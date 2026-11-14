@@ -141,8 +141,10 @@ handing in. Both models again scored 13 of 13 in all three languages. Avisoq cos
 runs took two to seven times as long as Python's or Rust's (measured on version 0.5). So the honest claim today is that
 agents can write Avisoq reliably, not that they write it better than other languages. The
 friction the agents reported (no `break`, no checked arithmetic, and more) is listed in
-[`agentbench/README.md`](agentbench/README.md) and was fixed in version 0.6. The benchmark has
-not been rerun since, so whether the fixes close the time gap is not yet measured.
+[`agentbench/README.md`](agentbench/README.md) and was fixed in version 0.6. Rerun on 0.6, the
+Avisoq agents again scored 13 of 13 and took about as long as the Python and Rust agents
+(109 s and 219 s, against 92 to 174 s). That is one run per model, so treat it as a direction,
+not a proof; the solutions are still about twice as long as Python's.
 
 <img src=".github/assets/agents/scene.webp" width="100%" alt="Two models each solved 24 of 24 tasks on the first attempt in Avisoq, Python and Rust. The Avisoq solutions were the longest: about 380 lines against 200 for Python and 330 for Rust.">
 

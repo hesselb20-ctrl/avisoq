@@ -1,0 +1,76 @@
+import "std/strings"
+import "std/arrays"
+
+fn is_letter(b: Int) -> Bool {
+  return (b >= 65 and b <= 90) or (b >= 97 and b <= 122)
+}
+
+fn valid_key(k: Str) -> Bool {
+  if len(k) == 0 { return false }
+  for i in 0..len(k) {
+    if not is_letter(byte_at(k, i)) { return false }
+  }
+  return true
+}
+
+fn valid_amount(a: Str) -> Bool {
+  if len(a) == 0 { return false }
+  var start = 0
+  if byte_at(a, 0) == 45 { start = 1 }
+  if len(a) <= start { return false }
+  for i in start..len(a) {
+    let b = byte_at(a, i)
+    if b < 48 or b > 57 { return false }
+  }
+  return true
+}
+
+// Only called on text that valid_amount accepted.
+fn amount_value(a: Str) -> Int {
+  var start = 0
+  var neg = false
+  if byte_at(a, 0) == 45 {
+    neg = true
+    start = 1
+  }
+  var v = 0
+  for i in start..len(a) {
+    v = v * 10 + (byte_at(a, i) - 48)
+  }
+  if neg { return 0 - v }
+  return v
+}
+
+fn group_csv(s: Str) -> Str {
+  var totals: Map[Str, Int] = {}
+  var bad = 0
+  let rows = split(s, "|")
+  for i in 0..len(rows) {
+    let row = trim(rows[i])
+    if len(row) > 0 {
+      let fields = split(row, ",")
+      if len(fields) != 2 {
+        bad = bad + 1
+      } else {
+        let key = trim(fields[0])
+        let amt = trim(fields[1])
+        if valid_key(key) and valid_amount(amt) {
+          if has(totals, key) {
+            put(totals, key, get(totals, key) + amount_value(amt))
+          } else {
+            put(totals, key, amount_value(amt))
+          }
+        } else {
+          bad = bad + 1
+        }
+      }
+    }
+  }
+  var names = keys(totals)
+  sort(names)
+  var parts: [Str] = []
+  for i in 0..len(names) {
+    push(parts, names[i] + "=" + str(get(totals, names[i])))
+  }
+  return join(parts, ",") + ";bad=" + str(bad)
+}

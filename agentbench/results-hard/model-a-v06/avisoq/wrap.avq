@@ -1,0 +1,51 @@
+fn wrap(s: Str, width: Int) -> Str {
+  var words: [Str] = []
+  var i = 0
+  let n = len(s)
+  while i < n {
+    if byte_at(s, i) == 32 {
+      i = i + 1
+    } else {
+      var j = i
+      while j < n and byte_at(s, j) != 32 { j = j + 1 }
+      var p = i
+      while p < j {
+        var e = p + width
+        if e > j { e = j }
+        push(words, substr(s, p, e))
+        p = e
+      }
+      i = j
+    }
+  }
+  var out = ""
+  var cur = ""
+  var started = false
+  for k in 0..len(words) {
+    if not started {
+      cur = words[k]
+      started = true
+    } else if len(cur) + 1 + len(words[k]) <= width {
+      cur = cur + " " + words[k]
+    } else {
+      if len(out) > 0 { out = out + "|" }
+      out = out + cur
+      cur = words[k]
+    }
+  }
+  if started {
+    if len(out) > 0 { out = out + "|" }
+    out = out + cur
+  }
+  return out
+}
+
+test "wrap" {
+  assert wrap("", 5) == ""
+  assert wrap("   ", 5) == ""
+  assert wrap("hello world", 5) == "hello|world"
+  assert wrap("  a b  c ", 3) == "a b|c"
+  assert wrap("abcdefgh", 3) == "abc|def|gh"
+  assert wrap("ab cdefg h", 4) == "ab|cdef|g h"
+  assert wrap("a b c", 1) == "a|b|c"
+}

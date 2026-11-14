@@ -1,0 +1,29 @@
+// Bellman-Ford style relaxation: lengths are never negative, so this settles.
+// dist[i] is -1 while node i is unreached.
+
+fn shortest_path(n: Int, edges: [Int]) -> Int {
+  var dist = array(n, -1)
+  dist[0] = 0
+  var changed = true
+  while changed {
+    changed = false
+    for e in 0..len(edges) / 3 {
+      let a = edges[3 * e]
+      let b = edges[3 * e + 1]
+      let w = edges[3 * e + 2]
+      if dist[a] >= 0 {
+        if dist[b] < 0 or dist[a] + w < dist[b] {
+          dist[b] = dist[a] + w
+          changed = true
+        }
+      }
+      if dist[b] >= 0 {
+        if dist[a] < 0 or dist[b] + w < dist[a] {
+          dist[a] = dist[b] + w
+          changed = true
+        }
+      }
+    }
+  }
+  return dist[n - 1]
+}

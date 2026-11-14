@@ -1,0 +1,84 @@
+// st[0] is the read position, st[1] is 1 once a division by zero was seen.
+
+fn at(t: Str, p: Int) -> Int {
+  if p >= len(t) { return -1 }
+  return byte_at(t, p)
+}
+
+fn parse_number(t: Str, st: mut [Int]) -> Int {
+  var v = 0
+  var c = at(t, st[0])
+  while c >= 48 and c <= 57 {
+    v = v * 10 + (c - 48)
+    st[0] = st[0] + 1
+    c = at(t, st[0])
+  }
+  return v
+}
+
+fn parse_primary(t: Str, st: mut [Int]) -> Int {
+  if at(t, st[0]) == 40 {
+    st[0] = st[0] + 1
+    let inner = parse_sum(t, st)
+    if at(t, st[0]) == 41 { st[0] = st[0] + 1 }
+    return inner
+  }
+  return parse_number(t, st)
+}
+
+fn parse_unary(t: Str, st: mut [Int]) -> Int {
+  if at(t, st[0]) == 45 {
+    st[0] = st[0] + 1
+    let inner = parse_unary(t, st)
+    return 0 - inner
+  }
+  return parse_primary(t, st)
+}
+
+fn parse_term(t: Str, st: mut [Int]) -> Int {
+  var v = parse_unary(t, st)
+  var op = at(t, st[0])
+  while op == 42 or op == 47 or op == 37 {
+    st[0] = st[0] + 1
+    let r = parse_unary(t, st)
+    if op == 42 {
+      v = v * r
+    } else if r == 0 {
+      st[1] = 1
+    } else if op == 47 {
+      v = v / r
+    } else {
+      v = v % r
+    }
+    op = at(t, st[0])
+  }
+  return v
+}
+
+fn parse_sum(t: Str, st: mut [Int]) -> Int {
+  var v = parse_term(t, st)
+  var op = at(t, st[0])
+  while op == 43 or op == 45 {
+    st[0] = st[0] + 1
+    let r = parse_term(t, st)
+    if op == 43 {
+      v = v + r
+    } else {
+      v = v - r
+    }
+    op = at(t, st[0])
+  }
+  return v
+}
+
+fn eval_expr(s: Str) -> Str {
+  var t = ""
+  for i in 0..len(s) {
+    let b = byte_at(s, i)
+    if b != 32 and b != 9 { t = t + chr(b) }
+  }
+  var st: [Int] = [0, 0]
+  let value = parse_sum(t, st)
+  if st[1] == 1 { return "div0" }
+  return str(value)
+}

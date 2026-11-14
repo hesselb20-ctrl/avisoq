@@ -1,0 +1,26 @@
+// Cofactor expansion along the first row. n is at most 6, so this is cheap and
+// never overflows (entries are at most 50 in absolute value).
+
+fn det_rec(m: [Int], k: Int) -> Int {
+  if k == 1 { return m[0] }
+  var total = 0
+  for c in 0..k {
+    var sub: [Int] = []
+    for r in 1..k {
+      for j in 0..k {
+        if j != c { push(sub, m[r * k + j]) }
+      }
+    }
+    let term = m[c] * det_rec(sub, k - 1)
+    if c % 2 == 0 {
+      total = total + term
+    } else {
+      total = total - term
+    }
+  }
+  return total
+}
+
+fn det(xs: [Int], n: Int) -> Int {
+  return det_rec(xs, n)
+}

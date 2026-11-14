@@ -1,0 +1,90 @@
+import "std/strings"
+import "std/arrays"
+
+fn read_amount(text: Str) -> Int {
+  var neg = false
+  var i = 0
+  if len(text) > 0 and byte_at(text, 0) == 45 {
+    neg = true
+    i = 1
+  }
+  var acc = 0
+  while i < len(text) {
+    acc = acc * 10 - (byte_at(text, i) - 48)
+    i = i + 1
+  }
+  if neg { return acc }
+  return -acc
+}
+
+// Applies one operation; true when it was accepted.
+fn apply_op(bal: mut Map[Str, Int], op: Str) -> Bool {
+  let w = split(op, " ")
+  let cmd = w[0]
+  if cmd == "open" and len(w) == 2 {
+    if has(bal, w[1]) { return false }
+    put(bal, w[1], 0)
+    return true
+  }
+  if (cmd == "deposit" or cmd == "withdraw") and len(w) == 3 {
+    if not has(bal, w[1]) { return false }
+    let amt = read_amount(w[2])
+    if amt <= 0 { return false }
+    let cur = get(bal, w[1])
+    if cmd == "deposit" {
+      if cur > 9223372036854775807 - amt { return false }
+      put(bal, w[1], cur + amt)
+    } else {
+      if cur < amt { return false }
+      put(bal, w[1], cur - amt)
+    }
+    return true
+  }
+  if cmd == "transfer" and len(w) == 4 {
+    if not has(bal, w[1]) or not has(bal, w[2]) { return false }
+    if w[1] == w[2] { return false }
+    let amt = read_amount(w[3])
+    if amt <= 0 { return false }
+    let from_bal = get(bal, w[1])
+    let to_bal = get(bal, w[2])
+    if from_bal < amt { return false }
+    if to_bal > 9223372036854775807 - amt { return false }
+    put(bal, w[1], from_bal - amt)
+    put(bal, w[2], to_bal + amt)
+    return true
+  }
+  if cmd == "close" and len(w) == 2 {
+    if not has(bal, w[1]) { return false }
+    if get(bal, w[1]) != 0 { return false }
+    remove(bal, w[1])
+    return true
+  }
+  return false
+}
+
+fn ledger(ops: Str) -> Str {
+  var bal: Map[Str, Int] = {}
+  var rejected = 0
+  if len(ops) > 0 {
+    let list = split(ops, ";")
+    for i in 0..len(list) {
+      if not apply_op(bal, list[i]) { rejected = rejected + 1 }
+    }
+  }
+  var names = copy(keys(bal))
+  sort(names)
+  var out = ""
+  for i in 0..len(names) {
+    if i > 0 { out = out + "," }
+    out = out + names[i] + "=" + str(get(bal, names[i]))
+  }
+  return out + ";rejected=" + str(rejected)
+}
+
+test "ledger" {
+  assert ledger("") == ";rejected=0"
+  assert ledger("open b;open a;deposit a 5;transfer a b 2") == "a=3,b=2;rejected=0"
+  assert ledger("open a;open a;deposit a -1;withdraw a 1;close a;close a") == ";rejected=4"
+  assert ledger("open a;deposit a 5;close a") == "a=5;rejected=1"
+  assert ledger("open a;transfer a a 1;transfer a b 1") == "a=0;rejected=2"
+}

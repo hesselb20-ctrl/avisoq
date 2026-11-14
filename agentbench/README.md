@@ -108,7 +108,27 @@ These come from the agents' own reports and are the most useful output of the ru
 Version 0.6 answers these: `break` and `continue`, `checked_add` / `checked_sub` /
 `checked_mul` in `std/math`, a literal for the smallest `Int`, `parse_int` over the whole range,
 `equal` for arrays, and a name-clash error that names the module. A bare `pop(xs)` was checked
-and is accepted. The benchmark has not been rerun on 0.6.
+and is accepted.
+
+### Rerun on version 0.6
+
+The two Avisoq agents were run again on 0.6, with the same instructions and fresh agents.
+Both again scored 13 of 13. Solutions are in `results-hard/model-a-v06` and `model-b-v06`.
+
+| Avisoq, run A / run B | Version 0.5 | Version 0.6 | Python (for scale) | Rust (for scale) |
+|---|---:|---:|---:|---:|
+| Time the agent took | 694 s / 356 s | 109 s / 219 s | 92 s / 174 s | 116 s / 150 s |
+| Tokens used (thousands) | 120 / 177 | 118 / 148 | 108 / 132 | 112 / 123 |
+| Non-blank lines | 851 / 688 | 809 / 660 | 315 / 379 | 373 / 698 |
+
+The Avisoq runs now take about as long as the Python and Rust runs, where before they took
+two to seven times as long. How much of that is due to the fixes is not established:
+
+- It is one run per model per version, and agent run times vary a lot between runs.
+- Both agents used `checked_mul` and `checked_add` for the overflow task, and neither
+  reported a language problem this time. But neither used `break` or `continue` in any
+  solution, so that fix did not contribute.
+- Code length barely changed. Avisoq solutions are still about twice as long as Python's.
 
 ### Limits
 

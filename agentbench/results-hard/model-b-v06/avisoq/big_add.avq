@@ -1,0 +1,90 @@
+// Sign and magnitude: digits are added or subtracted as text, least significant first.
+
+fn is_neg(s: Str) -> Bool {
+  if len(s) == 0 { return false }
+  return byte_at(s, 0) == 45
+}
+
+fn magnitude(s: Str) -> Str {
+  if is_neg(s) { return substr(s, 1, len(s)) }
+  return s
+}
+
+// True when magnitude x is at least magnitude y (both without leading zeros).
+fn mag_ge(x: Str, y: Str) -> Bool {
+  if len(x) != len(y) { return len(x) > len(y) }
+  return x >= y
+}
+
+fn strip_zeros(s: Str) -> Str {
+  var k = 0
+  while k < len(s) - 1 and byte_at(s, k) == 48 {
+    k = k + 1
+  }
+  return substr(s, k, len(s))
+}
+
+fn add_mag(x: Str, y: Str) -> Str {
+  var i = len(x) - 1
+  var j = len(y) - 1
+  var carry = 0
+  var res = ""
+  while i >= 0 or j >= 0 or carry > 0 {
+    var da = 0
+    if i >= 0 { da = byte_at(x, i) - 48 }
+    var db = 0
+    if j >= 0 { db = byte_at(y, j) - 48 }
+    let total = da + db + carry
+    res = chr(48 + total % 10) + res
+    carry = total / 10
+    i = i - 1
+    j = j - 1
+  }
+  return res
+}
+
+// Requires x >= y as magnitudes.
+fn sub_mag(x: Str, y: Str) -> Str {
+  var i = len(x) - 1
+  var j = len(y) - 1
+  var borrow = 0
+  var res = ""
+  while i >= 0 {
+    var db = 0
+    if j >= 0 { db = byte_at(y, j) - 48 }
+    var dig = byte_at(x, i) - 48 - db - borrow
+    if dig < 0 {
+      dig = dig + 10
+      borrow = 1
+    } else {
+      borrow = 0
+    }
+    res = chr(48 + dig) + res
+    i = i - 1
+    j = j - 1
+  }
+  return strip_zeros(res)
+}
+
+fn big_add(a: Str, b: Str) -> Str {
+  let na = is_neg(a)
+  let nb = is_neg(b)
+  let ma = magnitude(a)
+  let mb = magnitude(b)
+  if na == nb {
+    let same = add_mag(ma, mb)
+    if na and same != "0" { return "-" + same }
+    return same
+  }
+  var big = ma
+  var small = mb
+  var neg_res = na
+  if not mag_ge(ma, mb) {
+    big = mb
+    small = ma
+    neg_res = nb
+  }
+  let diff = sub_mag(big, small)
+  if neg_res and diff != "0" { return "-" + diff }
+  return diff
+}

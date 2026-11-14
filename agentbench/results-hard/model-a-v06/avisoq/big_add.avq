@@ -1,0 +1,101 @@
+// Magnitude helpers work on digit strings without sign.
+fn cmp_mag(a: Str, b: Str) -> Int {
+  if len(a) != len(b) {
+    if len(a) < len(b) { return -1 }
+    return 1
+  }
+  if a == b { return 0 }
+  if a < b { return -1 }
+  return 1
+}
+
+fn add_mag(a: Str, b: Str) -> Str {
+  var out = ""
+  var i = len(a) - 1
+  var j = len(b) - 1
+  var carry = 0
+  while i >= 0 or j >= 0 or carry > 0 {
+    var t = carry
+    if i >= 0 {
+      t = t + byte_at(a, i) - 48
+      i = i - 1
+    }
+    if j >= 0 {
+      t = t + byte_at(b, j) - 48
+      j = j - 1
+    }
+    out = chr(48 + t % 10) + out
+    carry = t / 10
+  }
+  return out
+}
+
+// a >= b required
+fn sub_mag(a: Str, b: Str) -> Str {
+  var out = ""
+  var i = len(a) - 1
+  var j = len(b) - 1
+  var borrow = 0
+  while i >= 0 {
+    var t = byte_at(a, i) - 48 - borrow
+    i = i - 1
+    if j >= 0 {
+      t = t - (byte_at(b, j) - 48)
+      j = j - 1
+    }
+    if t < 0 {
+      t = t + 10
+      borrow = 1
+    } else {
+      borrow = 0
+    }
+    out = chr(48 + t) + out
+  }
+  var k = 0
+  while k < len(out) - 1 and byte_at(out, k) == 48 { k = k + 1 }
+  return substr(out, k, len(out))
+}
+
+fn big_add(a: Str, b: Str) -> Str {
+  var na = false
+  var nb = false
+  var ma = a
+  var mb = b
+  if len(a) > 0 and byte_at(a, 0) == 45 {
+    na = true
+    ma = substr(a, 1, len(a))
+  }
+  if len(b) > 0 and byte_at(b, 0) == 45 {
+    nb = true
+    mb = substr(b, 1, len(b))
+  }
+  if na == nb {
+    let s = add_mag(ma, mb)
+    if na and s != "0" { return "-" + s }
+    return s
+  }
+  let c = cmp_mag(ma, mb)
+  if c == 0 { return "0" }
+  if c > 0 {
+    let s = sub_mag(ma, mb)
+    if na { return "-" + s }
+    return s
+  }
+  let s2 = sub_mag(mb, ma)
+  if nb { return "-" + s2 }
+  return s2
+}
+
+test "big" {
+  assert big_add("0", "0") == "0"
+  assert big_add("999", "1") == "1000"
+  assert big_add("-5", "5") == "0"
+  assert big_add("-5", "3") == "-2"
+  assert big_add("5", "-30") == "-25"
+  assert big_add("-0", "0") == "0"
+  assert big_add("1000", "-1") == "999"
+  assert big_add("-99999999999999999999999999999", "-1") == "-100000000000000000000000000000"
+  assert big_add("100000000000000000000000000000", "-99999999999999999999999999999") == "1"
+  assert big_add("123", "-123") == "0"
+  assert big_add("10", "-9") == "1"
+}

@@ -1,0 +1,36 @@
+fn det_rec(xs: [Int], n: Int, row: Int, used: mut [Int]) -> Int {
+  if row == n { return 1 }
+  var total = 0
+  var idx = 0
+  for c in 0..n {
+    if used[c] == 0 {
+      let el = xs[row * n + c]
+      if el != 0 {
+        used[c] = 1
+        let sub = det_rec(xs, n, row + 1, used)
+        used[c] = 0
+        if idx % 2 == 0 {
+          total = total + el * sub
+        } else {
+          total = total - el * sub
+        }
+      }
+      idx = idx + 1
+    }
+  }
+  return total
+}
+
+fn det(xs: [Int], n: Int) -> Int {
+  var used = array(n, 0)
+  return det_rec(xs, n, 0, used)
+}
+
+test "det" {
+  assert det([5], 1) == 5
+  assert det([1, 2, 3, 4], 2) == -2
+  assert det([2, 0, 0, 0, 3, 0, 0, 0, 4], 3) == 24
+  assert det([0, 1, 1, 0], 2) == -1
+  assert det([1, 2, 3, 4, 5, 6, 7, 8, 9], 3) == 0
+  assert det([0, 0, 1, 0, 1, 0, 1, 0, 0], 3) == -1
+}

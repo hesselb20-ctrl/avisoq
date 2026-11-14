@@ -1,0 +1,31 @@
+fn shortest_path(n: Int, edges: [Int]) -> Int {
+  var dist = array(n, -1)
+  dist[0] = 0
+  let m = len(edges) / 3
+  var changed = true
+  while changed {
+    changed = false
+    for e in 0..m {
+      let a = edges[3 * e]
+      let b = edges[3 * e + 1]
+      let l = edges[3 * e + 2]
+      if dist[a] >= 0 and (dist[b] < 0 or dist[a] + l < dist[b]) {
+        dist[b] = dist[a] + l
+        changed = true
+      }
+      if dist[b] >= 0 and (dist[a] < 0 or dist[b] + l < dist[a]) {
+        dist[a] = dist[b] + l
+        changed = true
+      }
+    }
+  }
+  return dist[n - 1]
+}
+
+test "sp" {
+  assert shortest_path(1, []) == 0
+  assert shortest_path(2, []) == -1
+  assert shortest_path(3, [0, 1, 4, 1, 2, 5, 0, 2, 20, 0, 2, 9, 1, 1, 0]) == 9
+  assert shortest_path(3, [0, 1, 0, 1, 2, 0]) == 0
+  assert shortest_path(4, [0, 1, 1, 2, 3, 1]) == -1
+}

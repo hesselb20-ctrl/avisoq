@@ -1,0 +1,33 @@
+import "std/strings"
+
+fn wrap(s: Str, width: Int) -> Str {
+  // Split into words, cutting any word longer than width into exact pieces.
+  var pieces: [Str] = []
+  let raw = split(s, " ")
+  for i in 0..len(raw) {
+    let w = raw[i]
+    var p = 0
+    while p < len(w) {
+      var e = p + width
+      if e > len(w) { e = len(w) }
+      push(pieces, substr(w, p, e))
+      p = p + width
+    }
+  }
+  // Fill lines greedily.
+  var out_lines: [Str] = []
+  var cur = ""
+  for i in 0..len(pieces) {
+    let w = pieces[i]
+    if len(cur) == 0 {
+      cur = w
+    } else if len(cur) + 1 + len(w) <= width {
+      cur = cur + " " + w
+    } else {
+      push(out_lines, cur)
+      cur = w
+    }
+  }
+  if len(cur) > 0 { push(out_lines, cur) }
+  return join(out_lines, "|")
+}

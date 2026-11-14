@@ -1,0 +1,27 @@
+// Stack of open positions. A base entry marks where the current run starts:
+// -1 at the beginning, or the position of a closer that could not be matched.
+
+fn pair_ok(open: Int, close: Int) -> Bool {
+  return (open == 40 and close == 41) or (open == 91 and close == 93) or (open == 123 and close == 125)
+}
+
+fn longest_valid(s: Str) -> Int {
+  var stack: [Int] = [-1]
+  var best = 0
+  for i in 0..len(s) {
+    let c = byte_at(s, i)
+    if c == 40 or c == 91 or c == 123 {
+      push(stack, i)
+    } else {
+      let top = stack[len(stack) - 1]
+      if top >= 0 and pair_ok(byte_at(s, top), c) {
+        pop(stack)
+        let run = i - stack[len(stack) - 1]
+        if run > best { best = run }
+      } else {
+        stack = [i]
+      }
+    }
+  }
+  return best
+}

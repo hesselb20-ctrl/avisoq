@@ -1,0 +1,40 @@
+fn cell_at(cur: [Int], w: Int, h: Int, x: Int, y: Int) -> Int {
+  if x < 0 or y < 0 or x >= w or y >= h { return 0 }
+  return cur[y * w + x]
+}
+
+fn neighbours(cur: [Int], w: Int, h: Int, x: Int, y: Int) -> Int {
+  var cnt = 0
+  for dy in 0..3 {
+    for dx in 0..3 {
+      if dx != 1 or dy != 1 {
+        cnt = cnt + cell_at(cur, w, h, x + dx - 1, y + dy - 1)
+      }
+    }
+  }
+  return cnt
+}
+
+fn life(cells: [Int], w: Int, h: Int, steps: Int) -> [Int] {
+  var cur = copy(cells)
+  var nxt = array(w * h, 0)
+  for t in 0..steps {
+    for y in 0..h {
+      for x in 0..w {
+        let cnt = neighbours(cur, w, h, x, y)
+        let alive = cur[y * w + x] == 1
+        var nv = 0
+        if alive {
+          if cnt == 2 or cnt == 3 { nv = 1 }
+        } else {
+          if cnt == 3 { nv = 1 }
+        }
+        nxt[y * w + x] = nv
+      }
+    }
+    for i in 0..w * h {
+      cur[i] = nxt[i]
+    }
+  }
+  return cur
+}

@@ -1,0 +1,83 @@
+import "std/strings"
+import "std/arrays"
+
+fn trim_sp(s: Str) -> Str {
+  var a = 0
+  var b = len(s)
+  while a < b and byte_at(s, a) == 32 { a = a + 1 }
+  while b > a and byte_at(s, b - 1) == 32 { b = b - 1 }
+  return substr(s, a, b)
+}
+
+fn is_key(s: Str) -> Bool {
+  if len(s) == 0 { return false }
+  for i in 0..len(s) {
+    let c = byte_at(s, i)
+    if not ((c >= 65 and c <= 90) or (c >= 97 and c <= 122)) { return false }
+  }
+  return true
+}
+
+fn is_amount(s: Str) -> Bool {
+  var start = 0
+  if len(s) > 0 and byte_at(s, 0) == 45 { start = 1 }
+  if len(s) == start { return false }
+  for i in start..len(s) {
+    let c = byte_at(s, i)
+    if c < 48 or c > 57 { return false }
+  }
+  return true
+}
+
+fn read_amount(s: Str) -> Int {
+  var neg = false
+  var i = 0
+  if byte_at(s, 0) == 45 {
+    neg = true
+    i = 1
+  }
+  var acc = 0
+  while i < len(s) {
+    acc = acc * 10 - (byte_at(s, i) - 48)
+    i = i + 1
+  }
+  if neg { return acc }
+  return -acc
+}
+
+fn group_csv(s: Str) -> Str {
+  var totals: Map[Str, Int] = {}
+  var bad = 0
+  let rows = split(s, "|")
+  for i in 0..len(rows) {
+    if len(trim_sp(rows[i])) > 0 {
+      let f = split(rows[i], ",")
+      if len(f) != 2 {
+        bad = bad + 1
+      } else {
+        let k = trim_sp(f[0])
+        let a = trim_sp(f[1])
+        if is_key(k) and is_amount(a) {
+          put(totals, k, get_or(totals, k, 0) + read_amount(a))
+        } else {
+          bad = bad + 1
+        }
+      }
+    }
+  }
+  var names = copy(keys(totals))
+  sort(names)
+  var out = ""
+  for i in 0..len(names) {
+    if i > 0 { out = out + "," }
+    out = out + names[i] + "=" + str(get(totals, names[i]))
+  }
+  return out + ";bad=" + str(bad)
+}
+
+test "group" {
+  assert group_csv("") == ";bad=0"
+  assert group_csv("a,1|b,2|a,3") == "a=4,b=2;bad=0"
+  assert group_csv("b,1|B,2| a , -5 |  | x|1,2|a,|a,-|a,1,2|a b,1") == "B=2,a=-5,b=1;bad=6"
+  assert group_csv("a,007|a,-0") == "a=7;bad=0"
+}

@@ -1,0 +1,47 @@
+// Values and last-use times are kept in two maps. The clock moves once per operation.
+
+fn oldest_key(last: Map[Int, Int]) -> Int {
+  var ks = keys(last)
+  var best = ks[0]
+  for i in 0..len(ks) {
+    if get(last, ks[i]) < get(last, best) {
+      best = ks[i]
+    }
+  }
+  return best
+}
+
+fn lru(capacity: Int, ops: [Int]) -> [Int] {
+  var vals: Map[Int, Int] = {}
+  var last: Map[Int, Int] = {}
+  var out: [Int] = []
+  var i = 0
+  var clock = 0
+  while i < len(ops) {
+    clock = clock + 1
+    if ops[i] == 0 {
+      let key = ops[i + 1]
+      if has(vals, key) {
+        push(out, get(vals, key))
+        put(last, key, clock)
+      } else {
+        push(out, -1)
+      }
+      i = i + 2
+    } else {
+      let key = ops[i + 1]
+      let value = ops[i + 2]
+      if not has(vals, key) {
+        if len(vals) >= capacity {
+          let victim = oldest_key(last)
+          remove(vals, victim)
+          remove(last, victim)
+        }
+      }
+      put(vals, key, value)
+      put(last, key, clock)
+      i = i + 3
+    }
+  }
+  return out
+}

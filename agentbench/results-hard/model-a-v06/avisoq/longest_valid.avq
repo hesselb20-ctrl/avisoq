@@ -1,0 +1,45 @@
+fn closer_of(c: Int) -> Int {
+  if c == 40 { return 41 }
+  if c == 91 { return 93 }
+  return 125
+}
+
+fn longest_valid(s: Str) -> Int {
+  var st = [-1]
+  var best = 0
+  for i in 0..len(s) {
+    let c = byte_at(s, i)
+    if c == 40 or c == 91 or c == 123 {
+      push(st, i)
+    } else {
+      var ok = false
+      if len(st) > 1 {
+        ok = closer_of(byte_at(s, st[len(st) - 1])) == c
+      }
+      if ok {
+        let dropped = pop(st)
+        let len_here = i - st[len(st) - 1]
+        if len_here > best { best = len_here }
+      } else {
+        while len(st) > 0 {
+          let dropped2 = pop(st)
+        }
+        push(st, i)
+      }
+    }
+  }
+  return best
+}
+
+test "lv" {
+  assert longest_valid("") == 0
+  assert longest_valid("(") == 0
+  assert longest_valid("()") == 2
+  assert longest_valid(")()())") == 4
+  assert longest_valid("([)]") == 0
+  assert longest_valid("([]){}") == 6
+  assert longest_valid("{[()]}(") == 6
+  assert longest_valid("(()") == 2
+  assert longest_valid("()(") == 2
+  assert longest_valid("(]()") == 2
+}

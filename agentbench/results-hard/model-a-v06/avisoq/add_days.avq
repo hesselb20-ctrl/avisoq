@@ -1,0 +1,44 @@
+fn pad(n: Int, width: Int) -> Str {
+  var t = str(n)
+  while len(t) < width {
+    t = "0" + t
+  }
+  return t
+}
+
+fn add_days(y: Int, m: Int, d: Int, n: Int) -> Str {
+  var yy = y
+  if m <= 2 { yy = yy - 1 }
+  let era = yy / 400
+  let yoe = yy - era * 400
+  var mm = m - 3
+  if m <= 2 { mm = m + 9 }
+  let doy = (153 * mm + 2) / 5 + d - 1
+  let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy
+  let z = era * 146097 + doe + n
+  let era2 = z / 146097
+  let doe2 = z - era2 * 146097
+  let yoe2 = (doe2 - doe2 / 1460 + doe2 / 36524 - doe2 / 146096) / 365
+  var y2 = yoe2 + era2 * 400
+  let doy2 = doe2 - (365 * yoe2 + yoe2 / 4 - yoe2 / 100)
+  let mp = (5 * doy2 + 2) / 153
+  let d2 = doy2 - (153 * mp + 2) / 5 + 1
+  var m2 = mp + 3
+  if mp >= 10 { m2 = mp - 9 }
+  if m2 <= 2 { y2 = y2 + 1 }
+  return pad(y2, 4) + "-" + pad(m2, 2) + "-" + pad(d2, 2)
+}
+
+test "add_days" {
+  assert add_days(2024, 2, 28, 1) == "2024-02-29"
+  assert add_days(2023, 2, 28, 1) == "2023-03-01"
+  assert add_days(2024, 12, 31, 1) == "2025-01-01"
+  assert add_days(2025, 1, 1, -1) == "2024-12-31"
+  assert add_days(1900, 2, 28, 1) == "1900-03-01"
+  assert add_days(2000, 2, 28, 1) == "2000-02-29"
+  assert add_days(1600, 1, 1, 0) == "1600-01-01"
+  assert add_days(1600, 1, 1, 146097) == "2000-01-01"
+  assert add_days(2024, 3, 1, -366) == "2023-03-01"
+  assert add_days(2400, 12, 31, -146097) == "2000-12-31"
+  assert add_days(1600, 3, 1, -1) == "1600-02-29"
+}

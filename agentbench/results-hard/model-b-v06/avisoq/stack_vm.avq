@@ -1,0 +1,102 @@
+import "std/strings"
+
+fn stack_vm(program: Str) -> Str {
+  if len(program) == 0 { return "" }
+  let parts = split(program, ";")
+  let n = len(parts)
+  var stack: [Int] = []
+  var outs: [Str] = []
+  var pc = 0
+  var steps = 0
+  var err = ""
+  var halted = false
+  while pc < n and err == "" and not halted {
+    if steps >= 1000 {
+      err = "!steps"
+    } else {
+      steps = steps + 1
+      let words = split(trim(parts[pc]), " ")
+      let op = words[0]
+      var arg = 0
+      if len(words) > 1 { arg = unwrap_or(parse_int(words[1]), 0) }
+      if op == "push" {
+        push(stack, arg)
+        pc = pc + 1
+      } else if op == "add" or op == "sub" or op == "mul" {
+        if len(stack) < 2 {
+          err = "!stack"
+        } else {
+          let b = pop(stack)
+          let a = pop(stack)
+          if op == "add" {
+            push(stack, a + b)
+          } else if op == "sub" {
+            push(stack, a - b)
+          } else {
+            push(stack, a * b)
+          }
+          pc = pc + 1
+        }
+      } else if op == "dup" {
+        if len(stack) < 1 {
+          err = "!stack"
+        } else {
+          push(stack, stack[len(stack) - 1])
+          pc = pc + 1
+        }
+      } else if op == "swap" {
+        if len(stack) < 2 {
+          err = "!stack"
+        } else {
+          let top = pop(stack)
+          let under = pop(stack)
+          push(stack, top)
+          push(stack, under)
+          pc = pc + 1
+        }
+      } else if op == "pop" {
+        if len(stack) < 1 {
+          err = "!stack"
+        } else {
+          let dropped = pop(stack)
+          pc = pc + 1
+        }
+      } else if op == "out" {
+        if len(stack) < 1 {
+          err = "!stack"
+        } else {
+          let shown = pop(stack)
+          push(outs, str(shown))
+          pc = pc + 1
+        }
+      } else if op == "jmp" {
+        if arg < 0 or arg > n {
+          err = "!jump"
+        } else {
+          pc = arg
+        }
+      } else if op == "jz" {
+        if len(stack) < 1 {
+          err = "!stack"
+        } else {
+          let v = pop(stack)
+          if v == 0 {
+            if arg < 0 or arg > n {
+              err = "!jump"
+            } else {
+              pc = arg
+            }
+          } else {
+            pc = pc + 1
+          }
+        }
+      } else if op == "halt" {
+        halted = true
+      } else {
+        pc = pc + 1
+      }
+    }
+  }
+  if err != "" { push(outs, err) }
+  return join(outs, ",")
+}

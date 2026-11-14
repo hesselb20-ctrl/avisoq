@@ -1,0 +1,119 @@
+import "std/strings"
+
+fn read_arg(text: Str) -> Int {
+  var neg = false
+  var i = 0
+  if len(text) > 0 and byte_at(text, 0) == 45 {
+    neg = true
+    i = 1
+  }
+  var acc = 0
+  while i < len(text) {
+    acc = acc * 10 - (byte_at(text, i) - 48)
+    i = i + 1
+  }
+  if neg { return acc }
+  return -acc
+}
+
+fn stack_vm(program: Str) -> Str {
+  var outs: [Str] = []
+  if len(program) == 0 { return "" }
+  let ins = split(program, ";")
+  let n = len(ins)
+  var st: [Int] = []
+  var pc = 0
+  var steps = 0
+  while pc < n {
+    if steps >= 1000 {
+      push(outs, "!steps")
+      return join(outs, ",")
+    }
+    steps = steps + 1
+    let parts = split(ins[pc], " ")
+    let name = parts[0]
+    var arg = 0
+    if len(parts) > 1 { arg = read_arg(parts[1]) }
+    var next = pc + 1
+    if name == "push" {
+      push(st, arg)
+    } else if name == "add" or name == "sub" or name == "mul" {
+      if len(st) < 2 {
+        push(outs, "!stack")
+        return join(outs, ",")
+      }
+      let b = pop(st)
+      let a = pop(st)
+      if name == "add" {
+        push(st, a + b)
+      } else if name == "sub" {
+        push(st, a - b)
+      } else {
+        push(st, a * b)
+      }
+    } else if name == "dup" {
+      if len(st) < 1 {
+        push(outs, "!stack")
+        return join(outs, ",")
+      }
+      push(st, st[len(st) - 1])
+    } else if name == "swap" {
+      if len(st) < 2 {
+        push(outs, "!stack")
+        return join(outs, ",")
+      }
+      let b = pop(st)
+      let a = pop(st)
+      push(st, b)
+      push(st, a)
+    } else if name == "pop" {
+      if len(st) < 1 {
+        push(outs, "!stack")
+        return join(outs, ",")
+      }
+      let dropped = pop(st)
+    } else if name == "out" {
+      if len(st) < 1 {
+        push(outs, "!stack")
+        return join(outs, ",")
+      }
+      let v = pop(st)
+      push(outs, str(v))
+    } else if name == "jmp" {
+      if arg < 0 or arg > n {
+        push(outs, "!jump")
+        return join(outs, ",")
+      }
+      next = arg
+    } else if name == "jz" {
+      if len(st) < 1 {
+        push(outs, "!stack")
+        return join(outs, ",")
+      }
+      let v = pop(st)
+      if v == 0 {
+        if arg < 0 or arg > n {
+          push(outs, "!jump")
+          return join(outs, ",")
+        }
+        next = arg
+      }
+    } else if name == "halt" {
+      return join(outs, ",")
+    }
+    pc = next
+  }
+  return join(outs, ",")
+}
+
+test "vm" {
+  assert stack_vm("") == ""
+  assert stack_vm("push 2;push 3;add;out") == "5"
+  assert stack_vm("add") == "!stack"
+  assert stack_vm("push 1;jmp 5") == "!jump"
+  assert stack_vm("push 1;jmp 2") == ""
+  assert stack_vm("jmp 0") == "!steps"
+  assert stack_vm("push -3;dup;mul;out;halt;push 1;out") == "9"
+  assert stack_vm("push 0;jz 3;push 7;push 8;out") == "8"
+  assert stack_vm("push 1;swap") == "!stack"
+}

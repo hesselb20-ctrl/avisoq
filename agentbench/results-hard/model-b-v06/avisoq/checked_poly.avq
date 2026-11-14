@@ -1,0 +1,19 @@
+import "std/math"
+
+fn checked_poly(coeffs: [Int], x: Int) -> Str {
+  var acc = 0
+  var i = len(coeffs) - 1
+  while i >= 0 {
+    match checked_mul(acc, x) {
+      Some(p) => {
+        match checked_add(p, coeffs[i]) {
+          Some(q) => { acc = q }
+          None => { return "overflow" }
+        }
+      }
+      None => { return "overflow" }
+    }
+    i = i - 1
+  }
+  return str(acc)
+}

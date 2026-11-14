@@ -1,0 +1,43 @@
+// Howard Hinnant's day-number algorithms; all dates here are after 1600, so
+// every intermediate value is positive and integer division behaves.
+
+fn days_from_civil(y0: Int, m: Int, d: Int) -> Int {
+  var y = y0
+  if m <= 2 { y = y - 1 }
+  let era = y / 400
+  let yoe = y - era * 400
+  var mp = m + 9
+  if m > 2 { mp = m - 3 }
+  let doy = (153 * mp + 2) / 5 + d - 1
+  let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy
+  return era * 146097 + doe - 719468
+}
+
+fn pad2(v: Int) -> Str {
+  if v < 10 { return "0" + str(v) }
+  return str(v)
+}
+
+fn pad4(v: Int) -> Str {
+  var s = str(v)
+  while len(s) < 4 {
+    s = "0" + s
+  }
+  return s
+}
+
+fn add_days(y: Int, m: Int, d: Int, n: Int) -> Str {
+  let days = days_from_civil(y, m, d) + n
+  let zz = days + 719468
+  let era = zz / 146097
+  let doe = zz - era * 146097
+  let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365
+  var yy = yoe + era * 400
+  let doy = doe - (365 * yoe + yoe / 4 - yoe / 100)
+  let mp = (5 * doy + 2) / 153
+  let dd = doy - (153 * mp + 2) / 5 + 1
+  var mm = mp + 3
+  if mp >= 10 { mm = mp - 9 }
+  if mm <= 2 { yy = yy + 1 }
+  return pad4(yy) + "-" + pad2(mm) + "-" + pad2(dd)
+}

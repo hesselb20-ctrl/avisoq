@@ -1,0 +1,81 @@
+import "std/strings"
+import "std/arrays"
+
+fn is_digits(a: Str) -> Bool {
+  if len(a) == 0 { return false }
+  for i in 0..len(a) {
+    let b = byte_at(a, i)
+    if b < 48 or b > 57 { return false }
+  }
+  return true
+}
+
+fn ledger(ops: Str) -> Str {
+  var accts: Map[Str, Int] = {}
+  var rejected = 0
+  if len(ops) > 0 {
+    let items = split(ops, ";")
+    for i in 0..len(items) {
+      let w = split(items[i], " ")
+      let cmd = w[0]
+      var ok = false
+      if cmd == "open" {
+        ok = not has(accts, w[1])
+        if ok { put(accts, w[1], 0) }
+      } else if cmd == "deposit" {
+        let nm = w[1]
+        let amt = unwrap_or(parse_int(w[2]), 0)
+        if has(accts, nm) {
+          if amt > 0 {
+            ok = true
+            put(accts, nm, get(accts, nm) + amt)
+          }
+        }
+      } else if cmd == "withdraw" {
+        let nm = w[1]
+        let amt = unwrap_or(parse_int(w[2]), 0)
+        if has(accts, nm) {
+          if amt > 0 {
+            if get(accts, nm) >= amt {
+              ok = true
+              put(accts, nm, get(accts, nm) - amt)
+            }
+          }
+        }
+      } else if cmd == "transfer" {
+        let src = w[1]
+        let dst = w[2]
+        let amt = unwrap_or(parse_int(w[3]), 0)
+        if has(accts, src) {
+          if has(accts, dst) {
+            if src != dst {
+              if amt > 0 {
+                if get(accts, src) >= amt {
+                  ok = true
+                  put(accts, src, get(accts, src) - amt)
+                  put(accts, dst, get(accts, dst) + amt)
+                }
+              }
+            }
+          }
+        }
+      } else if cmd == "close" {
+        let nm = w[1]
+        if has(accts, nm) {
+          if get(accts, nm) == 0 {
+            ok = true
+            remove(accts, nm)
+          }
+        }
+      }
+      if not ok { rejected = rejected + 1 }
+    }
+  }
+  var names = keys(accts)
+  sort(names)
+  var parts: [Str] = []
+  for i in 0..len(names) {
+    push(parts, names[i] + "=" + str(get(accts, names[i])))
+  }
+  return join(parts, ",") + ";rejected=" + str(rejected)
+}
