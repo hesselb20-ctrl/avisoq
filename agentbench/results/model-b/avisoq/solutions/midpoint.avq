@@ -1,0 +1,15 @@
+// Floor of (a + b) / 2 without overflowing: split each value into quotient and remainder.
+fn midpoint(a: Int, b: Int) -> Int {
+  let qa = a / 2
+  let qb = b / 2
+  let ra = a % 2
+  let rb = b % 2
+  let s = ra + rb
+  var adjust = 0
+  if s < 0 {
+    adjust = -1
+  } else {
+    adjust = s / 2
+  }
+  return qa + qb + adjust
+}

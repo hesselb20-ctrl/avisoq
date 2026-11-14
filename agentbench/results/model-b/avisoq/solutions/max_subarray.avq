@@ -1,0 +1,18 @@
+fn max_subarray(xs: [Int]) -> Int {
+  if len(xs) == 0 {
+    return 0
+  }
+  var best = xs[0]
+  var current = xs[0]
+  for i in 1..len(xs) {
+    if current + xs[i] > xs[i] {
+      current = current + xs[i]
+    } else {
+      current = xs[i]
+    }
+    if current > best {
+      best = current
+    }
+  }
+  return best
+}

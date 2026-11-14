@@ -1,0 +1,11 @@
+fn sum_digits(n: Int) -> Int {
+  var cur = n
+  var total = 0
+  while cur != 0 {
+    var d = cur % 10
+    if d < 0 { d = 0 - d }
+    total = total + d
+    cur = cur / 10
+  }
+  return total
+}

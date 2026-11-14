@@ -1,0 +1,12 @@
+fn two_sum(xs: [Int], target: Int) -> [Int] {
+  for i in 0..len(xs) {
+    let first_j = i + 1
+    for j in first_j..len(xs) {
+      if xs[i] + xs[j] == target {
+        return [i, j]
+      }
+    }
+  }
+  let none: [Int] = []
+  return none
+}

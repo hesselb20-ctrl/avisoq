@@ -516,6 +516,7 @@ export function cgen(program, opts = {}) {
           const s = site(FAIL.BOUNDS, e);
           return seq(e.args.map(part), (xs) => `vstr_substr(${xs.join(', ')}, ${s})`);
         }
+        case 'chr': return `vstr_from_byte(${expr(e.args[0])}, ${site(FAIL.BOUNDS, e)})`;
         case 'byte_at': {
           const s = site(FAIL.BOUNDS, e);
           return seq(e.args.map(part), (xs) => `vstr_byte_at(${xs.join(', ')}, ${s})`);

@@ -1,0 +1,262 @@
+// A web-server log analyser: reads an access log, reports traffic, errors and latency,
+// and writes the report to a file.
+//
+//   avisoq run examples/loganalyzer.avq --allow io,fs:examples
+//
+// Log lines look like:  2026-11-14T10:23:45 GET /api/users 200 123
+//                       (time, method, path, status code, milliseconds)
+import "std/strings"
+import "std/arrays"
+import "std/math"
+
+struct Request { hour: Int, method: Str, path: Str, status: Int, millis: Int }
+
+enum Parsed { Good(request: Request), Bad(line_number: Int, reason: Str) }
+
+struct PathStat { path: Str, hits: Int, total_ms: Int, worst_ms: Int, errors: Int }
+
+// ---- parsing ----
+
+private fn hour_of(stamp: Str) -> Option[Int] {
+  let at = index_of(stamp, "T")
+  if at < 0 or at + 3 > len(stamp) { return None }
+  match parse_int(substr(stamp, at + 1, at + 3)) {
+    Some(value) => {
+      if value >= 0 and value <= 23 { return Some(value: value) }
+      return None
+    }
+    None => { return None }
+  }
+}
+
+fn parse_request(text: Str, line_number: Int) -> Parsed {
+  let fields = filter(split(trim(text), " "), fn(f) => len(f) > 0)
+  if len(fields) != 5 {
+    return Bad(line_number: line_number, reason: "expected 5 fields, found " + str(len(fields)))
+  }
+  match hour_of(fields[0]) {
+    None => { return Bad(line_number: line_number, reason: "unreadable time: " + fields[0]) }
+    Some(value) => {
+      let status = unwrap_or(parse_int(fields[3]), -1)
+      let millis = unwrap_or(parse_int(fields[4]), -1)
+      if status < 100 or status > 599 {
+        return Bad(line_number: line_number, reason: "bad status code: " + fields[3])
+      }
+      if millis < 0 {
+        return Bad(line_number: line_number, reason: "bad duration: " + fields[4])
+      }
+      return Good(
+        request: Request(
+          hour: value,
+          method: fields[1],
+          path: fields[2],
+          status: status,
+          millis: millis,
+        ),
+      )
+    }
+  }
+}
+
+// ---- statistics ----
+
+// The value below which p percent of the sorted values fall (nearest-rank method).
+fn percentile(sorted_values: [Int], p: Int) -> Int
+  requires len(sorted_values) > 0
+  requires p >= 1 and p <= 100
+{
+  let n = len(sorted_values)
+  let rank = (p * n + 99) / 100
+  return sorted_values[clamp(rank - 1, 0, n - 1)]
+}
+
+fn is_error(r: Request) -> Bool {
+  return r.status >= 500
+}
+
+private fn one_if(condition: Bool) -> Int {
+  if condition { return 1 }
+  return 0
+}
+
+// One entry per path, in order of first appearance.
+fn by_path(requests: [Request]) -> [PathStat] {
+  var position: Map[Str, Int] = {}
+  var stats: [PathStat] = []
+  for i in 0..len(requests) {
+    let r = requests[i]
+    let failed = one_if(is_error(r))
+    if has(position, r.path) {
+      let at = get(position, r.path)
+      let old = stats[at]
+      stats[at] = PathStat(
+        path: old.path,
+        hits: old.hits + 1,
+        total_ms: old.total_ms + r.millis,
+        worst_ms: max(old.worst_ms, r.millis),
+        errors: old.errors + failed,
+      )
+    } else {
+      put(position, r.path, len(stats))
+      push(
+        stats,
+        PathStat(path: r.path, hits: 1, total_ms: r.millis, worst_ms: r.millis, errors: failed),
+      )
+    }
+  }
+  return stats
+}
+
+fn per_hour(requests: [Request]) -> [Int] {
+  var counts = array(24, 0)
+  for i in 0..len(requests) {
+    counts[requests[i].hour] = counts[requests[i].hour] + 1
+  }
+  return counts
+}
+
+// ---- formatting ----
+
+fn pad_left(s: Str, width: Int) -> Str {
+  if len(s) >= width { return s }
+  return repeat(" ", width - len(s)) + s
+}
+
+fn pad_right(s: Str, width: Int) -> Str {
+  if len(s) >= width { return s }
+  return s + repeat(" ", width - len(s))
+}
+
+fn bar(count: Int, largest: Int, width: Int) -> Str
+  requires largest > 0 and width > 0
+{
+  return repeat("#", (count * width + largest - 1) / largest)
+}
+
+fn percent(part: Int, whole: Int) -> Str
+  requires whole > 0
+{
+  let tenths = part * 1000 / whole
+  return str(tenths / 10) + "." + str(tenths % 10) + "%"
+}
+
+fn report(requests: [Request], rejected: [Str]) -> [Str] {
+  var out: [Str] = []
+  let n = len(requests)
+  push(out, "Requests: " + str(n) + "   rejected lines: " + str(len(rejected)))
+  if n == 0 {
+    push(out, "Nothing to report.")
+    return out
+  }
+
+  let errors = count_if(requests, fn(r) => is_error(r))
+  let durations = sorted(map(requests, fn(r) => r.millis))
+  push(out, "Server errors: " + str(errors) + " (" + percent(errors, n) + ")")
+  push(
+    out,
+    "Latency ms: median " + str(percentile(durations, 50)) + ", p95 " + str(percentile(durations, 95)) + ", worst " + str(max_of(durations)),
+  )
+
+  push(out, "")
+  push(out, "Busiest paths")
+  var paths = by_path(requests)
+  sort_by(paths, fn(p) => p.path)
+  sort_by(paths, fn(p) => 0 - p.hits)
+  let shown = min(len(paths), 5)
+  for i in 0..shown {
+    let p = paths[i]
+    push(
+      out,
+      "  " + pad_right(p.path, 18) + pad_left(str(p.hits), 4) + " hits  avg " + pad_left(str(p.total_ms / p.hits), 5) + " ms  worst " + pad_left(str(p.worst_ms), 5) + " ms  errors " + str(p.errors),
+    )
+  }
+
+  push(out, "")
+  push(out, "Requests per hour")
+  let hours = per_hour(requests)
+  let peak = max_of(hours)
+  for h in 0..24 {
+    if hours[h] > 0 {
+      push(
+        out,
+        "  " + pad_left(str(h), 2) + ":00 " + pad_left(str(hours[h]), 4) + " " + bar(hours[h], peak, 30),
+      )
+    }
+  }
+
+  if len(rejected) > 0 {
+    push(out, "")
+    push(out, "Rejected lines")
+    for i in 0..len(rejected) {
+      push(out, "  " + rejected[i])
+    }
+  }
+  return out
+}
+
+fn main() uses io, fs {
+  let source = "examples/access.log"
+  match read_file(source) {
+    Err(error) => { print("cannot read", source + ":", error) }
+    Ok(text) => {
+      var requests: [Request] = []
+      var rejected: [Str] = []
+      let rows = lines(text)
+      for i in 0..len(rows) {
+        if len(trim(rows[i])) > 0 {
+          match parse_request(rows[i], i + 1) {
+            Good(request) => { push(requests, request) }
+            Bad(line_number, reason) => { push(rejected, "line " + str(line_number) + ": " + reason) }
+          }
+        }
+      }
+      let result = report(requests, rejected)
+      each(result, fn(line) => print(line))
+      match write_file("examples/access-report.txt", join(result, "\n") + "\n") {
+        Ok => { print("\nsaved to examples/access-report.txt") }
+        Err(error) => { print("could not save the report:", error) }
+      }
+    }
+  }
+}
+
+test "a well-formed line parses" {
+  match parse_request("2026-11-14T10:23:45 GET /api/users 200 123", 1) {
+    Good(request) => {
+      assert request.hour == 10 and request.status == 200 and request.millis == 123
+      assert request.path == "/api/users"
+    }
+    Bad => { assert false }
+  }
+}
+
+test "malformed lines are rejected with a reason" {
+  match parse_request("garbage", 7) {
+    Good => { assert false }
+    Bad(line_number, reason) => { assert line_number == 7 and reason == "expected 5 fields, found 1" }
+  }
+  match parse_request("2026-11-14T10:23:45 GET /x 999 5", 1) {
+    Good => { assert false }
+    Bad(line_number, reason) => { assert reason == "bad status code: 999" }
+  }
+}
+
+test "percentiles use the nearest rank" {
+  let values = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+  assert percentile(values, 50) == 50
+  assert percentile(values, 95) == 100
+  assert percentile(values, 1) == 10
+  assert percentile([7], 50) == 7
+}
+
+test "paths are grouped" {
+  let rs = [
+    Request(hour: 1, method: "GET", path: "/a", status: 200, millis: 10),
+    Request(hour: 1, method: "GET", path: "/b", status: 500, millis: 30),
+    Request(hour: 2, method: "GET", path: "/a", status: 503, millis: 50),
+  ]
+  let stats = by_path(rs)
+  assert len(stats) == 2
+  assert stats[0].path == "/a" and stats[0].hits == 2 and stats[0].total_ms == 60 and stats[0].worst_ms == 50
+  assert stats[0].errors == 1 and stats[1].errors == 1
+}

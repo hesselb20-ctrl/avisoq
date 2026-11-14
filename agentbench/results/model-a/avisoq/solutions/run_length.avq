@@ -1,0 +1,15 @@
+fn run_length(s: Str) -> Str {
+  let n = len(s)
+  var out = ""
+  var i = 0
+  while i < n {
+    let b = byte_at(s, i)
+    var j = i
+    while j < n and byte_at(s, j) == b {
+      j = j + 1
+    }
+    out = out + substr(s, i, i + 1) + str(j - i)
+    i = j
+  }
+  return out
+}

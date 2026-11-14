@@ -1,0 +1,11 @@
+fn count_vowels(s: Str) -> Int {
+  var total = 0
+  for i in 0..len(s) {
+    var b = byte_at(s, i)
+    if b >= 65 and b <= 90 { b = b + 32 }
+    if b == 97 or b == 101 or b == 105 or b == 111 or b == 117 {
+      total = total + 1
+    }
+  }
+  return total
+}

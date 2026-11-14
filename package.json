@@ -1,0 +1,19 @@
+{
+  "name": "avisoq",
+  "version": "0.5.0",
+  "description": "Avisoq: a fast, safe programming language designed to be written and verified by AI agents",
+  "license": "MIT",
+  "author": "Hessel",
+  "repository": { "type": "git", "url": "git+https://github.com/hesselb20-ctrl/avisoq.git" },
+  "homepage": "https://github.com/hesselb20-ctrl/avisoq#readme",
+  "bugs": { "url": "https://github.com/hesselb20-ctrl/avisoq/issues" },
+  "keywords": ["programming-language", "compiler", "webassembly", "ai-agents", "contracts", "capabilities"],
+  "bin": { "avisoq": "src/cli.mjs" },
+  "files": ["src", "std", "docs", "examples", "README.md", "LICENSE"],
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "test": "node tests/run.mjs wasm && node tests/ide.mjs && node tests/pkg.mjs",
+    "test:native": "node tests/run.mjs native && node tests/sandbox.mjs",
+    "fuzz": "node tests/fuzz.mjs 200"
+  }
+}

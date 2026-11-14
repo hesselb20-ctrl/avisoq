@@ -1,0 +1,48 @@
+fn is_open_code(b: Int) -> Bool {
+  if b == 40 or b == 91 or b == 123 {
+    return true
+  }
+  return false
+}
+
+fn is_close_code(b: Int) -> Bool {
+  if b == 41 or b == 93 or b == 125 {
+    return true
+  }
+  return false
+}
+
+fn pair_ok(opener: Int, closer: Int) -> Bool {
+  if opener == 40 and closer == 41 {
+    return true
+  }
+  if opener == 91 and closer == 93 {
+    return true
+  }
+  if opener == 123 and closer == 125 {
+    return true
+  }
+  return false
+}
+
+fn balanced(s: Str) -> Bool {
+  var stack: [Int] = array(len(s), 0)
+  var depth = 0
+  for i in 0..len(s) {
+    let b = byte_at(s, i)
+    if is_open_code(b) {
+      stack[depth] = b
+      depth = depth + 1
+    }
+    if is_close_code(b) {
+      if depth == 0 {
+        return false
+      }
+      depth = depth - 1
+      if not pair_ok(stack[depth], b) {
+        return false
+      }
+    }
+  }
+  return depth == 0
+}

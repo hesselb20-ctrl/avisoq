@@ -1,0 +1,13 @@
+fn pow_mod(base: Int, exp: Int, m: Int) -> Int {
+  var b = base % m
+  var e = exp
+  var r = 1 % m
+  while e > 0 {
+    if e % 2 == 1 {
+      r = (r * b) % m
+    }
+    b = (b * b) % m
+    e = e / 2
+  }
+  return r
+}

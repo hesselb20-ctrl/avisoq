@@ -1,0 +1,18 @@
+fn count_primes_below(n: Int) -> Int {
+  if n <= 2 {
+    return 0
+  }
+  var composite: [Bool] = array(n, false)
+  var count = 0
+  for i in 2..n {
+    if not composite[i] {
+      count = count + 1
+      var j = i * i
+      while j < n {
+        composite[j] = true
+        j = j + i
+      }
+    }
+  }
+  return count
+}

@@ -1,0 +1,19 @@
+fn is_prime_helper(n: Int) -> Bool {
+  if n < 2 { return false }
+  var d = 2
+  while d * d <= n {
+    if n % d == 0 { return false }
+    d = d + 1
+  }
+  return true
+}
+
+fn nth_prime(k: Int) -> Int {
+  var found = 0
+  var cand = 1
+  while found < k {
+    cand = cand + 1
+    if is_prime_helper(cand) { found = found + 1 }
+  }
+  return cand
+}

@@ -1,0 +1,19 @@
+fn most_frequent(xs: [Int]) -> Int {
+  var best = xs[0]
+  var best_count = 0
+  for i in 0..len(xs) {
+    var occurrences = 0
+    for j in 0..len(xs) {
+      if xs[j] == xs[i] {
+        occurrences = occurrences + 1
+      }
+    }
+    if occurrences > best_count {
+      best = xs[i]
+      best_count = occurrences
+    } else if occurrences == best_count and xs[i] < best {
+      best = xs[i]
+    }
+  }
+  return best
+}

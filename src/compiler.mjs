@@ -274,6 +274,10 @@ export async function instantiate(wasm, meta, { allow = [], write = (s) => proce
         if (start < 0n || end < start || end > BigInt(x.length)) fail(FAIL.BOUNDS, site);
         return newStr(x.subarray(Number(start), Number(end)));
       },
+      str_from_byte: (b, site) => {
+        if (b < 0n || b > 255n) fail(FAIL.BOUNDS, site);
+        return newStr(Uint8Array.of(Number(b)));
+      },
       byte_at: (s, i, site) => {
         const x = strBytes(s);
         if (i < 0n || i >= BigInt(x.length)) fail(FAIL.BOUNDS, site);

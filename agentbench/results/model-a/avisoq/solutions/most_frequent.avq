@@ -1,0 +1,17 @@
+fn most_frequent(xs: [Int]) -> Int {
+  var tally: Map[Int, Int] = {}
+  for i in 0..len(xs) {
+    put(tally, xs[i], get_or(tally, xs[i], 0) + 1)
+  }
+  let ks = keys(tally)
+  var best = ks[0]
+  var best_n = get(tally, ks[0])
+  for j in 1..len(ks) {
+    let c = get(tally, ks[j])
+    if c > best_n or (c == best_n and ks[j] < best) {
+      best = ks[j]
+      best_n = c
+    }
+  }
+  return best
+}

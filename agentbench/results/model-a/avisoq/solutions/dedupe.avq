@@ -1,0 +1,11 @@
+fn dedupe(xs: [Int]) -> [Int] {
+  var seen: Map[Int, Int] = {}
+  var out: [Int] = []
+  for i in 0..len(xs) {
+    if not has(seen, xs[i]) {
+      put(seen, xs[i], 1)
+      push(out, xs[i])
+    }
+  }
+  return out
+}

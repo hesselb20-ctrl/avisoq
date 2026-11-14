@@ -1,0 +1,13 @@
+fn to_roman(n: Int) -> Str {
+  let vals = [1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1]
+  let syms = ["M", "CM", "D", "CD", "C", "XC", "L", "XL", "X", "IX", "V", "IV", "I"]
+  var left = n
+  var out = ""
+  for i in 0..13 {
+    while left >= vals[i] {
+      out = out + syms[i]
+      left = left - vals[i]
+    }
+  }
+  return out
+}

@@ -1,0 +1,10 @@
+fn fib_mod(n: Int) -> Int {
+  var a = 0
+  var b = 1
+  for i in 0..n {
+    let t = (a + b) % 1000000007
+    a = b
+    b = t
+  }
+  return a
+}

@@ -194,6 +194,13 @@ static const vstr *vstr_substr(const vstr *s, int64_t start, int64_t end, int si
   memcpy(r->data, s->data + start, (size_t)(end - start));
   return r;
 }
+/* A one-byte string. */
+static const vstr *vstr_from_byte(int64_t b, int site) {
+  if (VUNLIKELY((uint64_t)b > 255)) avisoq_fail(site);
+  vstr *s = vstr_new(1);
+  s->data[0] = (char)b;
+  return s;
+}
 static int64_t vstr_byte_at(const vstr *s, int64_t i, int site) {
   if (VUNLIKELY((uint64_t)i >= (uint64_t)s->len)) avisoq_fail(site);
   return (unsigned char)s->data[i];

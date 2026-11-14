@@ -559,6 +559,9 @@ await prints('negative zero keeps its sign on both backends', main('let z = 0.0\
 
 await prints('comprehensions of numbers use lanes and agree with plain code', `fn wave(i: Int) -> Float { var x = float(i) * 0.25\n if x > 3.0 { x = x - 3.0 }\n return x * x + 0.5 }\n${main('let fs = [i in 0..37: wave(i)]\nlet ns = [i in 3..40: int(float(i) * 1.5) + 1]\nvar t = 0.0\nfor i in 0..len(fs) { t = t + fs[i] }\nprint(len(fs), fs[0], fs[12], fs[13], fs[36], t)\nprint(len(ns), ns[0], ns[7], ns[36], sum(i in 0..len(ns): ns[i]))')}`, '37 0.5 9.5 0.5625 36.5 365.375\n37 5 16 59 1193\n');
 
+await prints('chr builds a string from a byte', main('var s = ""\nfor i in 0..5 { s = s + chr(97 + i) }\nprint(s, chr(byte_at("Z", 0) + 32), len(chr(0)))'), 'abcde z 1\n');
+await traps('chr outside a byte', main('let n = 300\nprint(chr(n))'), 'bounds');
+
 // ---- capabilities ----
 await traps('io denied without grant', main('print(1)'), 'capability_denied', { allow: [] });
 await traps('time denied without grant', 'fn main() uses io, time { print(now_ms() >= 0.0) }', 'capability_denied', { allow: ['io'] });

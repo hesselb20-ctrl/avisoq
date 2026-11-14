@@ -1,0 +1,7 @@
+fn is_palindrome(s: Str) -> Bool {
+  let n = len(s)
+  for i in 0..n {
+    if byte_at(s, i) != byte_at(s, n - 1 - i) { return false }
+  }
+  return true
+}

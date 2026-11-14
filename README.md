@@ -5,7 +5,7 @@ A small, fast, safe programming language designed to be written and verified by 
 Version 0.5. One front end, two backends (native machine code through GCC, and sandboxed
 WebAssembly), a standard library written in Avisoq, a formatter, a compile-time contract prover,
 a language server, a package manager and a differential fuzzer. The test suites pass on both
-backends: 314 compiler cases each, plus 26 editor, 17 package and 10 sandbox tests.
+backends: 316 compiler cases each, plus 26 editor, 17 package and 10 sandbox tests.
 
 ```
 import "std/strings"
@@ -33,26 +33,56 @@ fn main() uses io, fs {
 }
 ```
 
-## Use
+## Install and use
 
-Requires Node 22 or newer. The native backend also needs GCC (found on PATH, through
-`AVISOQ_CC`, or in the WinGet WinLibs install).
+Requires Node 22 or newer.
 
 ```
-node src/cli.mjs check examples/wordfreq.avq                            # types, effects, contracts
-node src/cli.mjs run   examples/wordfreq.avq --allow io,fs:examples     # WebAssembly sandbox
-node src/cli.mjs run   examples/wordfreq.avq --allow io,fs:examples --native
-node src/cli.mjs test  examples/wordfreq.avq
-node src/cli.mjs fmt   examples/wordfreq.avq                            # canonical layout
-node src/cli.mjs build examples/wordfreq.avq --native --portable -o wordfreq.exe
-node src/cli.mjs lsp                                                    # language server
-node src/cli.mjs init | add <name> <path or git url> | install          # packages
+npm install -g avisoq
+```
+
+Or run it from a clone of this repository with `node src/cli.mjs` in place of `avisoq`.
+The native backend also needs GCC (found on PATH, through `AVISOQ_CC`, or in the WinGet
+WinLibs install); without it, programs run on the WebAssembly backend.
+
+```
+avisoq check program.avq                         # types, effects, contracts
+avisoq run   program.avq --allow io              # WebAssembly sandbox
+avisoq run   program.avq --allow io --native     # machine code
+avisoq test  program.avq
+avisoq fmt   program.avq                         # canonical layout
+avisoq build program.avq --native --portable -o program.exe
+avisoq guide                                     # the language guide written for AI agents
+avisoq lsp                                       # language server
+avisoq init | add <name> <path or git url> | install     # packages
 ```
 
 Add `--json` to any command for machine-readable output.
 
-Tests: `node tests/run.mjs wasm`, `node tests/run.mjs native`, `node tests/ide.mjs`,
-`node tests/pkg.mjs`, `node tests/sandbox.mjs`, and `node tests/fuzz.mjs 200` for the fuzzer.
+From a clone, the tests are `npm test` (WebAssembly backend, editor, packages),
+`npm run test:native` and `npm run fuzz`.
+
+### For AI agents
+
+`docs/AGENT_GUIDE.md` (also printed by `avisoq guide`) is a one-page description of the whole
+language, written to be given to a model. Point your agent at it, and have it check its work
+with `avisoq check file.avq --json`, whose errors carry the exact fix in a `hint` field.
+
+## Status: experimental preview
+
+Avisoq is a few days old and was written with an AI coding agent. It has a thorough test
+suite and has been used for one program of real size (`examples/loganalyzer.avq`, 260 lines),
+but not yet by anyone other than its author. It is developed and tested on Windows only.
+Expect rough edges, and please report them.
+
+## Can a model actually write it?
+
+Measured, with the method and all solutions in [`agentbench/`](agentbench/README.md): given
+only the one-page guide, two Claude models each wrote 24 of 24 small tasks correctly in
+Avisoq on the first attempt, with no chance to compile or test. They scored the same 24 of 24
+in Python and Rust. So a model can learn the language from one page, but this benchmark is too
+easy to show an advantage over existing languages, and Avisoq's solutions were about twice
+as long as Python's.
 
 ## What makes it agent-oriented
 
@@ -160,7 +190,7 @@ when the program was granted neither files nor network, no right to write any fi
 - **Modules:** `import "std/strings"`, `import "other_file"` (relative), `import "pkg:name/module"`.
   `private fn` / `private struct` / `private enum` are usable only in their own file.
 - **Built-ins:** `print`, `len`, `array`, `copy`, `push`, `pop`, `float`, `int`, `sqrt`, `str`,
-  `substr`, `byte_at`, `now_ms`; maps: `put`, `get`, `get_or`, `has`, `remove`, `keys`;
+  `substr`, `byte_at`, `chr`, `now_ms`; maps: `put`, `get`, `get_or`, `has`, `remove`, `keys`;
   files: `read_file`, `write_file`, `file_exists`; network: `http_get`, `http_post`.
 
 ### Standard library
@@ -232,8 +262,10 @@ on an idle machine with 8 logical cores (Zen 4, AVX-512). Ratios are relative to
 
 ## Known limits
 
-- **Not yet used on a real project.** Everything here was tested with programs written to
-  exercise the language. Expect gaps the moment someone writes something larger.
+- **Barely used.** One 260-line program and the examples; nobody but the author has written
+  Avisoq yet. Expect gaps the moment someone writes something larger.
+- **No conditional expression.** `if` is a statement only, so choosing between two values
+  takes a few lines or a helper function.
 - **Windows only, in practice.** The code is written to be portable, but Linux and macOS have
   never been run. Native HTTP and the sandbox launcher are Windows-only; elsewhere native
   `http_get` returns an error value and programs run without the launcher.

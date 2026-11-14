@@ -31,7 +31,7 @@
     { "name": "support.type.primitive.avq", "match": "\\b(?:Int|Float|Bool|Str|Map)\\b" },
     {
       "name": "support.function.builtin.avq",
-      "match": "\\b(?:print|len|array|float|int|sqrt|now_ms|str|substr|byte_at|put|get|get_or|has|keys|remove|copy|sum|read_file|write_file|file_exists|http_get)(?=\\s*\\()"
+      "match": "\\b(?:print|len|array|float|int|sqrt|now_ms|str|substr|byte_at|chr|push|pop|http_post|put|get|get_or|has|keys|remove|copy|sum|read_file|write_file|file_exists|http_get)(?=\\s*\\()"
     },
     { "name": "entity.name.type.avq", "match": "\\b[A-Z][A-Za-z0-9_]*\\b" },
     { "name": "entity.name.function.call.avq", "match": "\\b[a-z_][A-Za-z0-9_]*(?=\\s*\\()" },

@@ -28,7 +28,7 @@ export function planRegions(program, backend) {
 
   const directAlloc = (n) => n.kind === 'ArrayLit' || n.kind === 'Comp' || n.kind === 'MapLit'
     || (n.kind === 'New' && backend === 'wasm')
-    || (n.kind === 'Call' && !n.fn && ['array', 'str', 'substr', 'keys', 'copy', 'read_file', 'write_file', 'http_get', 'http_post'].includes(n.name))
+    || (n.kind === 'Call' && !n.fn && ['array', 'str', 'substr', 'chr', 'keys', 'copy', 'read_file', 'write_file', 'http_get', 'http_post'].includes(n.name))
     || (n.kind === 'Binary' && n.op === '+' && n.ty === 'Str');
 
   const pointerStore = (n) => (n.kind === 'Assign' && n.target.kind === 'Index' && !flat(n.target.ty))

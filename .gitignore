@@ -2,3 +2,6 @@ bench/out/
 *.wasm
 *.exe
 *.vsix
+agentbench/work/*/round*/
+*.tgz
+node_modules/

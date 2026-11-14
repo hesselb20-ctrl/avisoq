@@ -14,6 +14,7 @@ commands:
   build   compile to a .wasm file, or an executable with --native (-o path)
   fmt     rewrite the file in the canonical layout (--check only reports)
   lsp     start the language server on stdin/stdout (no file argument)
+  guide   print the language guide written for AI agents (no file argument)
 
 packages (run in the project folder):
   init [name]                  create avisoq.json
@@ -62,6 +63,10 @@ if (['init', 'add', 'install'].includes(cmd)) {
   else r = pkg.install(process.cwd(), flags.json ? () => {} : say);
   if (flags.json) process.stdout.write(`${JSON.stringify(r, null, 2)}\n`); else (r.ok ? say : (m) => process.stderr.write(`avisoq ${cmd}: ${m}\n`))(r.message);
   process.exit(r.ok ? 0 : 1);
+}
+if (cmd === 'guide') {
+  process.stdout.write(readFileSync(new URL('../docs/AGENT_GUIDE.md', import.meta.url), 'utf8'));
+  process.exit(0);
 }
 if (cmd === 'lsp') {
   const { startServer } = await import('./lsp.mjs');

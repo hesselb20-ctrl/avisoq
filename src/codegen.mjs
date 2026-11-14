@@ -52,6 +52,7 @@ export function codegen(program, opts = {}) {
     imp.str_from_bool = m.addImport('rt', 'str_from_bool', [I32], [I32]);
     imp.substr = m.addImport('rt', 'substr', [I32, I64, I64, I32], [I32]);
     imp.byte_at = m.addImport('rt', 'byte_at', [I32, I64, I32], [I64]);
+    imp.str_from_byte = m.addImport('rt', 'str_from_byte', [I64, I32], [I32]);
   }
 
   if (['read_file', 'write_file', 'file_exists'].some((b) => used.has(b))) {
@@ -527,6 +528,9 @@ export function codegen(program, opts = {}) {
           break;
         case 'byte_at':
           e.args.forEach(expr); emit(...i32c(site(e))); call(imp.byte_at);
+          break;
+        case 'chr':
+          expr(e.args[0]); emit(...i32c(site(e))); call(imp.str_from_byte);
           break;
         default: throw new Error(`codegen: unknown builtin ${e.name}`);
       }

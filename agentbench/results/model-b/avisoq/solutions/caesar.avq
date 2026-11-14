@@ -1,0 +1,29 @@
+fn is_lower_code(b: Int) -> Bool {
+  if b >= 97 and b <= 122 {
+    return true
+  }
+  return false
+}
+
+fn is_upper_code(b: Int) -> Bool {
+  if b >= 65 and b <= 90 {
+    return true
+  }
+  return false
+}
+
+fn caesar(s: Str, k: Int) -> Str {
+  let shift = ((k % 26) + 26) % 26
+  var out = ""
+  for i in 0..len(s) {
+    let b = byte_at(s, i)
+    if is_lower_code(b) {
+      out = out + chr(97 + (b - 97 + shift) % 26)
+    } else if is_upper_code(b) {
+      out = out + chr(65 + (b - 65 + shift) % 26)
+    } else {
+      out = out + substr(s, i, i + 1)
+    }
+  }
+  return out
+}

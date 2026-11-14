@@ -1,0 +1,15 @@
+fn caesar(s: Str, k: Int) -> Str {
+  let sh = ((k % 26) + 26) % 26
+  var out = ""
+  for i in 0..len(s) {
+    let b = byte_at(s, i)
+    if b >= 65 and b <= 90 {
+      out = out + chr(65 + (b - 65 + sh) % 26)
+    } else if b >= 97 and b <= 122 {
+      out = out + chr(97 + (b - 97 + sh) % 26)
+    } else {
+      out = out + substr(s, i, i + 1)
+    }
+  }
+  return out
+}

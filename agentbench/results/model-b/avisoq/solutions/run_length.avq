@@ -1,0 +1,21 @@
+fn run_end(s: Str, start: Int) -> Int {
+  var j = start
+  while j < len(s) {
+    if byte_at(s, j) != byte_at(s, start) {
+      return j
+    }
+    j = j + 1
+  }
+  return len(s)
+}
+
+fn run_length(s: Str) -> Str {
+  var out = ""
+  var i = 0
+  while i < len(s) {
+    let stop = run_end(s, i)
+    out = out + substr(s, i, i + 1) + str(stop - i)
+    i = stop
+  }
+  return out
+}

@@ -1,0 +1,11 @@
+fn rotate_left(xs: [Int], k: Int) -> [Int] {
+  var out: [Int] = []
+  if len(xs) == 0 {
+    return out
+  }
+  let shift = k % len(xs)
+  for i in 0..len(xs) {
+    push(out, xs[(i + shift) % len(xs)])
+  }
+  return out
+}

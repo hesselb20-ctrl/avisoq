@@ -1,0 +1,13 @@
+fn common_prefix(a: Str, b: Str) -> Str {
+  var n = 0
+  while n < len(a) {
+    if n >= len(b) {
+      return substr(a, 0, n)
+    }
+    if byte_at(a, n) != byte_at(b, n) {
+      return substr(a, 0, n)
+    }
+    n = n + 1
+  }
+  return substr(a, 0, n)
+}

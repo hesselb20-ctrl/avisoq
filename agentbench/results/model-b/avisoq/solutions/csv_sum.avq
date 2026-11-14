@@ -1,0 +1,18 @@
+import "std/strings"
+
+fn csv_sum(s: Str) -> Int {
+  let parts = split(s, ",")
+  var total = 0
+  for i in 0..len(parts) {
+    let field = trim(parts[i])
+    if len(field) > 0 {
+      match parse_int(field) {
+        Some(value) => {
+          total = total + value
+        }
+        None => { }
+      }
+    }
+  }
+  return total
+}

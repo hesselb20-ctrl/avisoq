@@ -5,7 +5,7 @@ import { elemOf, isArr, isMap, mangle, mapParts, showType, substType, typeArgs, 
 export const EFFECTS = new Set(['io', 'time', 'fs', 'net']);
 const BUILTIN_EFFECTS = { print: 'io', now_ms: 'time', read_file: 'fs', write_file: 'fs', file_exists: 'fs', http_get: 'net', http_post: 'net' };
 const BUILTINS = new Set(['print', 'len', 'array', 'float', 'int', 'sqrt', 'now_ms', 'str', 'substr', 'byte_at',
-  'put', 'get', 'get_or', 'has', 'keys', 'remove', 'copy', 'push', 'pop', 'read_file', 'write_file', 'file_exists', 'http_get', 'http_post']);
+  'put', 'get', 'get_or', 'has', 'keys', 'remove', 'copy', 'push', 'pop', 'chr', 'read_file', 'write_file', 'file_exists', 'http_get', 'http_post']);
 const BASE_TYPES = new Set(['Int', 'Float', 'Bool', 'Str']);
 const RESERVED_TYPES = new Set([...BASE_TYPES, 'Unit', 'Map', 'Fn']);
 // Constraints a type parameter can carry: fn max[T: Ord](a: T, b: T) -> T
@@ -643,6 +643,10 @@ export function check(program, diags) {
             want(e.args[1], 'Int', 'start of substr');
             want(e.args[2], 'Int', 'end of substr');
           }
+          return 'Str';
+        case 'chr':
+          program.usesStrings = true;
+          if (argc(e, 1)) want(e.args[0], 'Int', 'argument of chr');
           return 'Str';
         case 'byte_at':
           program.usesStrings = true;

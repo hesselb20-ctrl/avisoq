@@ -1,0 +1,13 @@
+fn floor_half(x: Int) -> Int {
+  if x % 2 != 0 and x < 0 { return x / 2 - 1 }
+  return x / 2
+}
+
+fn parity_bit(x: Int) -> Int {
+  if x % 2 != 0 { return 1 }
+  return 0
+}
+
+fn midpoint(a: Int, b: Int) -> Int {
+  return floor_half(a) + floor_half(b) + (parity_bit(a) + parity_bit(b)) / 2
+}
