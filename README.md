@@ -9,7 +9,7 @@ A small, fast, safe programming language designed to be written and verified by 
 Version 0.9. One front end, two backends (native machine code through GCC, and sandboxed
 WebAssembly), a standard library written in Avisoq, a formatter, a compile-time contract prover,
 a language server, a package manager and a differential fuzzer. The test suites pass on both
-backends: 366 compiler cases each, plus 26 editor, 17 package and 10 sandbox tests.
+backends: 368 compiler cases each, plus 26 editor, 17 package and 10 sandbox tests.
 
 ```
 import "std/strings"
@@ -106,7 +106,7 @@ module itself and runs it in a sandbox. Both keep every run-time check.
 - **Adversarial memory tests.** Programs that would exhaust memory without reclamation, and
   programs that check live data survives it.
 
-<img src=".github/assets/how/scene.webp" width="100%" alt="366 test programs go through one front end, are compiled by both the native and the WebAssembly backend, and all 366 print the same on both. The fuzzer found two mismatches, both fixed.">
+<img src=".github/assets/how/scene.webp" width="100%" alt="368 test programs go through one front end, are compiled by both the native and the WebAssembly backend, and all 368 print the same on both. The fuzzer found two mismatches, both fixed.">
 
 ## Capabilities
 
