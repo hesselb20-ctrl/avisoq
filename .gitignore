@@ -7,3 +7,4 @@ agentbench/work/*/round*/
 node_modules/
 agentbench/work-hard/
 agentbench/work-expert/
+*.dll

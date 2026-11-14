@@ -339,7 +339,8 @@ Calling it needs the `ffi` effect and `--allow ffi`.
 ```
 extern "shim.c" fn add_squares(a: Int, b: Int) -> Int      // a C file next to this one
 extern "m" fn cos(x: Float) -> Float                        // the C standard library: "c" or "m"
-extern "shim.c" link "sqlite3" fn db_count(path: Str) -> Int   // also link a library
+extern "shim.c" link "sqlite3" fn db_count(path: Str) -> Int   // also link a library by name
+extern "shim.c" link "libsqlite3-0.dll" fn db_open(path: Str) -> Int   // or a library file next to this one
 ```
 
 Use these only when the task needs something that exists elsewhere. Code that calls them

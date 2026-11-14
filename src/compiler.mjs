@@ -167,7 +167,12 @@ export function compile(src, opts = {}) {
       const src = f.extern.source;
       if (src.toLowerCase().endsWith('.c')) sources.add(resolve(f.file ? dirname(resolve(f.file)) : process.cwd(), src));
       else if (src !== 'c' && src !== 'm') links.add(src);
-      for (const l of f.extern.links) links.add(l);
+      // link "sqlite3" names a library for the linker to find; link "libs/sqlite3.dll" (a path, or a
+      // file name ending in .dll, .a, .lib or .o) names a file next to the source.
+      for (const l of f.extern.links) {
+        if (/[\\/]|\.(dll|a|lib|o|so|dylib)$/i.test(l)) sources.add(resolve(f.file ? dirname(resolve(f.file)) : process.cwd(), l));
+        else links.add(l);
+      }
     }
     return { ok: true, diagnostics, backend, c, meta, proof, extern: { sources: [...sources], links: [...links] } };
   }
@@ -474,6 +479,7 @@ export function buildNative(compiled, outPath, opts = {}) {
   const flags = opts.portable ? CFLAGS.map((f) => (f === '-march=native' ? '-march=x86-64-v2' : f)) : CFLAGS;
   const ext = compiled.extern ?? { sources: [], links: [] };
   for (const s of ext.sources) if (!existsSync(s)) throw new Error(`extern C file not found: ${s}`);
+  const useFlags = flags; // -static still applies to the compiler's own runtime; a .dll named on the command line is linked dynamically
   const hasher = createHash('sha256').update(compiled.c).update(flags.join(' ')).update(ext.links.join(' '));
   for (const s of ext.sources) hasher.update(readFileSync(s));
   const hash = hasher.digest('hex').slice(0, 24);
@@ -482,7 +488,7 @@ export function buildNative(compiled, outPath, opts = {}) {
     const cfile = join(cache, `${hash}.c`);
     writeFileSync(cfile, compiled.c);
     const env = gccEnv(gcc);
-    const r = spawnSync(gcc, [...flags, '-o', exe, cfile, ...ext.sources, '-lm', ...ext.links.map((l) => `-l${l}`), ...(process.platform === 'win32' ? ['-lwinhttp'] : [])], { encoding: 'utf8', env });
+    const r = spawnSync(gcc, [...useFlags, '-o', exe, cfile, ...ext.sources, '-lm', ...ext.links.map((l) => `-l${l}`), ...(process.platform === 'win32' ? ['-lwinhttp'] : [])], { encoding: 'utf8', env });
     if (r.status !== 0) throw new Error(ext.sources.length || ext.links.length ? `the C code named by extern functions failed to build:\n${(r.stderr || '').replace(/-w\b/g, '').slice(0, 3000)}` : `internal error: generated C failed to compile (${cfile})\n${r.stderr}`);
   }
   if (outPath) copyFileSync(exe, outPath);
@@ -490,10 +496,12 @@ export function buildNative(compiled, outPath, opts = {}) {
 }
 
 // sandbox: null (run directly), 'low' or 'std' (see sandbox_win.c)
-function execNative(exe, args, write, sandbox = null, memoryMb = 0) {
+function execNative(exe, args, write, sandbox = null, memoryMb = 0, libraryDirs = []) {
   const box = sandbox ? sandboxLauncher() : null;
   if (box) { args = [sandbox, String(memoryMb), exe, ...args]; exe = box; }
-  const r = spawnSync(exe, args, { stdio: ['ignore', write ? 'pipe' : 'inherit', 'pipe'], maxBuffer: 1 << 30 });
+  // A program linked against a .dll finds it through the search path when it starts.
+  const env = libraryDirs.length ? { ...process.env, PATH: [...libraryDirs, process.env.PATH].join(delimiter) } : process.env;
+  const r = spawnSync(exe, args, { stdio: ['ignore', write ? 'pipe' : 'inherit', 'pipe'], maxBuffer: 1 << 30, env });
   if (write && r.stdout?.length) write(r.stdout.toString('utf8'));
   const stderr = r.stderr?.toString('utf8') ?? '';
   const m = /\x01AVISOQFAIL (.*)/.exec(stderr);
@@ -518,7 +526,8 @@ export async function run(compiled, { allow = [], write, sandbox, portable, memo
     // A program that may start other programs or call C code cannot run under the reduced-rights launcher.
     const open = compiled.meta.effects.some((e) => e === 'run' || e === 'ffi');
     const mode = sandbox === false || open ? null : compiled.meta.effects.some((e) => e === 'fs' || e === 'net') ? 'std' : 'low';
-    return execNative(buildNative(compiled, undefined, { portable }), [], write, mode, memoryMb);
+    const libraryDirs = [...new Set((compiled.extern?.sources ?? []).filter((s) => /\.(dll|so|dylib)$/i.test(s)).map((s) => dirname(s)))];
+    return execNative(buildNative(compiled, undefined, { portable }), [], write, mode, memoryMb, libraryDirs);
   }
   const instance = await instantiate(compiled.wasm, compiled.meta, { allow, write });
   try {

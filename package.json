@@ -1,6 +1,6 @@
 {
   "name": "avisoq",
-  "version": "0.13.0",
+  "version": "0.13.1",
   "description": "Avisoq: a fast, safe programming language designed to be written and verified by AI agents",
   "license": "MIT",
   "author": "Hessel",

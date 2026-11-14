@@ -59,5 +59,49 @@ if (hasGcc) {
   report('[native] extern: a missing C file is reported plainly', message.includes('extern C file not found'), message);
 }
 
+// ---- a real C library: SQLite ----
+if (hasGcc) {
+  const { copyFileSync, existsSync, mkdtempSync, rmSync } = await import('node:fs');
+  const { dirname, join } = await import('node:path');
+  const { tmpdir } = await import('node:os');
+  const here = path('sqlite/libsqlite3-0.dll');
+  const shipped = join(dirname(findGcc()), 'libsqlite3-0.dll');
+  if (!existsSync(here) && existsSync(shipped)) copyFileSync(shipped, here);
+  if (!existsSync(here)) {
+    console.log('(libsqlite3-0.dll not found: the SQLite test was skipped; see examples/interop/sqlite/README.md)');
+  } else {
+    const notes = readFileSync(path('sqlite/notes.avq'), 'utf8');
+    const want = [
+      'SQLite loaded', 'notes: 6', "  4 4 Read the 'manual'", '  3 1 Buy milk', '  3 6 Buy stamps', "  2 3 It's a test; DROP TABLE notes; --", '  1 5 Zürich trip', '  0 2 Call Ada',
+      'starting with Buy: 2 Buy milk Buy stamps', 'count, stars, longest title: 6 13 33 ok', 'no match: 0',
+      'a bad query is an error value: no such table: missing_table', 'a broken rule is an error value: NOT NULL constraint failed: notes.stars', 'done: 6', '',
+    ].join('\n');
+    const r = await exec(notes, 'native', ['io', 'ffi'], path('sqlite/notes.avq'));
+    report('[native] SQLite: create, insert with bound values, query, aggregate, errors as values', r.run?.ok && r.stdout === want, JSON.stringify(r.run?.ok ? r.stdout : r.run ?? r.compile.diagnostics));
+
+    // a database file on disk: written by one connection, read back by another
+    const dir = mkdtempSync(join(tmpdir(), 'avisoq-sqlite-'));
+    const file = join(dir, 'kept.db').replace(/\\/g, '/');
+    const decls = notes.slice(0, notes.indexOf('struct Note'));
+    const program = `${decls}
+fn main() uses io, ffi {
+  let first = db_open("${file}")
+  let made = db_exec(first, "CREATE TABLE kept (word TEXT, n INTEGER)")
+  var last = 0
+  for i in 0..500 { last = db_insert(first, "INSERT INTO kept (word, n) VALUES (?1, ?2)", "w" + str(i), i * i) }
+  db_close(first)
+  let second = db_open("${file}")
+  let total = db_query(second, "SELECT COUNT(*), SUM(n), MAX(word) FROM kept WHERE word LIKE ?1", "w%")
+  let one = db_query(second, "SELECT n FROM kept WHERE word = ?1", "w499")
+  print(made, last, db_query_ok(), total, one)
+  db_close(second)
+}
+`;
+    const k = await exec(program, 'native', ['io', 'ffi'], path('sqlite/notes.avq'));
+    report('[native] SQLite: a database file survives being closed and reopened', k.run?.ok && k.stdout === 'true 500 true 500\t41541750\tw99 249001\n' && existsSync(file), JSON.stringify(k.run?.ok ? k.stdout : k.run ?? k.compile.diagnostics));
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 console.log(`[interop] ${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

@@ -9,7 +9,7 @@ A small, fast, safe programming language designed to be written and verified by 
 Version 0.13. One front end, two backends (native machine code through GCC, and sandboxed
 WebAssembly), a standard library written in Avisoq, a formatter, a compile-time contract prover,
 a language server, a package manager and a differential fuzzer. The test suites pass on both
-backends: 371 compiler cases each, 21 embedding and 16 interop tests, plus 26 editor, 17 package and 10 sandbox tests.
+backends: 371 compiler cases each, 21 embedding and 18 interop tests, plus 26 editor, 17 package and 10 sandbox tests.
 
 ```
 import "std/strings"
@@ -99,7 +99,8 @@ and arrays. See [`examples/embed`](examples/embed/README.md).
 
 The last two are deliberate holes in the sandbox. A program that is granted `run` or `ffi`
 runs without the reduced-rights launcher, and what the other program or the C code does is
-outside every guarantee Avisoq makes. See [`examples/interop`](examples/interop).
+outside every guarantee Avisoq makes. See [`examples/interop`](examples/interop), which includes a
+working [SQLite binding](examples/interop/sqlite/README.md) of about 100 lines of C.
 
 ### For AI agents
 
@@ -369,7 +370,8 @@ on an idle machine with 8 logical cores (Zen 4, AVX-512). Ratios are relative to
 - **Using other ecosystems goes through a boundary, not an import.** Avisoq cannot import a
   Python or npm package. It can run a program (`run_command`), call C through a small C file
   (`extern`, native backend only, plain values only), or be called from JavaScript and Python.
-  Native `run_command` works on Windows only so far. Embedding uses the WebAssembly backend,
+  Native `run_command` works on Windows only so far, and C interop has been tried with one real
+  library (SQLite), on Windows. Embedding uses the WebAssembly backend,
   which is slower than the native one.
 - **Big integers are a library, not built in.** `std/bigint` is faster than Python at
   factorials, parsing and printing, level on powers and multiplication, and 2 to 4 times
