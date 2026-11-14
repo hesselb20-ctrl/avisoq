@@ -556,8 +556,23 @@ export function check(program, diags) {
           }
           return isCmp ? 'Bool' : l;
         }
+        case 'Cond': {
+          want(e.cond, 'Bool', 'condition');
+          const t = expr(e.then, hint);
+          if (t === '?') { expr(e.els, hint); return '?'; }
+          want(e.els, t, 'the else value');
+          if (hasContainer(t)) err('E0225', `a conditional expression cannot choose between values of type ${showType(t)}`, e, 'arrays and maps are never shared; use an if statement and assign in each branch');
+          return t;
+        }
         case 'Index': {
           const b = expr(e.base);
+          if (b === 'Str') {
+            // s[i] is the byte at position i
+            const base = e.base, index = e.index, at = { line: e.line, col: e.col, file: e.file };
+            for (const k of Object.keys(e)) delete e[k];
+            Object.assign(e, { kind: 'Call', name: 'byte_at', args: [base, index] }, at);
+            return expr(e, hint);
+          }
           want(e.index, 'Int', 'array index');
           if (b === '?') return '?';
           if (!isArr(b)) {
@@ -1050,7 +1065,9 @@ export function check(program, diags) {
             owned(s.init, `'${s.name}'`);
           } else if (s.init.ty && s.init.ty !== '?' && hasContainer(s.init.ty)) {
             const root = placeRoot(s.init);
-            if (root && canMutate(root)) {
+            if (root && s.loopView) {
+              extra.view = true; // the element of a for-in loop: read it, do not keep it
+            } else if (root && canMutate(root)) {
               err('E0210', `'${s.name}' would be a let that changes whenever '${root.name}' is modified`, s.init,
                 'take an independent value with copy(...), or read the data directly where it is needed');
             } else if (root) {

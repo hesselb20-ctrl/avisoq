@@ -24,7 +24,7 @@
       "match": "\\b(struct|enum)\\s+([A-Za-z_][A-Za-z0-9_]*)",
       "captures": { "1": { "name": "keyword.declaration.type.avq" }, "2": { "name": "entity.name.type.avq" } }
     },
-    { "name": "keyword.control.avq", "match": "\\b(?:if|else|while|for|in|return|match|break|continue)\\b" },
+    { "name": "keyword.control.avq", "match": "\\b(?:if|then|else|while|for|in|return|match|break|continue)\\b" },
     { "name": "keyword.other.contract.avq", "match": "\\b(?:requires|ensures|invariant|assert|uses)\\b" },
     { "name": "keyword.declaration.avq", "match": "\\b(?:fn|let|var|struct|enum|test|import|mut)\\b" },
     { "name": "keyword.operator.logical.avq", "match": "\\b(?:and|or|not)\\b" },

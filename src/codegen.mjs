@@ -301,6 +301,7 @@ export function codegen(program, opts = {}) {
     function expr(e) {
       switch (e.kind) {
         case 'Held': lget(storeIndex); break;
+        case 'Cond': expr(e.cond); emit(IF, wt(e.ty)); expr(e.then); emit(ELSE); expr(e.els); emit(END); break;
         case 'IntLit': emit(...i64c(e.value)); break;
         case 'FloatLit': emit(F64_CONST, ...f64bytes(e.value)); break;
         case 'BoolLit': emit(...i32c(e.value ? 1 : 0)); break;

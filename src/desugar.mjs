@@ -41,6 +41,21 @@ export function desugar(program) {
         out.push(...block(rest));
         break;
       }
+      if (s.kind === 'ForIn') {
+        exprs(s.iter);
+        let items = s.iter;
+        if (items.kind !== 'Name') {
+          const held = fresh('items');
+          out.push({ kind: 'Let', mutable: false, name: held, ty: null, init: items, stmtLine: s.line, ...at });
+          items = { kind: 'Name', name: held, ...at };
+        }
+        const i = s.index ? s.index.name : fresh('i');
+        const element = { kind: 'Let', mutable: false, loopView: true, name: s.name, ty: null, init: { kind: 'Index', base: { ...items }, index: { kind: 'Name', name: i, ...at }, ...at }, line: s.nameLine, col: s.nameCol, endLine: s.line, stmtLine: s.line };
+        const body = block([element, ...s.body]);
+        body.closeLine = s.body.closeLine;
+        out.push({ kind: 'For', name: i, start: { kind: 'IntLit', value: 0n, raw: '0', ...at }, end: { kind: 'Call', name: 'len', args: [{ ...items }], ...at }, body, line: s.index ? s.index.line : s.line, col: s.index ? s.index.col : s.col, endLine: s.endLine, stmtLine: s.stmtLine });
+        continue;
+      }
       if (s.try) {
         s.try = false;
         const scrut = s.kind === 'Let' ? s.init : s.kind === 'Assign' ? s.value : s.expr;

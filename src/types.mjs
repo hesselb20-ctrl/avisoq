@@ -25,6 +25,8 @@ export function children(n) {
     case 'New': return n.fields.map((f) => f.expr);
     case 'ArrayLit': case 'Tuple': return n.elems;
     case 'LetTuple': return [n.init];
+    case 'Cond': return [n.cond, n.then, n.els];
+    case 'ForIn': return [n.iter, ...n.body];
     case 'Sum': case 'Comp': return [n.start, n.end, n.body];
     case 'Call': return n.args;
     case 'Lambda': return [n.body];

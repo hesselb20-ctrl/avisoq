@@ -322,6 +322,7 @@ export function cgen(program, opts = {}) {
             + `if (VUNLIKELY((uint64_t)${i} >= (uint64_t)${a}->len)) avisoq_fail(${site(FAIL.BOUNDS, e)}); `
             + `VDATA(${ctype(e.ty)}, ${a})[${i}]; })`;
         }
+        case 'Cond': return `(${expr(e.cond)} ? ${expr(e.then)} : ${expr(e.els)})`;
         case 'Field': return `(${expr(e.base)}).f_${e.name}`;
         case 'New': {
           const T = ctype(e.ty), k = e.variantIndex;

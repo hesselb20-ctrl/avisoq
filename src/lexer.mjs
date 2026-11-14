@@ -12,10 +12,10 @@ export class AvisoqError extends Error {
 
 export const KEYWORDS = new Set([
   'fn', 'let', 'var', 'if', 'else', 'while', 'for', 'in', 'return', 'assert',
-  'requires', 'ensures', 'uses', 'test', 'true', 'false', 'and', 'or', 'not', 'mut', 'struct', 'enum', 'match', 'import', 'invariant', 'private', 'break', 'continue',
+  'requires', 'ensures', 'uses', 'test', 'true', 'false', 'and', 'or', 'not', 'mut', 'struct', 'enum', 'match', 'import', 'invariant', 'private', 'break', 'continue', 'then',
 ]);
 
-const OPS = ['->', '=>', '..', '.', '==', '!=', '<=', '>=', '+', '-', '*', '/', '%', '<', '>', '=',
+const OPS = ['+=', '-=', '*=', '/=', '%=', '->', '=>', '..', '.', '==', '!=', '<=', '>=', '+', '-', '*', '/', '%', '<', '>', '=',
   '(', ')', '{', '}', '[', ']', ',', ':', '?'];
 
 const I64_MAX = (1n << 63n) - 1n;
@@ -42,6 +42,18 @@ export function lex(src) {
       continue;
     }
     const pos = i, l = line, c = col;
+    if (ch === "'") {
+      // A character literal is the Int value of one byte: 'a' is 97.
+      const esc = { n: 10, t: 9, r: 13, '0': 0, "'": 39, '"': 34, '\\': 92 };
+      let code, n;
+      if (src[i + 1] === '\\' && src[i + 2] in esc && src[i + 3] === "'") { code = esc[src[i + 2]]; n = 4; }
+      else if (src[i + 2] === "'" && src[i + 1] !== '\n' && src.charCodeAt(i + 1) < 128) { code = src.charCodeAt(i + 1); n = 3; }
+      else throw new AvisoqError('E0003', 'a character literal holds exactly one ASCII character', l, c, "write 'a', or an escape such as '\\n'; text goes in double quotes");
+      i += n; col += n;
+      push('int', BigInt(code), pos, l, c);
+      toks[toks.length - 1].raw = src.slice(pos, i);
+      continue;
+    }
     if (isDigit(ch)) {
       while (i < src.length && (isDigit(src[i]) || src[i] === '_')) i++;
       let isFloat = false;

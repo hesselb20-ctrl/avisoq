@@ -36,8 +36,8 @@ differ from the languages you know. Print this guide any time with `avisoq guide
 13. **A variable cannot have the name of any function**, including standard library functions
     of modules you import (`lines`, `map`, `min`, `sort` ...). The error names the module.
 14. **Arrays are not compared with `==`.** Use `equal(a, b)` from `std/arrays`.
-15. **Overflow is checked at every step, not just at the end.** `v * 10 + b - 48` can stop the
-    program where `v * 10 + (b - 48)` does not. To read digits into an Int, use `parse_int`.
+15. **Overflow is checked at every step, not just at the end.** `v * 10 + b - '0'` can stop the
+    program where `v * 10 + (b - '0')` does not. To read digits into an Int, use `parse_int`.
 16. **Comments are `//` only.**
 
 ## A complete example
@@ -72,6 +72,29 @@ fn main() uses io {
 }
 ```
 
+## Shorthand: write it the short way
+
+These forms exist so that programs stay short. Prefer them.
+
+```
+for x in items { total += x }            // every element of an array
+for i, x in items { print(i, x) }        // with its index
+for b in text { if b == ',' { n += 1 } }  // every byte of a Str, as an Int
+
+let c = text[i]                           // a byte of a Str, same as byte_at(text, i)
+let word = text[start..end]               // part of a Str, same as substr(text, start, end)
+if c >= '0' and c <= '9' { v = v * 10 + (c - '0') }   // 'x' is the Int value of a character
+
+count += 1                                // also -= *= /= %=, on variables, elements and fields
+let size = if n > 10 then "big" else "small"   // a conditional expression (not for arrays or maps)
+```
+
+- A character literal is an `Int`: `'a'` is 97, `'\n'` is 10, `' '` is 32. Never write the number.
+- `std/strings` has `is_digit(b)`, `is_letter(b)`, `is_lower(b)`, `is_upper(b)`, `is_space(b)`,
+  `pad_left(s, width, fill)` and `pad_right(s, width, fill)`.
+- In `for x in items`, `x` is a read-only view of the element. To change elements, loop over
+  the index: `for i in 0..len(items) { items[i] = ... }`.
+
 ## State, constants, tuples and errors
 
 These four features remove most of the bookkeeping from larger programs. Use them.
@@ -93,13 +116,13 @@ the way to write a parser or an interpreter: put the position, flags and tables 
 struct Parser { src: Str, pos: Int, errors: [Str] }
 
 fn skip_spaces(p: mut Parser) {
-  while p.pos < len(p.src) and byte_at(p.src, p.pos) == 32 { p.pos = p.pos + 1 }
+  while p.pos < len(p.src) and p.src[p.pos] == ' ' { p.pos += 1 }
 }
 
 fn expect(p: mut Parser, ch: Int) {
   skip_spaces(p)
-  if p.pos < len(p.src) and byte_at(p.src, p.pos) == ch {
-    p.pos = p.pos + 1
+  if p.pos < len(p.src) and p.src[p.pos] == ch {
+    p.pos += 1
   } else {
     push(p.errors, "expected " + chr(ch) + " at " + str(p.pos))
   }
@@ -107,8 +130,8 @@ fn expect(p: mut Parser, ch: Int) {
 
 fn main() uses io {
   var p = Parser(src: " (x", pos: 0, errors: [])
-  expect(p, 40)
-  expect(p, 41)
+  expect(p, '(')
+  expect(p, ')')
   print(p.pos, len(p.errors))
 }
 ```
@@ -226,7 +249,7 @@ Functions can be passed as arguments, by name or as a lambda `fn(x) => x * 2`
 | `int(f)` / `float(i)` | Convert. `int` truncates toward zero. |
 | `sqrt(f)` | Square root of a `Float` |
 | `substr(s, start, end)` | Bytes from `start` up to but not including `end` |
-| `byte_at(s, i)` | Byte value 0 to 255 at position `i` (`"a"` is 97, `"A"` 65, `"0"` 48, space 32) |
+| `byte_at(s, i)` or `s[i]` | Byte value 0 to 255 at position `i`. Compare with character literals: `s[i] == 'a'` |
 | `chr(b)` | One-byte string from a byte value: `chr(97)` is `"a"` |
 | `put(m, k, v)`, `get(m, k)`, `get_or(m, k, d)`, `has(m, k)`, `remove(m, k)`, `keys(m)` | Maps. `get` fails on a missing key; `keys` is in insertion order. |
 
@@ -270,7 +293,7 @@ put(seen, word, get_or(seen, word, 0) + 1)
 // Walk the characters of a string
 for i in 0..len(s) {
   let b = byte_at(s, i)
-  if b >= 48 and b <= 57 { digits = digits + 1 }
+  if b >= '0' and b <= '9' { digits += 1 }
 }
 
 // Stop a search early: return from a helper

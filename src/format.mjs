@@ -16,6 +16,7 @@ function expr(e, min = 0) {
     case 'Name': return e.name;
     case 'MapLit': return '{}';
     case 'Tuple': return `(${e.elems.map((x) => expr(x)).join(', ')})`;
+    case 'Cond': return wrap(0.5, `if ${expr(e.cond)} then ${expr(e.then, 1)} else ${expr(e.els, 0.5)}`);
     case 'Lambda': return wrap(0.5, `fn(${e.params.map((p) => p.name).join(', ')}) => ${expr(e.body)}`);
     case 'Unary':
       return e.op === 'not' ? wrap(3, `not ${expr(e.operand, 3)}`) : wrap(7, `-${expr(e.operand, 7)}`);
@@ -29,7 +30,8 @@ function expr(e, min = 0) {
     }
     case 'Index': return `${expr(e.base, 8)}[${expr(e.index)}]`;
     case 'Field': return `${expr(e.base, 8)}.${e.name}`;
-    case 'Call': return `${e.name}(${e.args.map((a) => expr(a)).join(', ')})`;
+    case 'Call':
+      if (e.slice) return `${expr(e.args[0], 8)}[${expr(e.args[1])}..${expr(e.args[2], 5)}]`; return `${e.name}(${e.args.map((a) => expr(a)).join(', ')})`;
     case 'New': return `${e.name}(${e.fields.map((f) => `${f.name}: ${expr(f.expr)}`).join(', ')})`;
     case 'ArrayLit': return `[${e.elems.map((x) => expr(x)).join(', ')}]`;
     case 'Sum': return `sum(${e.name} in ${expr(e.start)}..${expr(e.end, 5)}: ${expr(e.body)})`;
@@ -84,7 +86,7 @@ export function format(src) {
     switch (s.kind) {
       case 'Let': return `${s.mutable ? 'var' : 'let'} ${s.name}${s.ty ? `: ${fmtType(s.ty)}` : ''} = ${expr(s.init)}${s.try ? '?' : ''}`;
       case 'LetTuple': return `${s.mutable ? 'var' : 'let'} (${s.names.map((x) => x.name).join(', ')}) = ${expr(s.init)}${s.try ? '?' : ''}`;
-      case 'Assign': return `${expr(s.target)} = ${expr(s.value)}${s.try ? '?' : ''}`;
+      case 'Assign': return s.compound ? `${expr(s.target)} ${s.compound}= ${expr(s.rhs)}` : `${expr(s.target)} = ${expr(s.value)}${s.try ? '?' : ''}`;
       case 'Return': return s.value ? `return ${expr(s.value)}` : 'return';
       case 'Break': return 'break';
       case 'Continue': return 'continue';
@@ -141,8 +143,8 @@ export function format(src) {
         break;
       }
       case 'Assign': {
-        const head = `${expr(s.target)} = `;
-        out.push(`${indent}${head}${exprAt(s.value, head, indent)}${s.try ? '?' : ''}`);
+        const head = `${expr(s.target)} ${s.compound ?? ''}= `;
+        out.push(`${indent}${head}${exprAt(s.compound ? s.rhs : s.value, head, indent)}${s.try ? '?' : ''}`);
         break;
       }
       case 'Return': out.push(`${indent}${s.value ? `return ${exprAt(s.value, 'return ', indent)}` : 'return'}`); break;
@@ -161,6 +163,7 @@ export function format(src) {
         }
         break;
       case 'For': braced(`for ${s.name} in ${expr(s.start)}..${expr(s.end, 5)}`, s.body, indent, s.stmtLine); break;
+      case 'ForIn': braced(`for ${s.index ? `${s.index.name}, ` : ''}${s.name} in ${expr(s.iter)}`, s.body, indent, s.stmtLine); break;
       case 'Match': {
         out.push(`${indent}match ${expr(s.scrut)} {`);
         lastLine = s.line;

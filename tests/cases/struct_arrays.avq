@@ -1,4 +1,5 @@
 struct Bag { items: [Int], names: [Str], seen: Map[Str, Int], total: Int }
+
 struct Box { bag: Bag, label: Str }
 
 fn add(b: mut Bag, v: Int) {

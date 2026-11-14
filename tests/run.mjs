@@ -207,7 +207,6 @@ await traps('substr reversed', main('print(substr("abc", 2, 1))'), 'bounds');
 await traps('byte_at out of range', main('print(byte_at("abc", 3))'), 'bounds');
 rejects('string plus int', main('print("a" + 1)'), 'E0201');
 rejects('bool ordering', main('print(true < false)'), 'E0201');
-rejects('index into string', main('let s = "abc"\nprint(s[0])'), 'E0201');
 
 // ---- sum ----
 await prints('sum of a range', main('print(sum(i in 0..101: i), sum(i in 5..5: i), sum(i in 9..2: i))'), '5050 0 0\n');

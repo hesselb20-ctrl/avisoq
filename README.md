@@ -233,8 +233,11 @@ when the program was granted neither files nor network, no right to write any fi
   the context.
 - **Arrays:** fixed layout, growable with `push(xs, v)` and `pop(xs)` on a `var` or `mut`
   parameter.
-- **Statements:** `if / else if / else`, `while cond invariant e { }`, `for i in a..b`, `break`, `continue`,
+- **Statements:** `if / else if / else`, `while cond invariant e { }`, `for i in a..b`,
+  `for x in items`, `for i, x in items`, `break`, `continue`, `x += 1` (and `-= *= /= %=`),
   `match`, `return`, `assert`.
+- **Shorthand:** character literals (`'a'` is the Int 97), `s[i]` and `s[a..b]` on strings, and
+  the conditional expression `if c then a else b`.
 - **Expressions:** `+ - * / %`, comparisons (also on `Str`), `and or not`,
   `sum(i in a..b: expr)`, `[i in a..b: expr]`.
 - **Modules:** `import "std/strings"`, `import "other_file"` (relative), `import "pkg:name/module"`.
@@ -304,8 +307,6 @@ on an idle machine with 8 logical cores (Zen 4, AVX-512). Ratios are relative to
 
 - **Barely used.** One 260-line program and the examples; nobody but the author has written
   Avisoq yet. Expect gaps the moment someone writes something larger.
-- **No conditional expression.** `if` is a statement only, so choosing between two values
-  takes a few lines or a helper function.
 - **Windows only, in practice.** The code is written to be portable, but Linux and macOS have
   never been run. Native HTTP and the sandbox launcher are Windows-only; elsewhere native
   `http_get` returns an error value and programs run without the launcher.

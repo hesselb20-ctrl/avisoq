@@ -248,8 +248,15 @@ export function parse(src) {
         case 'for': {
           next();
           const name = ident('a loop variable name');
-          expect('kw', 'in', 'loops are written: for i in start..end { ... }');
+          let second = null;
+          if (isOp(',')) { next(); second = ident('a name for the element'); }
+          expect('kw', 'in', 'loops are written: for i in start..end { ... } or for x in items { ... }');
           const start = parseExpr();
+          if (second || !isOp('..')) {
+            // for x in items, or for i, x in items: every element of an array, or every byte of a Str
+            const body = parseBlock();
+            return { kind: 'ForIn', index: second ? { name: name.value, line: name.line, col: name.col } : null, name: (second ?? name).value, nameLine: (second ?? name).line, nameCol: (second ?? name).col, iter: start, body, line: name.line, col: name.col, stmtLine: t.line };
+          }
           expect('op', '..', 'loops are written: for i in start..end { ... } (end is exclusive)');
           const end = parseExpr();
           const body = parseBlock();
@@ -280,6 +287,16 @@ export function parse(src) {
       }
     }
     const expr = parseExpr();
+    const compound = ['+=', '-=', '*=', '/=', '%='].find((o) => isOp(o));
+    if (compound) {
+      next();
+      if (expr.kind !== 'Name' && expr.kind !== 'Index' && expr.kind !== 'Field') {
+        throw new AvisoqError('E0001', `left side of ${compound} must be a variable, an array element or a field`, expr.line, expr.col);
+      }
+      const rhs = parseExpr();
+      // x += e  means  x = x + e
+      return { kind: 'Assign', target: expr, compound: compound[0], rhs, value: { kind: 'Binary', op: compound[0], left: structuredClone(expr), right: rhs, line: expr.line, col: expr.col }, ...at };
+    }
     if (isOp('=')) {
       next();
       if (expr.kind !== 'Name' && expr.kind !== 'Index' && expr.kind !== 'Field') {
@@ -394,6 +411,14 @@ export function parse(src) {
       if (isOp('[') && !peek().nl) {
         const t = next();
         const index = parseExpr();
+        if (isOp('..')) {
+          // s[a..b] is the part of a string from byte a up to, not including, byte b
+          next();
+          const end = parseExpr();
+          expect('op', ']');
+          e = { kind: 'Call', name: 'substr', slice: true, args: [e, index, end], line: e.line, col: e.col };
+          continue;
+        }
         expect('op', ']');
         e = { kind: 'Index', base: e, index, line: t.line, col: t.col };
       } else if (isOp('.') && !peek().nl) {
@@ -465,6 +490,16 @@ export function parse(src) {
         return { kind: 'Call', name: t.value, args, ...at };
       }
       return { kind: 'Name', name: t.value, ...at };
+    }
+    if (isKw('if')) {
+      // A conditional expression: if c then a else b
+      next();
+      const cond = parseExpr();
+      expect('kw', 'then', 'a conditional expression is written: if condition then value else other');
+      const then = parseExpr();
+      expect('kw', 'else', 'a conditional expression needs both values: if condition then value else other');
+      const els = parseExpr();
+      return { kind: 'Cond', cond, then, els, ...at };
     }
     if (isKw('fn')) {
       // A lambda: fn(x, y) => expression

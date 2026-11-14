@@ -10,5 +10,11 @@ fn main() uses io {
   }
   let parts = split(big, ",")
   print(len(big), commas, len(parts), len(join(parts, "+")), index_of(big, "d,a"))
-  print(starts_with(big, "ab,"), ends_with(big, "cd,"), join(["a"], "-"), repeat("xy", 0) == "", repeat("xy", 3))
+  print(
+    starts_with(big, "ab,"),
+    ends_with(big, "cd,"),
+    join(["a"], "-"),
+    repeat("xy", 0) == "",
+    repeat("xy", 3),
+  )
 }

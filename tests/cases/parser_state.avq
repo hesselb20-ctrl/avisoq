@@ -2,6 +2,7 @@ import "std/strings"
 import "std/arrays"
 
 struct Bag { items: [Int], names: [Str], total: Int }
+
 struct P { src: Str, pos: Int, out: [Str] }
 
 fn add(b: mut Bag, v: Int) {

@@ -101,7 +101,38 @@ fn repeat(s: Str, times: Int) -> Str
   return out
 }
 
-private fn is_space(byte: Int) -> Bool {
+// Byte classes, for parsers: the argument is a byte such as s[i] or 'a'.
+fn is_digit(byte: Int) -> Bool {
+  return byte >= '0' and byte <= '9'
+}
+
+fn is_lower(byte: Int) -> Bool {
+  return byte >= 'a' and byte <= 'z'
+}
+
+fn is_upper(byte: Int) -> Bool {
+  return byte >= 'A' and byte <= 'Z'
+}
+
+fn is_letter(byte: Int) -> Bool {
+  return is_lower(byte) or is_upper(byte)
+}
+
+fn pad_left(s: Str, width: Int, fill: Str) -> Str
+  requires len(fill) == 1
+{
+  if len(s) >= width { return s }
+  return repeat(fill, width - len(s)) + s
+}
+
+fn pad_right(s: Str, width: Int, fill: Str) -> Str
+  requires len(fill) == 1
+{
+  if len(s) >= width { return s }
+  return s + repeat(fill, width - len(s))
+}
+
+fn is_space(byte: Int) -> Bool {
   return byte == 32 or byte == 9 or byte == 10 or byte == 13
 }
 
