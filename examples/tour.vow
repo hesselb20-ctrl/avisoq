@@ -1,0 +1,79 @@
+// A tour of Vow v0.
+
+// Contracts are part of the signature. They are checked at run time
+// and are visible to every caller, human or agent.
+fn fib(n: Int) -> Int
+  requires n >= 0
+  ensures result >= 0
+{
+  if n < 2 { return n }
+  return fib(n - 1) + fib(n - 2)
+}
+
+fn gcd(a: Int, b: Int) -> Int
+  requires a > 0 and b > 0
+  ensures result > 0
+{
+  var x = a
+  var y = b
+  while y != 0 {
+    let r = x % y
+    x = y
+    y = r
+  }
+  return x
+}
+
+// Pure function: no 'uses' clause, so it cannot print, read the clock,
+// or call anything that does. The compiler enforces this.
+fn sum_of(xs: [Int]) -> Int {
+  var acc = 0
+  for i in 0..len(xs) {
+    acc = acc + xs[i]
+  }
+  return acc
+}
+
+// 'mut' marks a parameter the function may modify.
+fn fill_squares(xs: mut [Int]) {
+  for i in 0..len(xs) {
+    xs[i] = i * i
+  }
+}
+
+fn mean(xs: [Float]) -> Float
+  requires len(xs) > 0
+{
+  var total = 0.0
+  for i in 0..len(xs) {
+    total = total + xs[i]
+  }
+  return total / float(len(xs))
+}
+
+// Effects are declared. main needs 'io' to print.
+fn main() uses io {
+  print("fib(20) =", fib(20))
+  print("gcd(84, 36) =", gcd(84, 36))
+
+  var squares = array(6, 0)
+  fill_squares(squares)
+  print("sum of squares below 6 =", sum_of(squares))
+
+  print("mean =", mean([1.5, 2.5, 4.0]))
+  print("is 7 > 3?", 7 > 3)
+}
+
+test "fib matches known values" {
+  assert fib(0) == 0
+  assert fib(10) == 55
+}
+
+test "gcd" {
+  assert gcd(84, 36) == 12
+  assert gcd(17, 5) == 1
+}
+
+test "sum of a literal" {
+  assert sum_of([1, 2, 3, 4]) == 10
+}

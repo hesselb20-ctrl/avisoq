@@ -1,0 +1,20 @@
+// Collatz written the idiomatic Vow way: a sum of a pure function over a range.
+fn steps(n: Int) -> Int
+  requires n >= 1
+{
+  var x = n
+  var count = 0
+  while x != 1 {
+    if x % 2 == 0 { x = x / 2 } else { x = 3 * x + 1 }
+    count = count + 1
+  }
+  return count
+}
+
+fn main() uses io, time {
+  let t0 = now_ms()
+  // Opaque zero: keeps the optimiser from precomputing the answer from the constant input.
+  let z = int(t0 * 0.0)
+  let r = sum(n in 1..1000000 + z: steps(n))
+  print("collatz", r, now_ms() - t0)
+}

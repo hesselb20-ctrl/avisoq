@@ -1,0 +1,12 @@
+fn fib(n: Int) -> Int {
+  if n < 2 { return n }
+  return fib(n - 1) + fib(n - 2)
+}
+
+fn main() uses io, time {
+  let t0 = now_ms()
+  // Opaque zero: keeps the optimiser from precomputing the answer from the constant input.
+  let z = int(t0 * 0.0)
+  let r = fib(38 + z)
+  print("fib", r, now_ms() - t0)
+}

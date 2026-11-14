@@ -1,0 +1,42 @@
+// Small numeric helpers. min, max and clamp work for Int and Float.
+
+fn min[T](a: T, b: T) -> T {
+  if b < a { return b }
+  return a
+}
+
+fn max[T](a: T, b: T) -> T {
+  if b > a { return b }
+  return a
+}
+
+fn clamp[T](x: T, lo: T, hi: T) -> T
+  requires lo <= hi
+  ensures result >= lo and result <= hi
+{
+  if x < lo { return lo }
+  if x > hi { return hi }
+  return x
+}
+
+fn abs(x: Int) -> Int
+  ensures result >= 0
+{
+  if x < 0 { return -x }
+  return x
+}
+
+fn abs_float(x: Float) -> Float {
+  if x < 0.0 { return -x }
+  return x
+}
+
+fn pow(base: Int, exponent: Int) -> Int
+  requires exponent >= 0
+{
+  var result_so_far = 1
+  for i in 0..exponent {
+    result_so_far = result_so_far * base
+  }
+  return result_so_far
+}

@@ -1,0 +1,33 @@
+// Core types: a value that may be absent, and a result that may be an error.
+
+enum Option[T] { Some(value: T), None }
+
+enum Result[T, E] { Ok(value: T), Err(error: E) }
+
+fn is_some[T](o: Option[T]) -> Bool {
+  match o {
+    Some => { return true }
+    None => { return false }
+  }
+}
+
+fn unwrap_or[T](o: Option[T], fallback: T) -> T {
+  match o {
+    Some(value) => { return copy(value) }
+    None => { return copy(fallback) }
+  }
+}
+
+fn is_ok[T, E](r: Result[T, E]) -> Bool {
+  match r {
+    Ok => { return true }
+    Err => { return false }
+  }
+}
+
+fn value_or[T, E](r: Result[T, E], fallback: T) -> T {
+  match r {
+    Ok(value) => { return copy(value) }
+    Err => { return copy(fallback) }
+  }
+}

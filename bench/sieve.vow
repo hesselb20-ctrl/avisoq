@@ -1,0 +1,25 @@
+fn count_primes(n: Int) -> Int
+  requires n >= 2
+{
+  var composite = array(n + 1, false)
+  var count = 0
+  for i in 2..n + 1 {
+    if not composite[i] {
+      count = count + 1
+      var j = i * i
+      while j <= n {
+        composite[j] = true
+        j = j + i
+      }
+    }
+  }
+  return count
+}
+
+fn main() uses io, time {
+  let t0 = now_ms()
+  // Opaque zero: keeps the optimiser from precomputing the answer from the constant input.
+  let z = int(t0 * 0.0)
+  let r = count_primes(20000000 + z)
+  print("sieve", r, now_ms() - t0)
+}

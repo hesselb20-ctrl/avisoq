@@ -1,0 +1,4 @@
+bench/out/
+*.wasm
+*.exe
+*.vsix

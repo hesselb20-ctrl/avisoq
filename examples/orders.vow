@@ -1,0 +1,52 @@
+// Structs, strings and parallel sums.
+
+struct Item { name: Str, cents: Int, qty: Int }
+
+struct Order { id: Int, customer: Str, items: [Item] }
+
+fn item_total(it: Item) -> Int
+  requires it.qty >= 0 and it.cents >= 0
+  ensures result >= 0
+{
+  return it.cents * it.qty
+}
+
+// A sum over a pure expression. The compiler knows 'item_total' has no effects,
+// so on the native backend large sums run on every core, with the same result.
+fn order_total(o: Order) -> Int {
+  return sum(i in 0..len(o.items): item_total(o.items[i]))
+}
+
+fn money(cents: Int) -> Str
+  requires cents >= 0
+{
+  let whole = str(cents / 100)
+  let frac = cents % 100
+  if frac < 10 { return "EUR " + whole + ".0" + str(frac) }
+  return "EUR " + whole + "." + str(frac)
+}
+
+fn describe(o: Order) -> Str {
+  return "order " + str(o.id) + " for " + o.customer + ": " + str(len(o.items)) + " lines, " + money(order_total(o))
+}
+
+fn main() uses io {
+  let orders = [
+    Order(id: 1, customer: "Ada", items: [Item(name: "cable", cents: 799, qty: 2), Item(name: "hub", cents: 2450, qty: 1)]),
+    Order(id: 2, customer: "Grace", items: [Item(name: "desk", cents: 18900, qty: 1)]),
+    Order(id: 3, customer: "Linus", items: [])
+  ]
+  for i in 0..len(orders) {
+    print(describe(orders[i]))
+  }
+  print("revenue:", money(sum(i in 0..len(orders): order_total(orders[i]))))
+}
+
+test "money formats cents" {
+  assert money(5) == "EUR 0.05"
+  assert money(4048) == "EUR 40.48"
+}
+
+test "empty order totals zero" {
+  assert order_total(Order(id: 9, customer: "x", items: [])) == 0
+}

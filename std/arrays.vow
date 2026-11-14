@@ -1,0 +1,90 @@
+// Array helpers. Arrays have a fixed length; functions that "add" return a new array.
+
+fn sift_down[T](xs: mut [T], start: Int, end: Int) {
+  var root = start
+  while 2 * root + 1 < end {
+    var child = 2 * root + 1
+    if child + 1 < end and xs[child] < xs[child + 1] { child = child + 1 }
+    if xs[root] < xs[child] {
+      let held = xs[root]
+      xs[root] = xs[child]
+      xs[child] = held
+      root = child
+    } else {
+      return
+    }
+  }
+}
+
+// Sorts in place, smallest first (heap sort). Works for Int and Float.
+fn sort[T](xs: mut [T]) {
+  let n = len(xs)
+  var i = n / 2 - 1
+  while i >= 0 {
+    sift_down(xs, i, n)
+    i = i - 1
+  }
+  var last = n - 1
+  while last > 0 {
+    let held = xs[0]
+    xs[0] = xs[last]
+    xs[last] = held
+    sift_down(xs, 0, last)
+    last = last - 1
+  }
+}
+
+fn sorted[T](xs: [T]) -> [T] {
+  var out = copy(xs)
+  sort(out)
+  return out
+}
+
+fn reverse[T](xs: [T]) -> [T] {
+  let n = len(xs)
+  return [i in 0..n: copy(xs[n - 1 - i])]
+}
+
+// Position of the first element equal to x, or -1.
+fn index_in[T](xs: [T], x: T) -> Int
+  ensures result >= -1
+{
+  for i in 0..len(xs) {
+    if xs[i] == x { return i }
+  }
+  return -1
+}
+
+fn max_of[T](xs: [T]) -> T
+  requires len(xs) > 0
+{
+  var best = 0
+  for i in 1..len(xs) {
+    if xs[i] > xs[best] { best = i }
+  }
+  return copy(xs[best])
+}
+
+fn min_of[T](xs: [T]) -> T
+  requires len(xs) > 0
+{
+  var best = 0
+  for i in 1..len(xs) {
+    if xs[i] < xs[best] { best = i }
+  }
+  return copy(xs[best])
+}
+
+fn item_of_two[T](a: [T], b: [T], i: Int) -> T {
+  if i < len(a) { return copy(a[i]) }
+  return copy(b[i - len(a)])
+}
+
+fn concat[T](a: [T], b: [T]) -> [T] {
+  return [i in 0..len(a) + len(b): item_of_two(a, b, i)]
+}
+
+// A new array with x added at the end.
+fn append[T](xs: [T], x: T) -> [T] {
+  return concat(xs, [copy(x)])
+}

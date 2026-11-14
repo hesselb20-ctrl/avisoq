@@ -1,0 +1,19 @@
+fn collatz(limit: Int) -> Int {
+  var total = 0
+  for n in 1..limit {
+    var x = n
+    while x != 1 {
+      if x % 2 == 0 { x = x / 2 } else { x = 3 * x + 1 }
+      total = total + 1
+    }
+  }
+  return total
+}
+
+fn main() uses io, time {
+  let t0 = now_ms()
+  // Opaque zero: keeps the optimiser from precomputing the answer from the constant input.
+  let z = int(t0 * 0.0)
+  let r = collatz(1000000 + z)
+  print("collatz", r, now_ms() - t0)
+}

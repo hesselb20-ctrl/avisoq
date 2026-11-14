@@ -1,0 +1,79 @@
+// Enums, match, generics, modules and the file capability.
+// Run with:  vow run examples/report.vow --allow io,fs:examples
+import "std/core"
+import "std/strings"
+import "std/arrays"
+
+struct Entry { name: Str, score: Int }
+
+enum Line { Parsed(entry: Entry), Blank, Bad(reason: Str) }
+
+// One line of "name,score" text becomes a value that says exactly what it is.
+fn parse_line(text: Str) -> Line {
+  let clean = trim(text)
+  if len(clean) == 0 { return Blank }
+  let parts = split(clean, ",")
+  if len(parts) != 2 { return Bad(reason: "expected name,score but got: " + clean) }
+  match parse_int(trim(parts[1])) {
+    Some(value) => { return Parsed(entry: Entry(name: trim(parts[0]), score: value)) }
+    None => { return Bad(reason: "score is not a number: " + clean) }
+  }
+}
+
+// A generic helper: how many items of any array satisfy a count already worked out per item.
+fn count_where[T](items: [T], flags: [Bool]) -> Int
+  requires len(items) == len(flags)
+  ensures result >= 0
+{
+  var n = 0
+  for i in 0..len(items) {
+    if flags[i] { n = n + 1 }
+  }
+  return n
+}
+
+fn is_parsed(l: Line) -> Bool {
+  match l {
+    Parsed => { return true }
+    else => { return false }
+  }
+}
+
+fn score_of(l: Line) -> Int {
+  match l {
+    Parsed(entry) => { return entry.score }
+    else => { return 0 }
+  }
+}
+
+fn main() uses io, fs {
+  let path = "examples/scores.txt"
+  write_file(path, "ada, 91\ngrace, 88\n\nlinus, eighty\nmargaret, 97\n")
+
+  let rows = lines(read_file(path))
+  let parsed = [i in 0..len(rows): parse_line(rows[i])]
+  let good = [i in 0..len(parsed): is_parsed(parsed[i])]
+
+  for i in 0..len(parsed) {
+    match parsed[i] {
+      Parsed(entry) => { print(entry.name, "scored", entry.score) }
+      Bad(reason) => { print("skipped:", reason) }
+      Blank => { }
+    }
+  }
+
+  let scores = sorted([i in 0..len(parsed): score_of(parsed[i])])
+  print("valid lines:", count_where(parsed, good), "of", len(rows))
+  print("best score:", max_of(scores), "total:", sum(i in 0..len(scores): scores[i]))
+}
+
+test "a good line parses" {
+  assert score_of(parse_line(" ada , 91 ")) == 91
+  assert is_parsed(parse_line("ada,91"))
+}
+
+test "bad and blank lines do not parse" {
+  assert not is_parsed(parse_line("   "))
+  assert not is_parsed(parse_line("linus, eighty"))
+  assert not is_parsed(parse_line("too,many,parts"))
+}

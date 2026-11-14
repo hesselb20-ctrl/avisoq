@@ -1,0 +1,28 @@
+// Mandelbrot written the idiomatic Vow way: a sum over rows.
+// 'row' is pure, so the compiler is free to run rows on every core.
+fn row(py: Int, size: Int, max_iter: Int) -> Int {
+  var total = 0
+  let cy = float(py) / float(size) * 2.0 - 1.0
+  for px in 0..size {
+    let cx = float(px) / float(size) * 3.0 - 2.0
+    var x = 0.0
+    var y = 0.0
+    var i = 0
+    while i < max_iter and x * x + y * y <= 4.0 {
+      let t = x * x - y * y + cx
+      y = 2.0 * x * y + cy
+      x = t
+      i = i + 1
+    }
+    total = total + i
+  }
+  return total
+}
+
+fn main() uses io, time {
+  let t0 = now_ms()
+  // Opaque zero: keeps the optimiser from precomputing the answer from the constant input.
+  let z = int(t0 * 0.0)
+  let r = sum(py in 0..800 + z: row(py, 800 + z, 300 + z))
+  print("mandel", r, now_ms() - t0)
+}

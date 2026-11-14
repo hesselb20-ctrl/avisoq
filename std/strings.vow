@@ -1,0 +1,127 @@
+// String helpers. Positions and lengths are in bytes.
+import "std/core"
+
+fn starts_with(s: Str, prefix: Str) -> Bool {
+  if len(prefix) > len(s) { return false }
+  return substr(s, 0, len(prefix)) == prefix
+}
+
+fn ends_with(s: Str, suffix: Str) -> Bool {
+  if len(suffix) > len(s) { return false }
+  return substr(s, len(s) - len(suffix), len(s)) == suffix
+}
+
+// Position of the first occurrence of needle, or -1.
+fn index_of(s: Str, needle: Str) -> Int
+  ensures result >= -1
+{
+  let n = len(needle)
+  for i in 0..len(s) - n + 1 {
+    if substr(s, i, i + n) == needle { return i }
+  }
+  return -1
+}
+
+fn contains(s: Str, needle: Str) -> Bool {
+  return index_of(s, needle) >= 0
+}
+
+fn split(s: Str, separator: Str) -> [Str]
+  requires len(separator) > 0
+  ensures len(result) >= 1
+{
+  let n = len(separator)
+  var count = 1
+  var i = 0
+  while i + n <= len(s) {
+    if substr(s, i, i + n) == separator {
+      count = count + 1
+      i = i + n
+    } else {
+      i = i + 1
+    }
+  }
+  var parts = array(count, "")
+  var start = 0
+  var k = 0
+  i = 0
+  while i + n <= len(s) {
+    if substr(s, i, i + n) == separator {
+      parts[k] = substr(s, start, i)
+      k = k + 1
+      i = i + n
+      start = i
+    } else {
+      i = i + 1
+    }
+  }
+  parts[k] = substr(s, start, len(s))
+  return parts
+}
+
+fn join(parts: [Str], separator: Str) -> Str {
+  var out = ""
+  for i in 0..len(parts) {
+    if i > 0 { out = out + separator }
+    out = out + parts[i]
+  }
+  return out
+}
+
+fn replace(s: Str, from: Str, to: Str) -> Str
+  requires len(from) > 0
+{
+  return join(split(s, from), to)
+}
+
+fn repeat(s: Str, times: Int) -> Str
+  requires times >= 0
+{
+  var out = ""
+  for i in 0..times {
+    out = out + s
+  }
+  return out
+}
+
+fn is_space(byte: Int) -> Bool {
+  return byte == 32 or byte == 9 or byte == 10 or byte == 13
+}
+
+// Removes spaces, tabs and line breaks from both ends.
+fn trim(s: Str) -> Str {
+  var start = 0
+  var end = len(s)
+  while start < end and is_space(byte_at(s, start)) {
+    start = start + 1
+  }
+  while end > start and is_space(byte_at(s, end - 1)) {
+    end = end - 1
+  }
+  return substr(s, start, end)
+}
+
+fn lines(s: Str) -> [Str] {
+  return split(s, "\n")
+}
+
+// Reads a decimal integer such as "42" or "-7". None if s is not one, or has more than 18 digits.
+fn parse_int(s: Str) -> Option[Int] {
+  var i = 0
+  var negative = false
+  if len(s) > 0 and byte_at(s, 0) == 45 {
+    negative = true
+    i = 1
+  }
+  let digits = len(s) - i
+  if digits < 1 or digits > 18 { return None }
+  var value = 0
+  while i < len(s) {
+    let d = byte_at(s, i) - 48
+    if d < 0 or d > 9 { return None }
+    value = value * 10 + d
+    i = i + 1
+  }
+  if negative { return Some(value: -value) }
+  return Some(value: value)
+}

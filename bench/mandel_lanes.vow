@@ -1,0 +1,27 @@
+// Mandelbrot written per pixel: a sum of a pure function over rows and columns.
+// The compiler runs rows on every core and, because 'pixel' is plain numeric code,
+// evaluates 8 pixels per instruction.
+fn pixel(px: Int, py: Int, size: Int, max_iter: Int) -> Int {
+  let cx = float(px) / float(size) * 3.0 - 2.0
+  let cy = float(py) / float(size) * 2.0 - 1.0
+  var x = 0.0
+  var y = 0.0
+  var i = 0
+  while i < max_iter and x * x + y * y <= 4.0 {
+    let t = x * x - y * y + cx
+    y = 2.0 * x * y + cy
+    x = t
+    i = i + 1
+  }
+  return i
+}
+
+fn main() uses io, time {
+  let t0 = now_ms()
+  // Opaque zero: keeps the optimiser from precomputing the answer from the constant input.
+  let z = int(t0 * 0.0)
+  let size = 800 + z
+  let max_iter = 300 + z
+  let r = sum(py in 0..size: sum(px in 0..size: pixel(px, py, size, max_iter)))
+  print("mandel", r, now_ms() - t0)
+}

@@ -1,0 +1,445 @@
+// Vow parser: tokens -> AST.
+import { lex, VowError } from './lexer.mjs';
+
+const CMP = new Set(['==', '!=', '<', '<=', '>', '>=']);
+
+export function parse(src) {
+  const toks = lex(src);
+  const eof = toks[toks.length - 1];
+  let p = 0;
+  let prevEnd = 0;
+  let prevLine = 1;
+
+  const peek = () => toks[p];
+  const ahead = (n) => toks[p + n] ?? eof;
+  const next = () => { const t = toks[p++]; prevEnd = t.end; prevLine = t.line; return t; };
+  const is = (kind, value) => toks[p].kind === kind && (value === undefined || toks[p].value === value);
+  const isOp = (v) => is('op', v);
+  const isKw = (v) => is('kw', v);
+  const show = (t) => (t.kind === 'eof' ? 'end of file' : t.kind === 'str' ? 'string literal' : `'${t.value}'`);
+  const fail = (msg, hint, t = peek()) => { throw new VowError('E0001', msg, t.line, t.col, hint); };
+  const expect = (kind, value, hint) => {
+    if (!is(kind, value)) fail(`expected '${value ?? kind}' but found ${show(peek())}`, hint);
+    return next();
+  };
+  const ident = (what) => {
+    if (!is('id')) {
+      fail(`expected ${what} but found ${show(peek())}`,
+        peek().kind === 'kw' ? `'${peek().value}' is a reserved keyword and cannot be used as a name` : undefined);
+    }
+    return next();
+  };
+  // Marks where a declaration or statement ends, for the formatter.
+  const ended = (node) => { node.endLine = prevLine; return node; };
+
+  // Types are canonical strings: Int, [T], Map[K,V], Name, Name[A,B].
+  function parseType() {
+    if (isOp('[')) {
+      next();
+      const inner = parseType();
+      expect('op', ']');
+      return `[${inner}]`;
+    }
+    const t = ident('a type');
+    if (isOp('[') && !peek().nl) {
+      next();
+      const args = [parseType()];
+      while (isOp(',')) { next(); args.push(parseType()); }
+      expect('op', ']', 'type arguments are written Name[A, B]');
+      return `${t.value}[${args.join(',')}]`;
+    }
+    return t.value;
+  }
+
+  // Optional [T, U] after a declared name.
+  function parseTypeParams() {
+    const params = [];
+    if (!isOp('[')) return params;
+    next();
+    do { params.push(ident('a type parameter name').value); } while (isOp(',') && next());
+    expect('op', ']');
+    return params;
+  }
+
+  function parseFields(close, what) {
+    const fields = [];
+    while (!isOp(close)) {
+      const fnm = ident(`a ${what} name`);
+      expect('op', ':', `every ${what} needs a type: name: Type`);
+      const tyTok = peek();
+      fields.push({ name: fnm.value, ty: parseType(), line: fnm.line, col: fnm.col, tyLine: tyTok.line, tyCol: tyTok.col });
+      if (isOp(',')) next();
+    }
+    next();
+    return fields;
+  }
+
+  function parseStruct() {
+    next();
+    const name = ident('a struct name');
+    const typeParams = parseTypeParams();
+    expect('op', '{');
+    const fields = parseFields('}', 'field');
+    return ended({ kind: 'Struct', name: name.value, typeParams, fields, line: name.line, col: name.col });
+  }
+
+  function parseEnum() {
+    next();
+    const name = ident('an enum name');
+    const typeParams = parseTypeParams();
+    expect('op', '{');
+    const variants = [];
+    while (!isOp('}')) {
+      const v = ident('a variant name');
+      let fields = [];
+      if (isOp('(')) { next(); fields = parseFields(')', 'field'); }
+      variants.push({ name: v.value, fields, line: v.line, col: v.col });
+      if (isOp(',')) next();
+    }
+    next();
+    if (variants.length === 0) {
+      throw new VowError('E0106', `enum '${name.value}' has no variants`, name.line, name.col, 'an enum needs at least one variant');
+    }
+    return ended({ kind: 'Enum', name: name.value, typeParams, variants, line: name.line, col: name.col });
+  }
+
+  function parseImport() {
+    const kw = next();
+    const path = expect('str', undefined, 'an import names a file: import "std/strings"');
+    return ended({ kind: 'Import', path: path.value, line: kw.line, col: kw.col });
+  }
+
+  function parseFn() {
+    const kw = next();
+    const name = ident('a function name');
+    const typeParams = parseTypeParams();
+    expect('op', '(');
+    const params = [];
+    while (!isOp(')')) {
+      const pn = ident('a parameter name');
+      expect('op', ':', 'every parameter needs a type: name: Type');
+      let mut = false;
+      if (isKw('mut')) { next(); mut = true; }
+      const ty = parseType();
+      if (mut && ty[0] !== '[' && !ty.startsWith('Map[')) {
+        throw new VowError('E0001', `only array and Map parameters can be 'mut', but '${pn.value}' is ${ty}`, pn.line, pn.col,
+          'values other than arrays and maps are immutable; return a new value instead');
+      }
+      params.push({ name: pn.value, ty, mut, line: pn.line, col: pn.col });
+      if (!isOp(')')) expect('op', ',');
+    }
+    next();
+    let ret = 'Unit';
+    if (isOp('->')) { next(); ret = parseType(); }
+    const effects = [];
+    if (isKw('uses')) {
+      next();
+      do {
+        const e = ident('an effect name');
+        effects.push({ name: e.value, line: e.line, col: e.col });
+      } while (isOp(',') && next());
+    }
+    const requires = [], ensures = [];
+    while (isKw('requires') || isKw('ensures')) {
+      const k = next();
+      const start = peek().pos;
+      const expr = parseExpr();
+      (k.value === 'requires' ? requires : ensures).push({ expr, text: src.slice(start, prevEnd), line: k.line, col: k.col });
+    }
+    const body = parseBlock();
+    return ended({ kind: 'Fn', name: name.value, typeParams, params, ret, effects, requires, ensures, body, line: kw.line, col: name.col });
+  }
+
+  function parseTest() {
+    const kw = next();
+    const name = expect('str', undefined, 'a test needs a name: test "what it checks" { ... }');
+    const body = parseBlock();
+    return ended({ kind: 'Test', name: name.value, body, line: kw.line, col: kw.col });
+  }
+
+  function parseBlock() {
+    expect('op', '{');
+    const stmts = [];
+    while (!isOp('}')) {
+      if (is('eof')) fail("expected '}' but reached end of file", 'a block opened with { was never closed');
+      stmts.push(ended(parseStmt()));
+    }
+    stmts.closeLine = next().line; // where the block's } is, for the formatter
+    return stmts;
+  }
+
+  function parseStmt() {
+    const t = peek();
+    const at = { line: t.line, col: t.col };
+    if (t.kind === 'kw') {
+      switch (t.value) {
+        case 'let':
+        case 'var': {
+          next();
+          const name = ident('a variable name');
+          let ty = null;
+          if (isOp(':')) { next(); ty = parseType(); }
+          expect('op', '=', 'every variable must be initialised: let name = value');
+          const init = parseExpr();
+          return { kind: 'Let', mutable: t.value === 'var', name: name.value, ty, init, line: name.line, col: name.col, stmtLine: t.line };
+        }
+        case 'if':
+          return parseIf();
+        case 'while': {
+          next();
+          const cond = parseExpr();
+          const body = parseBlock();
+          return { kind: 'While', cond, body, ...at };
+        }
+        case 'for': {
+          next();
+          const name = ident('a loop variable name');
+          expect('kw', 'in', 'loops are written: for i in start..end { ... }');
+          const start = parseExpr();
+          expect('op', '..', 'loops are written: for i in start..end { ... } (end is exclusive)');
+          const end = parseExpr();
+          const body = parseBlock();
+          return { kind: 'For', name: name.value, start, end, body, line: name.line, col: name.col, stmtLine: t.line };
+        }
+        case 'match':
+          return parseMatch();
+        case 'return': {
+          next();
+          let value = null;
+          if (!isOp('}') && !peek().nl) value = parseExpr();
+          return { kind: 'Return', value, ...at };
+        }
+        case 'assert': {
+          next();
+          const start = peek().pos;
+          const cond = parseExpr();
+          return { kind: 'Assert', cond, text: src.slice(start, prevEnd), ...at };
+        }
+        default:
+          break;
+      }
+    }
+    const expr = parseExpr();
+    if (isOp('=')) {
+      next();
+      if (expr.kind === 'Field') {
+        throw new VowError('E0204', `cannot assign to field '${expr.name}': struct values are immutable`, expr.line, expr.col,
+          'build a new value instead, for example p = Point(x: p.x + 1.0, y: p.y)');
+      }
+      if (expr.kind !== 'Name' && expr.kind !== 'Index') {
+        throw new VowError('E0001', 'left side of = must be a variable or an array element', expr.line, expr.col,
+          'to compare values use ==');
+      }
+      const value = parseExpr();
+      return { kind: 'Assign', target: expr, value, ...at };
+    }
+    return { kind: 'ExprStmt', expr, ...at };
+  }
+
+  function parseIf() {
+    const t = next();
+    const cond = parseExpr();
+    const then = parseBlock();
+    let els = null;
+    if (isKw('else')) {
+      next();
+      els = isKw('if') ? [ended(parseIf())] : parseBlock();
+    }
+    return { kind: 'If', cond, then, els, line: t.line, col: t.col };
+  }
+
+  // match value { Variant(a, b) => { ... }  Other => { ... }  else => { ... } }
+  function parseMatch() {
+    const t = next();
+    const scrut = parseExpr();
+    expect('op', '{', 'a match is written: match value { Variant(x) => { ... } }');
+    const arms = [];
+    while (!isOp('}')) {
+      const at = { line: peek().line, col: peek().col };
+      let variant = null;
+      const binds = [];
+      if (isKw('else')) {
+        next();
+      } else {
+        variant = ident('a variant name').value;
+        if (isOp('(')) {
+          next();
+          while (!isOp(')')) {
+            const b = ident('a name for the field');
+            binds.push({ name: b.value, line: b.line, col: b.col });
+            if (!isOp(')')) expect('op', ',');
+          }
+          next();
+        }
+      }
+      expect('op', '=>', 'each match arm is written: Variant(x) => { ... }');
+      const body = parseBlock();
+      arms.push({ variant, binds, body, endLine: prevLine, ...at });
+    }
+    next();
+    return { kind: 'Match', scrut, arms, line: t.line, col: t.col };
+  }
+
+  function parseExpr() { return parseOr(); }
+
+  function binLoop(sub, match) {
+    let left = sub();
+    while (!peek().nl && match(peek())) {
+      const op = next();
+      const right = sub();
+      left = { kind: 'Binary', op: op.value, left, right, line: op.line, col: op.col };
+    }
+    return left;
+  }
+  const parseOr = () => binLoop(parseAnd, (t) => t.kind === 'kw' && t.value === 'or');
+  const parseAnd = () => binLoop(parseNot, (t) => t.kind === 'kw' && t.value === 'and');
+
+  function parseNot() {
+    if (isKw('not')) {
+      const t = next();
+      return { kind: 'Unary', op: 'not', operand: parseNot(), line: t.line, col: t.col };
+    }
+    return parseCmp();
+  }
+
+  function parseCmp() {
+    const left = parseAdd();
+    if (!peek().nl && peek().kind === 'op' && CMP.has(peek().value)) {
+      const op = next();
+      const right = parseAdd();
+      if (!peek().nl && peek().kind === 'op' && CMP.has(peek().value)) {
+        fail('comparisons cannot be chained', 'write a < b and b < c instead of a < b < c');
+      }
+      return { kind: 'Binary', op: op.value, left, right, line: op.line, col: op.col };
+    }
+    return left;
+  }
+
+  const parseAdd = () => binLoop(parseMul, (t) => t.kind === 'op' && (t.value === '+' || t.value === '-'));
+  const parseMul = () => binLoop(parseUnary, (t) => t.kind === 'op' && (t.value === '*' || t.value === '/' || t.value === '%'));
+
+  function parseUnary() {
+    if (isOp('-')) {
+      const t = next();
+      return { kind: 'Unary', op: '-', operand: parseUnary(), line: t.line, col: t.col };
+    }
+    return parsePostfix();
+  }
+
+  function parsePostfix() {
+    let e = parsePrimary();
+    for (;;) {
+      if (isOp('[') && !peek().nl) {
+        const t = next();
+        const index = parseExpr();
+        expect('op', ']');
+        e = { kind: 'Index', base: e, index, line: t.line, col: t.col };
+      } else if (isOp('.') && !peek().nl) {
+        next();
+        const f = ident('a field name');
+        e = { kind: 'Field', base: e, name: f.value, line: f.line, col: f.col };
+      } else {
+        return e;
+      }
+    }
+  }
+
+  // i in start..end: body   (shared by sum(...) and [...])
+  function parseRange(what, close) {
+    const v = next();
+    next();
+    const start = parseExpr();
+    expect('op', '..', `a ${what} is written with a range: i in start..end: expression`);
+    const end = parseExpr();
+    expect('op', ':', `a ${what} is written with a range: i in start..end: expression`);
+    const body = parseExpr();
+    expect('op', close);
+    return { name: v.value, start, end, body, nameLine: v.line, nameCol: v.col };
+  }
+
+  function parsePrimary() {
+    const t = peek();
+    const at = { line: t.line, col: t.col };
+    if (t.kind === 'int') { next(); return { kind: 'IntLit', value: t.value, raw: t.raw, ...at }; }
+    if (t.kind === 'float') { next(); return { kind: 'FloatLit', value: t.value, raw: t.raw, ...at }; }
+    if (t.kind === 'str') { next(); return { kind: 'StrLit', value: t.value, ...at }; }
+    if (t.kind === 'kw' && (t.value === 'true' || t.value === 'false')) {
+      next();
+      return { kind: 'BoolLit', value: t.value === 'true', ...at };
+    }
+    if (t.kind === 'id') {
+      next();
+      const call = isOp('(') && !peek().nl;
+      const a1 = ahead(1), a2 = ahead(2);
+      if (call && t.value === 'sum' && a1.kind === 'id' && a2.kind === 'kw' && a2.value === 'in') {
+        next();
+        return { kind: 'Sum', ...parseRange('sum', ')'), ...at };
+      }
+      if (call && a1.kind === 'id' && a2.kind === 'op' && a2.value === ':') {
+        // Struct or enum variant construction with named fields: Point(x: 1.0, y: 2.0)
+        next();
+        const fields = [];
+        while (!isOp(')')) {
+          const fnm = ident('a field name');
+          expect('op', ':', 'fields are given by name: Type(field: value, ...)');
+          fields.push({ name: fnm.value, expr: parseExpr(), line: fnm.line, col: fnm.col });
+          if (!isOp(')')) expect('op', ',');
+        }
+        next();
+        return { kind: 'New', name: t.value, fields, ...at };
+      }
+      if (call) {
+        next();
+        const args = [];
+        while (!isOp(')')) {
+          args.push(parseExpr());
+          if (!isOp(')')) expect('op', ',');
+        }
+        next();
+        return { kind: 'Call', name: t.value, args, ...at };
+      }
+      return { kind: 'Name', name: t.value, ...at };
+    }
+    if (isOp('(')) {
+      next();
+      const e = parseExpr();
+      expect('op', ')');
+      return e;
+    }
+    if (isOp('[')) {
+      next();
+      if (is('id') && ahead(1).kind === 'kw' && ahead(1).value === 'in') {
+        return { kind: 'Comp', ...parseRange('comprehension', ']'), ...at };
+      }
+      const elems = [];
+      while (!isOp(']')) {
+        elems.push(parseExpr());
+        if (!isOp(']')) expect('op', ',');
+      }
+      next();
+      return { kind: 'ArrayLit', elems, ...at };
+    }
+    if (isOp('{') && ahead(1).kind === 'op' && ahead(1).value === '}') {
+      next();
+      next();
+      return { kind: 'MapLit', ...at };
+    }
+    fail(`expected an expression but found ${show(t)}`);
+  }
+
+  const program = { fns: [], tests: [], structs: [], enums: [], imports: [], decls: [], comments: toks.comments };
+  while (!is('eof')) {
+    let d;
+    if (isKw('fn')) { d = parseFn(); program.fns.push(d); }
+    else if (isKw('test')) { d = parseTest(); program.tests.push(d); }
+    else if (isKw('struct')) { d = parseStruct(); program.structs.push(d); }
+    else if (isKw('enum')) { d = parseEnum(); program.enums.push(d); }
+    else if (isKw('import')) { d = parseImport(); program.imports.push(d); }
+    else {
+      fail(`expected 'fn', 'struct', 'enum', 'import' or 'test' at top level but found ${show(peek())}`,
+        'all code lives inside functions; the program starts at fn main()');
+    }
+    program.decls.push(d);
+  }
+  return program;
+}

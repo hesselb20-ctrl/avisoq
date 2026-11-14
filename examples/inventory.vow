@@ -1,0 +1,61 @@
+// Maps, comprehensions and automatic memory reclamation.
+
+struct Sale { sku: Str, qty: Int, cents: Int }
+
+// A comprehension builds an array from a pure expression. Each iteration writes its own
+// slot, so the compiler may fill the array on every core.
+fn demo_sales(n: Int) -> [Sale]
+  requires n >= 0
+{
+  return [i in 0..n: Sale(sku: "sku-" + str(i % 4), qty: i % 3 + 1, cents: 250 + 100 * (i % 4))]
+}
+
+// 'mut' on a Map parameter: this function may add to the caller's map.
+fn tally(sales: [Sale], units: mut Map[Str, Int]) {
+  for i in 0..len(sales) {
+    let s = sales[i]
+    put(units, s.sku, get_or(units, s.sku, 0) + s.qty)
+  }
+}
+
+fn revenue(sales: [Sale]) -> Int {
+  return sum(i in 0..len(sales): sales[i].qty * sales[i].cents)
+}
+
+// Builds a large temporary array and returns one number. The compiler can prove nothing
+// allocated here is reachable afterwards, so the memory is handed back on return.
+fn busiest_batch(batches: Int, size: Int) -> Int
+  requires batches > 0 and size > 0
+{
+  var best = 0
+  for b in 0..batches {
+    let r = revenue(demo_sales(size + b))
+    if r > best { best = r }
+  }
+  return best
+}
+
+fn main() uses io {
+  let sales = demo_sales(10)
+  var units: Map[Str, Int] = {}
+  tally(sales, units)
+
+  let skus = keys(units)
+  for i in 0..len(skus) {
+    print(skus[i], "units:", get(units, skus[i]))
+  }
+  print("revenue in cents:", revenue(sales))
+  print("has sku-9:", has(units, "sku-9"))
+  print("busiest of 2000 batches:", busiest_batch(2000, 5000))
+}
+
+test "tally adds up quantities" {
+  var units: Map[Str, Int] = {}
+  tally(demo_sales(8), units)
+  assert len(units) == 4
+  assert get(units, "sku-0") == 1 + 2
+}
+
+test "revenue of nothing is zero" {
+  assert revenue([]) == 0
+}
