@@ -1,0 +1,33 @@
+import "std/arrays"
+
+fn sat(n: Int, clauses: [Int]) -> [Int] {
+  let total = shift_left(1, n)
+  for mask in 0..total {
+    var ok = true
+    var clause_ok = false
+    for e in clauses {
+      if e == 0 {
+        if not clause_ok { ok = false }
+        clause_ok = false
+        if not ok { break }
+      } else {
+        var v = e
+        if e < 0 { v = -e }
+        let bit = bit_and(shift_right(mask, n - v), 1)
+        if (e > 0 and bit == 1) or (e < 0 and bit == 0) { clause_ok = true }
+      }
+    }
+    if ok {
+      return [i in 0..n: bit_and(shift_right(mask, n - 1 - i), 1)]
+    }
+  }
+  return [-1]
+}
+
+test "sat" {
+  assert equal(sat(2, []), [0, 0])
+  assert equal(sat(2, [1, 0]), [1, 0])
+  assert equal(sat(1, [1, 0, -1, 0]), [-1])
+  assert equal(sat(1, [0]), [-1])
+  assert equal(sat(3, [-1, 2, 0, -2, 3, 0, 1, 0]), [1, 1, 1])
+}

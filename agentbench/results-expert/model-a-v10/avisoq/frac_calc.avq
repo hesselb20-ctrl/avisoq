@@ -1,0 +1,132 @@
+import "std/math"
+
+struct Calc { src: Str, pos: Int, bad: Bool }
+
+fn gcd_of(a: Int, b: Int) -> Int {
+  var x = abs(a)
+  var y = abs(b)
+  while y != 0 {
+    let t = x % y
+    x = y
+    y = t
+  }
+  return x
+}
+
+fn norm(n: Int, d: Int) -> (Int, Int) {
+  if d == 0 { return (0, 1) }
+  var nn = n
+  var dd = d
+  if dd < 0 {
+    nn = -nn
+    dd = -dd
+  }
+  let g = gcd_of(nn, dd)
+  if g > 1 {
+    nn = nn / g
+    dd = dd / g
+  }
+  return (nn, dd)
+}
+
+fn skip_sp(c: mut Calc) {
+  while c.pos < len(c.src) and c.src[c.pos] == ' ' { c.pos += 1 }
+}
+
+fn parse_atom(c: mut Calc) -> (Int, Int) {
+  skip_sp(c)
+  if c.pos >= len(c.src) { return (0, 1) }
+  let ch = c.src[c.pos]
+  if ch == '-' {
+    c.pos += 1
+    let (n, d) = parse_atom(c)
+    return (-n, d)
+  }
+  if ch == '(' {
+    c.pos += 1
+    let v = parse_sum(c)
+    skip_sp(c)
+    c.pos += 1
+    return v
+  }
+  var v = 0
+  while c.pos < len(c.src) and c.src[c.pos] >= '0' and c.src[c.pos] <= '9' {
+    v = v * 10 + (c.src[c.pos] - '0')
+    c.pos += 1
+  }
+  return (v, 1)
+}
+
+fn parse_prod(c: mut Calc) -> (Int, Int) {
+  let first = parse_atom(c)
+  var n = first.first
+  var d = first.second
+  while true {
+    skip_sp(c)
+    if c.pos >= len(c.src) { break }
+    let op = c.src[c.pos]
+    if op != '*' and op != '/' { break }
+    c.pos += 1
+    let (n2, d2) = parse_atom(c)
+    if op == '*' {
+      let r1 = norm(n * n2, d * d2)
+      n = r1.first
+      d = r1.second
+    } else {
+      if n2 == 0 {
+        c.bad = true
+      } else {
+        let r2 = norm(n * d2, d * n2)
+      n = r2.first
+      d = r2.second
+      }
+    }
+  }
+  return (n, d)
+}
+
+fn parse_sum(c: mut Calc) -> (Int, Int) {
+  let first = parse_prod(c)
+  var n = first.first
+  var d = first.second
+  while true {
+    skip_sp(c)
+    if c.pos >= len(c.src) { break }
+    let op = c.src[c.pos]
+    if op != '+' and op != '-' { break }
+    c.pos += 1
+    let (n2, d2) = parse_prod(c)
+    if op == '+' {
+      let r3 = norm(n * d2 + n2 * d, d * d2)
+      n = r3.first
+      d = r3.second
+    } else {
+      let r4 = norm(n * d2 - n2 * d, d * d2)
+      n = r4.first
+      d = r4.second
+    }
+  }
+  return (n, d)
+}
+
+fn frac_calc(s: Str) -> Str {
+  var c = Calc(src: s, pos: 0, bad: false)
+  let (n, d) = parse_sum(c)
+  if c.bad { return "div0" }
+  if d == 1 { return str(n) }
+  return str(n) + "/" + str(d)
+}
+
+test "frac" {
+  assert frac_calc("1/2") == "1/2"
+  assert frac_calc("1/2+1/2") == "1"
+  assert frac_calc("-1/2") == "-1/2"
+  assert frac_calc("1 / (2 - 2)") == "div0"
+  assert frac_calc("--3") == "3"
+  assert frac_calc("2*3/4") == "3/2"
+  assert frac_calc("0/5") == "0"
+  assert frac_calc("1-3/2") == "-1/2"
+  assert frac_calc("-(1/2)/-(3)") == "1/6"
+  assert frac_calc("1/(1/3)") == "3"
+  assert frac_calc("0 - 0") == "0"
+}

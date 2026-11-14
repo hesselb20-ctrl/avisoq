@@ -1,0 +1,191 @@
+import "std/arrays"
+
+// Thompson-style NFA. A state is a character test (kind 0), a split (kind 1)
+// or the accepting state (kind 3). lab is the byte to match, or -1 for any byte.
+struct NFA {
+  kind: [Int],
+  lab: [Int],
+  o1: [Int],
+  o2: [Int]
+}
+
+fn add_state(nfa: mut NFA, k: Int, label: Int, a: Int, b: Int) -> Int {
+  push(nfa.kind, k)
+  push(nfa.lab, label)
+  push(nfa.o1, a)
+  push(nfa.o2, b)
+  return len(nfa.kind) - 1
+}
+
+// Index of the ')' that closes the '(' at position i.
+fn group_close(pat: Str, i: Int) -> Int {
+  var depth = 0
+  var j = i
+  while j < len(pat) {
+    if pat[j] == '(' { depth += 1 }
+    if pat[j] == ')' {
+      depth -= 1
+      if depth == 0 { return j }
+    }
+    j += 1
+  }
+  return len(pat)
+}
+
+// Builds the states for one atom (a letter, a dot or a group) followed by next.
+fn compile_base(nfa: mut NFA, pat: Str, i: Int, ae: Int, next: Int) -> Int {
+  if pat[i] == '(' {
+    return compile_alt(nfa, pat, i + 1, ae - 1, next)
+  }
+  var label = pat[i]
+  if pat[i] == '.' { label = -1 }
+  return add_state(nfa, 0, label, next, -1)
+}
+
+fn compile_atom(nfa: mut NFA, pat: Str, i: Int, ae: Int, q: Int, next: Int) -> Int {
+  if q == 0 {
+    return compile_base(nfa, pat, i, ae, next)
+  }
+  if q == 1 {
+    let body = compile_base(nfa, pat, i, ae, next)
+    return add_state(nfa, 1, -1, body, next)
+  }
+  if q == 2 {
+    let s = add_state(nfa, 1, -1, -1, next)
+    let body = compile_base(nfa, pat, i, ae, s)
+    nfa.o1[s] = body
+    return s
+  }
+  let s = add_state(nfa, 1, -1, -1, next)
+  let body = compile_base(nfa, pat, i, ae, s)
+  nfa.o1[s] = body
+  return body
+}
+
+// A concatenation of atoms, each with an optional quantifier (1 ?, 2 *, 3 +).
+fn compile_seq(nfa: mut NFA, pat: Str, lo: Int, hi: Int, next: Int) -> Int {
+  var a_s: [Int] = []
+  var a_e: [Int] = []
+  var a_q: [Int] = []
+  var j = lo
+  while j < hi {
+    var ae = j + 1
+    if pat[j] == '(' { ae = group_close(pat, j) + 1 }
+    var q = 0
+    var nj = ae
+    if ae < hi {
+      if pat[ae] == '?' {
+        q = 1
+        nj = ae + 1
+      } else if pat[ae] == '*' {
+        q = 2
+        nj = ae + 1
+      } else if pat[ae] == '+' {
+        q = 3
+        nj = ae + 1
+      }
+    }
+    push(a_s, j)
+    push(a_e, ae)
+    push(a_q, q)
+    j = nj
+  }
+  var cur = next
+  var k = len(a_s) - 1
+  while k >= 0 {
+    cur = compile_atom(nfa, pat, a_s[k], a_e[k], a_q[k], cur)
+    k -= 1
+  }
+  return cur
+}
+
+// Alternatives separated by '|' at depth 0 within [lo, hi).
+fn compile_alt(nfa: mut NFA, pat: Str, lo: Int, hi: Int, next: Int) -> Int {
+  var heads: [Int] = []
+  var depth = 0
+  var pstart = lo
+  for j in lo..hi {
+    if pat[j] == '(' {
+      depth += 1
+    } else if pat[j] == ')' {
+      depth -= 1
+    } else if pat[j] == '|' and depth == 0 {
+      push(heads, compile_seq(nfa, pat, pstart, j, next))
+      pstart = j + 1
+    }
+  }
+  push(heads, compile_seq(nfa, pat, pstart, hi, next))
+  var result = heads[len(heads) - 1]
+  var k = len(heads) - 2
+  while k >= 0 {
+    result = add_state(nfa, 1, -1, heads[k], result)
+    k -= 1
+  }
+  return result
+}
+
+// Epsilon closure of the seed states, as a membership array.
+fn closure(nfa: NFA, seeds: [Int]) -> [Bool] {
+  let count = len(nfa.kind)
+  var mark: [Bool] = array(count, false)
+  var stack: [Int] = copy(seeds)
+  while len(stack) > 0 {
+    let s = pop(stack)
+    if not mark[s] {
+      mark[s] = true
+      if nfa.kind[s] == 1 {
+        push(stack, nfa.o1[s])
+        push(stack, nfa.o2[s])
+      }
+    }
+  }
+  return mark
+}
+
+fn regex_match(pattern: Str, text: Str) -> Bool {
+  var kind: [Int] = []
+  var lab: [Int] = []
+  var o1: [Int] = []
+  var o2: [Int] = []
+  var nfa = NFA(kind: kind, lab: lab, o1: o1, o2: o2)
+  // State 0 is the accepting state.
+  let accept = add_state(nfa, 3, -1, -1, -1)
+  let start = compile_alt(nfa, pattern, 0, len(pattern), accept)
+  var cur = closure(nfa, [start])
+  for j in 0..len(text) {
+    let c = byte_at(text, j)
+    var seeds: [Int] = []
+    for s in 0..len(nfa.kind) {
+      if cur[s] and nfa.kind[s] == 0 and (nfa.lab[s] == -1 or nfa.lab[s] == c) {
+        push(seeds, nfa.o1[s])
+      }
+    }
+    cur = closure(nfa, seeds)
+  }
+  return cur[accept]
+}
+
+test "alternatives and empty parts" {
+  assert regex_match("a|", "") == true
+  assert regex_match("a|", "a") == true
+  assert regex_match("a|", "aa") == false
+  assert regex_match("()", "") == true
+  assert regex_match("", "") == true
+  assert regex_match("", "a") == false
+}
+
+test "quantifiers" {
+  assert regex_match("a*b", "aaab") == true
+  assert regex_match("(ab)+", "abab") == true
+  assert regex_match("(ab)+", "") == false
+  assert regex_match("a?", "aa") == false
+  assert regex_match("a?", "") == true
+  assert regex_match("(a|b)*c", "ababc") == true
+  assert regex_match("(a|b)*c", "ababcc") == false
+}
+
+test "dots" {
+  assert regex_match("...", "abc") == true
+  assert regex_match(".*", "hello") == true
+  assert regex_match("h.llo", "hello") == true
+}

@@ -1,0 +1,61 @@
+import "std/strings"
+
+// Precedence: operands 4, ^ 3, * and / 2, + and - 1.
+fn prec_of(op: Int) -> Int {
+  if op == '^' { return 3 }
+  if op == '*' or op == '/' { return 2 }
+  return 1
+}
+
+fn to_infix(postfix: Str) -> Str {
+  let toks = split(postfix, " ")
+  var texts: [Str] = []
+  var precs: [Int] = []
+  for i in 0..len(toks) {
+    let t = toks[i]
+    let c = byte_at(t, 0)
+    if is_lower(c) {
+      push(texts, t)
+      push(precs, 4)
+    } else {
+      let rt = pop(texts)
+      let rp = pop(precs)
+      let lt = pop(texts)
+      let lp = pop(precs)
+      let p = prec_of(c)
+      var l = lt
+      if lp < 4 and (lp < p or (lp == p and c == '^')) {
+        l = "(" + lt + ")"
+      }
+      var r = rt
+      if rp < 4 and (rp < p or (rp == p and (c == '-' or c == '/'))) {
+        r = "(" + rt + ")"
+      }
+      push(texts, l + chr(c) + r)
+      push(precs, p)
+    }
+  }
+  return texts[0]
+}
+
+test "precedence drives parentheses" {
+  assert to_infix("a b + c *") == "(a+b)*c"
+  assert to_infix("a b * c +") == "a*b+c"
+  assert to_infix("a b c * +") == "a+b*c"
+  assert to_infix("a b c ^ ^") == "a^b^c"
+  assert to_infix("a b ^ c ^") == "(a^b)^c"
+}
+
+test "right operands of minus and divide" {
+  assert to_infix("a b c - -") == "a-(b-c)"
+  assert to_infix("a b - c -") == "a-b-c"
+  assert to_infix("a b c / /") == "a/(b/c)"
+  assert to_infix("a b / c *") == "a/b*c"
+  assert to_infix("a b c + -") == "a-(b+c)"
+  assert to_infix("a b c * /") == "a/(b*c)"
+}
+
+test "single operand" {
+  assert to_infix("z") == "z"
+  assert to_infix("a b + c d - *") == "(a+b)*(c-d)"
+}

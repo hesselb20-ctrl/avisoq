@@ -1,0 +1,28 @@
+import "std/bigint"
+
+// Quotient (rounded toward zero) and remainder (sign of a), separated by one space.
+fn big_divmod(a: Str, b: Str) -> Str {
+  let x = big(a)
+  let y = big(b)
+  let q = big_div(x, y)
+  let r = big_rem(x, y)
+  return big_str(q) + " " + big_str(r)
+}
+
+test "signs follow the rules" {
+  assert big_divmod("-7", "2") == "-3 -1"
+  assert big_divmod("7", "-2") == "-3 1"
+  assert big_divmod("-7", "-2") == "3 -1"
+  assert big_divmod("7", "2") == "3 1"
+}
+
+test "zero and exact division" {
+  assert big_divmod("0", "-5") == "0 0"
+  assert big_divmod("-6", "3") == "-2 0"
+  assert big_divmod("10", "10") == "1 0"
+}
+
+test "large values" {
+  assert big_divmod("123456789012345678901234567890", "1000000000000") == "123456789012345678 901234567890"
+  assert big_divmod("-99999999999999999999999999999999999999999999999999", "100000000000000000000000000000000000000000000000001") == "0 -99999999999999999999999999999999999999999999999999"
+}

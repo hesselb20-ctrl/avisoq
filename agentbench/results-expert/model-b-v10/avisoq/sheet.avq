@@ -1,0 +1,143 @@
+import "std/strings"
+
+// Cells are numbered 0..233: letter index * 9 + digit index (digit 1 is index 0).
+struct Book {
+  forms: [Str],
+  assigned: [Bool],
+  state: [Int],
+  val: [Int],
+  cyc: [Bool]
+}
+
+// Parser position inside one formula; cyc is set when a referenced cell is #CYCLE.
+struct P {
+  s: Str,
+  pos: Int,
+  cyc: Bool
+}
+
+fn expr_s(bk: mut Book, p: mut P) -> Int {
+  var v = term_s(bk, p)
+  while p.pos < len(p.s) and (p.s[p.pos] == '+' or p.s[p.pos] == '-') {
+    let op = p.s[p.pos]
+    p.pos += 1
+    let w = term_s(bk, p)
+    if op == '+' {
+      v = v + w
+    } else {
+      v = v - w
+    }
+  }
+  return v
+}
+
+fn term_s(bk: mut Book, p: mut P) -> Int {
+  var v = unary_s(bk, p)
+  while p.pos < len(p.s) and p.s[p.pos] == '*' {
+    p.pos += 1
+    let w = unary_s(bk, p)
+    v = v * w
+  }
+  return v
+}
+
+fn unary_s(bk: mut Book, p: mut P) -> Int {
+  if p.s[p.pos] == '-' {
+    p.pos += 1
+    let v = unary_s(bk, p)
+    return 0 - v
+  }
+  return atom_s(bk, p)
+}
+
+fn atom_s(bk: mut Book, p: mut P) -> Int {
+  let c = p.s[p.pos]
+  if c == '(' {
+    p.pos += 1
+    let v = expr_s(bk, p)
+    p.pos += 1
+    return v
+  }
+  if is_digit(c) {
+    let start = p.pos
+    while p.pos < len(p.s) and is_digit(p.s[p.pos]) {
+      p.pos += 1
+    }
+    return unwrap_or(parse_int(substr(p.s, start, p.pos)), 0)
+  }
+  // A cell reference: an upper-case letter then a digit.
+  let idx = (c - 'A') * 9 + (p.s[p.pos + 1] - '1')
+  p.pos += 2
+  if bk.state[idx] == 1 {
+    p.cyc = true
+    return 0
+  }
+  if bk.state[idx] == 0 {
+    resolve(bk, idx)
+  }
+  if bk.cyc[idx] {
+    p.cyc = true
+    return 0
+  }
+  return bk.val[idx]
+}
+
+fn resolve(bk: mut Book, c: Int) {
+  bk.state[c] = 1
+  var p = P(s: bk.forms[c], pos: 0, cyc: false)
+  let v = expr_s(bk, p)
+  bk.val[c] = v
+  bk.cyc[c] = p.cyc
+  bk.state[c] = 2
+}
+
+fn sheet(cells: Str) -> Str {
+  var forms: [Str] = array(234, "")
+  var assigned: [Bool] = array(234, false)
+  var state: [Int] = array(234, 2)
+  var val: [Int] = array(234, 0)
+  var cyc: [Bool] = array(234, false)
+  let segs = split(cells, ";")
+  for i in 0..len(segs) {
+    let seg = segs[i]
+    if len(seg) >= 4 {
+      let idx = (byte_at(seg, 0) - 'A') * 9 + (byte_at(seg, 1) - '1')
+      forms[idx] = substr(seg, 3, len(seg))
+      assigned[idx] = true
+      state[idx] = 0
+    }
+  }
+  var bk = Book(forms: forms, assigned: assigned, state: state, val: val, cyc: cyc)
+  for c in 0..234 {
+    if bk.assigned[c] and bk.state[c] == 0 {
+      resolve(bk, c)
+    }
+  }
+  var parts: [Str] = []
+  for c in 0..234 {
+    if bk.assigned[c] {
+      let name = chr('A' + c / 9) + chr('1' + c % 9)
+      var text = "#CYCLE"
+      if not bk.cyc[c] { text = str(bk.val[c]) }
+      push(parts, name + "=" + text)
+    }
+  }
+  return join(parts, ",")
+}
+
+test "basic references" {
+  assert sheet("A1=1;B1=A1+2") == "A1=1,B1=3"
+  assert sheet("") == ""
+  assert sheet("B2=C3*2") == "B2=0"
+}
+
+test "last assignment wins and precedence" {
+  assert sheet("A1=5;A1=2+3*4") == "A1=14"
+  assert sheet("A1=-2*3;B1=--(1+1)*2-A1") == "A1=-6,B1=10"
+}
+
+test "cycles propagate" {
+  assert sheet("A1=A1") == "A1=#CYCLE"
+  assert sheet("A1=B1;B1=A1;C1=B1+1;D1=7") == "A1=#CYCLE,B1=#CYCLE,C1=#CYCLE,D1=7"
+  assert sheet("A1=A2*0;A2=A1") == "A1=#CYCLE,A2=#CYCLE"
+}

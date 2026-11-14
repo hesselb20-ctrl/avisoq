@@ -1,0 +1,47 @@
+import "std/arrays"
+
+// Repeatedly takes the lowest-numbered task whose prerequisites are all taken.
+// Duplicate edges are counted once per occurrence on both sides, so they stay consistent.
+fn toposort(n: Int, edges: [Int]) -> [Int] {
+  var indeg: [Int] = array(n, 0)
+  var taken: [Bool] = array(n, false)
+  let m = len(edges) / 2
+  for e in 0..m {
+    indeg[edges[2 * e + 1]] += 1
+  }
+  var order: [Int] = []
+  for k in 0..n {
+    var pick = -1
+    for i in 0..n {
+      if pick < 0 and not taken[i] and indeg[i] == 0 {
+        pick = i
+      }
+    }
+    if pick < 0 {
+      return [-1]
+    }
+    taken[pick] = true
+    push(order, pick)
+    for e in 0..m {
+      if edges[2 * e] == pick {
+        indeg[edges[2 * e + 1]] -= 1
+      }
+    }
+  }
+  return order
+}
+
+test "simple order" {
+  assert equal(toposort(3, [0, 1, 1, 2]), [0, 1, 2])
+  assert equal(toposort(3, [2, 0]), [1, 2, 0])
+}
+
+test "cycles and self loops" {
+  assert equal(toposort(2, [0, 1, 1, 0]), [-1])
+  assert equal(toposort(1, [0, 0]), [-1])
+}
+
+test "duplicates and no edges" {
+  assert equal(toposort(3, [0, 2, 0, 2, 1, 2]), [0, 1, 2])
+  assert equal(toposort(2, []), [0, 1])
+}

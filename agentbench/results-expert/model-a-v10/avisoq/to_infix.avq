@@ -1,0 +1,45 @@
+import "std/strings"
+
+fn prec_of(op: Str) -> Int {
+  if op == "^" { return 3 }
+  if op == "*" or op == "/" { return 2 }
+  return 1
+}
+
+fn to_infix(postfix: Str) -> Str {
+  let toks = split(postfix, " ")
+  var exprs: [Str] = []
+  var precs: [Int] = []
+  for t in toks {
+    if len(t) == 0 { continue }
+    if is_lower(t[0]) {
+      push(exprs, t)
+      push(precs, 9)
+    } else {
+      let p = prec_of(t)
+      let rp = pop(precs)
+      let lp = pop(precs)
+      let r = pop(exprs)
+      let l = pop(exprs)
+      var ls = l
+      var rs = r
+      if lp < p or (lp == p and t == "^") { ls = "(" + l + ")" }
+      if rp < p or (rp == p and (t == "-" or t == "/")) { rs = "(" + r + ")" }
+      push(exprs, ls + t + rs)
+      push(precs, p)
+    }
+  }
+  if len(exprs) == 0 { return "" }
+  return exprs[0]
+}
+
+test "infix" {
+  assert to_infix("a b +") == "a+b"
+  assert to_infix("a b + c *") == "(a+b)*c"
+  assert to_infix("a b c - -") == "a-(b-c)"
+  assert to_infix("a b ^ c ^") == "(a^b)^c"
+  assert to_infix("a b c ^ ^") == "a^b^c"
+  assert to_infix("a b * c +") == "a*b+c"
+  assert to_infix("a b - c -") == "a-b-c"
+  assert to_infix("a") == "a"
+}

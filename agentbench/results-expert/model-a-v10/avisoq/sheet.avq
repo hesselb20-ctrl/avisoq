@@ -1,0 +1,125 @@
+import "std/strings"
+import "std/arrays"
+
+struct Sh {
+  forms: Map[Str, Str],
+  state: Map[Str, Int],
+  vals: Map[Str, Int],
+  cyc: Map[Str, Bool],
+  bad: Bool
+}
+
+struct Cur { src: Str, pos: Int }
+
+fn cell_value(sh: mut Sh, name: Str) -> Int {
+  if not has(sh.forms, name) { return 0 }
+  let st = get_or(sh.state, name, 0)
+  if st == 2 {
+    if get(sh.cyc, name) { sh.bad = true }
+    return get(sh.vals, name)
+  }
+  if st == 1 {
+    sh.bad = true
+    return 0
+  }
+  put(sh.state, name, 1)
+  let saved = sh.bad
+  sh.bad = false
+  var cur = Cur(src: get(sh.forms, name), pos: 0)
+  let v = f_sum(sh, cur)
+  let mine = sh.bad
+  put(sh.vals, name, v)
+  put(sh.cyc, name, mine)
+  put(sh.state, name, 2)
+  sh.bad = saved or mine
+  return v
+}
+
+fn f_atom(sh: mut Sh, c: mut Cur) -> Int {
+  let ch = c.src[c.pos]
+  if ch == '-' {
+    c.pos += 1
+    let v = f_atom(sh, c)
+    if sh.bad { return 0 }
+    return -v
+  }
+  if ch == '(' {
+    c.pos += 1
+    let v = f_sum(sh, c)
+    c.pos += 1
+    return v
+  }
+  if is_digit(ch) {
+    var v = 0
+    while c.pos < len(c.src) and is_digit(c.src[c.pos]) {
+      v = v * 10 + (c.src[c.pos] - '0')
+      c.pos += 1
+    }
+    return v
+  }
+  let name = c.src[c.pos..c.pos + 2]
+  c.pos += 2
+  return cell_value(sh, name)
+}
+
+fn f_prod(sh: mut Sh, c: mut Cur) -> Int {
+  var v = f_atom(sh, c)
+  while c.pos < len(c.src) and c.src[c.pos] == '*' {
+    c.pos += 1
+    let w = f_atom(sh, c)
+    if sh.bad { v = 0 } else { v = v * w }
+  }
+  return v
+}
+
+fn f_sum(sh: mut Sh, c: mut Cur) -> Int {
+  var v = f_prod(sh, c)
+  while c.pos < len(c.src) and (c.src[c.pos] == '+' or c.src[c.pos] == '-') {
+    let op = c.src[c.pos]
+    c.pos += 1
+    let w = f_prod(sh, c)
+    if sh.bad {
+      v = 0
+    } else if op == '+' {
+      v = v + w
+    } else {
+      v = v - w
+    }
+  }
+  return v
+}
+
+fn sheet(cells: Str) -> Str {
+  if len(cells) == 0 { return "" }
+  var sh = Sh(forms: {}, state: {}, vals: {}, cyc: {}, bad: false)
+  let parts = split(cells, ";")
+  for part in parts {
+    if len(part) < 3 { continue }
+    put(sh.forms, part[0..2], part[3..len(part)])
+  }
+  let names = sorted(keys(sh.forms))
+  var out: [Str] = []
+  for nm in names {
+    sh.bad = false
+    let v = cell_value(sh, nm)
+    if get(sh.cyc, nm) {
+      push(out, nm + "=#CYCLE")
+    } else {
+      push(out, nm + "=" + str(v))
+    }
+  }
+  return join(out, ",")
+}
+
+test "sheet" {
+  assert sheet("") == ""
+  assert sheet("A1=1;B1=A1+2*3") == "A1=1,B1=7"
+  assert sheet("A1=B1;B1=A1") == "A1=#CYCLE,B1=#CYCLE"
+  assert sheet("A1=A1;B1=A1*0;C1=1") == "A1=#CYCLE,B1=#CYCLE,C1=1"
+  assert sheet("A1=1;A1=2") == "A1=2"
+  assert sheet("A1=Z9+1") == "A1=1"
+  assert sheet("A1=--2-(-3)*-(1+1)") == "A1=-4"
+  assert sheet("B2=1;A1=B2-2-3") == "A1=-4,B2=1"
+  assert sheet("A1=B1+C1;B1=C1;C1=5") == "A1=10,B1=5,C1=5"
+  assert sheet("A1=B1;B1=C1;C1=B1;D1=A1;E1=2") == "A1=#CYCLE,B1=#CYCLE,C1=#CYCLE,D1=#CYCLE,E1=2"
+}

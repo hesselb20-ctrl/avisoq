@@ -161,7 +161,8 @@ What the agents' Avisoq programs do better is run. On the same inputs, with ever
 check on, they were 8 to 14 times faster in total than the Python programs the same agents
 wrote. Against the agents' Rust programs (`rustc -O`) they were 1.4 times faster in one run
 and level in the other, as of version 0.9; before its allocator and string work they were 14%
-to 45% slower. So today the measured case for Avisoq is: as correct as Python and Rust on
+to 45% slower. Solutions written fresh on 0.10, with the bigger library, ran about twice as
+fast as the Rust ones in both runs, though one task dominates that total. So today the measured case for Avisoq is: as correct as Python and Rust on
 these tasks, about as fast to run as Rust, much faster than Python, and slower for the agent
 to write than either. Ten tasks and two runs is a small sample; see the table and its caveats
 in [`agentbench/README.md`](agentbench/README.md).

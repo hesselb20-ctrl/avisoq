@@ -256,8 +256,8 @@ Functions can be passed as arguments, by name or as a lambda `fn(x) => x * 2`
 | `shift_left(a, n)`, `shift_right(a, n)` | Shifts; `n` must be 0 to 63. `shift_left(1, k)` is 2 to the power k; bit k of x is `bit_and(shift_right(x, k), 1)` |
 | `put(m, k, v)`, `get(m, k)`, `get_or(m, k, d)`, `has(m, k)`, `remove(m, k)`, `keys(m)` | Maps. `get` fails on a missing key; `keys` is in insertion order. |
 
-There is no string indexing (`s[i]` is an error): use `byte_at` and `substr`. Strings are
-joined with `+`. There is no string formatting or interpolation.
+`s[i]` is the byte at position `i` and `s[a..b]` is a substring. Strings are joined with `+`.
+There is no string formatting or interpolation.
 
 ## Standard library
 

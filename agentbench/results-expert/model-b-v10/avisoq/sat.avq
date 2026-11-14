@@ -1,0 +1,52 @@
+import "std/arrays"
+
+// Tries every assignment in order. Assignment m is read as n bits with variable 1
+// as the most significant bit, so counting m upward is the required 0-before-1 order.
+fn sat(n: Int, clauses: [Int]) -> [Int] {
+  let total = shift_left(1, n)
+  for m in 0..total {
+    var ok = true
+    var clause_done = false
+    for i in 0..len(clauses) {
+      let lit = clauses[i]
+      if lit == 0 {
+        if not clause_done {
+          ok = false
+          break
+        }
+        clause_done = false
+      } else {
+        var idx = lit
+        if lit < 0 { idx = 0 - lit }
+        let bit = bit_and(shift_right(m, n - idx), 1)
+        if (lit > 0 and bit == 1) or (lit < 0 and bit == 0) {
+          clause_done = true
+        }
+      }
+    }
+    if ok {
+      var res: [Int] = []
+      let top = n + 1
+      for v in 1..top {
+        push(res, bit_and(shift_right(m, n - v), 1))
+      }
+      return res
+    }
+  }
+  return [-1]
+}
+
+test "simple satisfiable" {
+  assert equal(sat(2, [1, 2, 0, -1, 0]), [0, 1])
+  assert equal(sat(1, []), [0])
+}
+
+test "unsatisfiable" {
+  assert equal(sat(1, [1, 0, -1, 0]), [-1])
+  assert equal(sat(2, [0]), [-1])
+}
+
+test "order prefers zeros" {
+  assert equal(sat(3, [1, 2, 3, 0]), [0, 0, 1])
+  assert equal(sat(3, [-1, 0, -2, 0]), [0, 0, 0])
+}

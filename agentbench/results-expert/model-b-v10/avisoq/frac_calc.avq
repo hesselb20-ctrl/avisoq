@@ -1,0 +1,152 @@
+import "std/strings"
+
+// A fraction n/d with d > 0, always in lowest terms (zero is 0/1).
+struct Rat {
+  n: Int,
+  d: Int
+}
+
+struct FP {
+  s: Str,
+  pos: Int,
+  dz: Bool
+}
+
+fn gcd_i(a: Int, b: Int) -> Int {
+  var x = a
+  var y = b
+  while y != 0 {
+    let t = x % y
+    x = y
+    y = t
+  }
+  return x
+}
+
+fn make_rat(n: Int, d: Int) -> Rat {
+  var num = n
+  var den = d
+  if den < 0 {
+    num = 0 - num
+    den = 0 - den
+  }
+  var g = gcd_i(num, den)
+  if g < 0 { g = 0 - g }
+  if g == 0 { return Rat(n: 0, d: 1) }
+  return Rat(n: num / g, d: den / g)
+}
+
+fn add_r(a: Rat, b: Rat) -> Rat {
+  return make_rat(a.n * b.d + b.n * a.d, a.d * b.d)
+}
+
+fn sub_r(a: Rat, b: Rat) -> Rat {
+  return make_rat(a.n * b.d - b.n * a.d, a.d * b.d)
+}
+
+fn mul_r(a: Rat, b: Rat) -> Rat {
+  return make_rat(a.n * b.n, a.d * b.d)
+}
+
+fn div_r(p: mut FP, a: Rat, b: Rat) -> Rat {
+  if b.n == 0 {
+    p.dz = true
+    return Rat(n: 0, d: 1)
+  }
+  return make_rat(a.n * b.d, a.d * b.n)
+}
+
+fn peek_c(p: mut FP) -> Int {
+  if p.pos < len(p.s) { return p.s[p.pos] }
+  return 0
+}
+
+fn f_expr(p: mut FP) -> Rat {
+  var v = f_term(p)
+  while peek_c(p) == '+' or peek_c(p) == '-' {
+    let op = peek_c(p)
+    p.pos += 1
+    let w = f_term(p)
+    if op == '+' {
+      v = add_r(v, w)
+    } else {
+      v = sub_r(v, w)
+    }
+  }
+  return v
+}
+
+fn f_term(p: mut FP) -> Rat {
+  var v = f_unary(p)
+  while peek_c(p) == '*' or peek_c(p) == '/' {
+    let op = peek_c(p)
+    p.pos += 1
+    let w = f_unary(p)
+    if op == '*' {
+      v = mul_r(v, w)
+    } else {
+      v = div_r(p, v, w)
+    }
+  }
+  return v
+}
+
+fn f_unary(p: mut FP) -> Rat {
+  if peek_c(p) == '-' {
+    p.pos += 1
+    let v = f_unary(p)
+    return Rat(n: 0 - v.n, d: v.d)
+  }
+  return f_atom(p)
+}
+
+fn f_atom(p: mut FP) -> Rat {
+  if peek_c(p) == '(' {
+    p.pos += 1
+    let v = f_expr(p)
+    p.pos += 1
+    return v
+  }
+  let start = p.pos
+  while p.pos < len(p.s) and is_digit(p.s[p.pos]) {
+    p.pos += 1
+  }
+  return Rat(n: unwrap_or(parse_int(substr(p.s, start, p.pos)), 0), d: 1)
+}
+
+fn frac_calc(s: Str) -> Str {
+  // Spaces may appear between tokens anywhere; drop them all.
+  var clean = ""
+  for i in 0..len(s) {
+    if s[i] != ' ' {
+      clean = clean + chr(s[i])
+    }
+  }
+  var p = FP(s: clean, pos: 0, dz: false)
+  let v = f_expr(p)
+  if p.dz { return "div0" }
+  if v.d == 1 { return str(v.n) }
+  return str(v.n) + "/" + str(v.d)
+}
+
+test "integers and simple fractions" {
+  assert frac_calc("1/2") == "1/2"
+  assert frac_calc("2/4") == "1/2"
+  assert frac_calc(" 1 / 2 + 1 / 3 ") == "5/6"
+  assert frac_calc("3*(2)") == "6"
+  assert frac_calc("0") == "0"
+}
+
+test "signs and precedence" {
+  assert frac_calc("-1/2") == "-1/2"
+  assert frac_calc("1/2 - 1/2") == "0"
+  assert frac_calc("2 - -3 * 2") == "8"
+  assert frac_calc("1 / -2") == "-1/2"
+  assert frac_calc("--4") == "4"
+}
+
+test "division by zero" {
+  assert frac_calc("1/0") == "div0"
+  assert frac_calc("1/(2-2)+3") == "div0"
+  assert frac_calc("0/5") == "0"
+}

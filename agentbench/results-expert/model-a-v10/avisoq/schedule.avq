@@ -1,0 +1,68 @@
+import "std/strings"
+import "std/arrays"
+
+fn two_digits(s: Str, at: Int) -> Int {
+  if not is_digit(s[at]) or not is_digit(s[at + 1]) { return -1 }
+  return (s[at] - '0') * 10 + (s[at + 1] - '0')
+}
+
+// Minutes since midnight of HH:MM at position at, or -1.
+fn clock_at(s: Str, at: Int) -> Int {
+  let h = two_digits(s, at)
+  let m = two_digits(s, at + 3)
+  if h < 0 or m < 0 or h > 23 or m > 59 { return -1 }
+  if s[at + 2] != ':' { return -1 }
+  return h * 60 + m
+}
+
+fn hhmm(t: Int) -> Str {
+  return pad_left(str(t / 60), 2, "0") + ":" + pad_left(str(t % 60), 2, "0")
+}
+
+fn schedule(s: Str) -> Str {
+  var ranges: [Int] = []
+  var invalid = 0
+  if len(s) > 0 {
+    let parts = split(s, ",")
+    for part in parts {
+      if len(part) != 11 or part[5] != '-' {
+        invalid += 1
+        continue
+      }
+      let a = clock_at(part, 0)
+      let b = clock_at(part, 6)
+      if a < 0 or b < 0 or b <= a {
+        invalid += 1
+        continue
+      }
+      push(ranges, a * 2000 + b)
+    }
+  }
+  sort(ranges)
+  var out: [Str] = []
+  var total = 0
+  var i = 0
+  while i < len(ranges) {
+    var cs = ranges[i] / 2000
+    var ce = ranges[i] % 2000
+    i += 1
+    while i < len(ranges) and ranges[i] / 2000 <= ce {
+      let e2 = ranges[i] % 2000
+      if e2 > ce { ce = e2 }
+      i += 1
+    }
+    push(out, hhmm(cs) + "-" + hhmm(ce))
+    total += ce - cs
+  }
+  return join(out, ",") + ";total=" + str(total) + ";invalid=" + str(invalid)
+}
+
+test "schedule" {
+  assert schedule("") == ";total=0;invalid=0"
+  assert schedule("09:00-10:00,10:00-11:30") == "09:00-11:30;total=150;invalid=0"
+  assert schedule("10:00-09:00,,9:00-10:00,09:00-09:00, 09:00-10:00") == ";total=0;invalid=5"
+  assert schedule("12:00-13:00,08:00-09:00,08:30-08:45") == "08:00-09:00,12:00-13:00;total=120;invalid=0"
+  assert schedule("a,") == ";total=0;invalid=2"
+  assert schedule("23:59-24:00") == ";total=0;invalid=1"
+  assert schedule("00:00-23:59") == "00:00-23:59;total=1439;invalid=0"
+}

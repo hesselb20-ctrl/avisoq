@@ -1,0 +1,137 @@
+// Node kinds: 0 empty, 1 char, 2 any, 3 star, 4 plus, 5 opt, 6 concat, 7 alt
+struct Re {
+  pat: Str,
+  pos: Int,
+  kind: [Int],
+  ca: [Int],
+  cb: [Int],
+  text: Str,
+  tl: Int,
+  memo: [Int]
+}
+
+fn new_node(r: mut Re, k: Int, a: Int, b: Int) -> Int {
+  push(r.kind, k)
+  push(r.ca, a)
+  push(r.cb, b)
+  return len(r.kind) - 1
+}
+
+fn parse_atom(r: mut Re) -> Int {
+  let ch = r.pat[r.pos]
+  r.pos += 1
+  if ch == '(' {
+    let inner = parse_alt(r)
+    r.pos += 1
+    return inner
+  }
+  if ch == '.' { return new_node(r, 2, 0, 0) }
+  return new_node(r, 1, ch, 0)
+}
+
+fn parse_seq(r: mut Re) -> Int {
+  var acc = -1
+  while r.pos < len(r.pat) and r.pat[r.pos] != '|' and r.pat[r.pos] != ')' {
+    var item = parse_atom(r)
+    while r.pos < len(r.pat) and (r.pat[r.pos] == '*' or r.pat[r.pos] == '+' or r.pat[r.pos] == '?') {
+      let q = r.pat[r.pos]
+      r.pos += 1
+      if q == '*' { item = new_node(r, 3, item, 0) }
+      if q == '+' {
+        let st = new_node(r, 3, item, 0)
+        item = new_node(r, 6, item, st)
+      }
+      if q == '?' { item = new_node(r, 5, item, 0) }
+    }
+    if acc < 0 {
+      acc = item
+    } else {
+      acc = new_node(r, 6, acc, item)
+    }
+  }
+  if acc < 0 { return new_node(r, 0, 0, 0) }
+  return acc
+}
+
+fn parse_alt(r: mut Re) -> Int {
+  var acc = parse_seq(r)
+  while r.pos < len(r.pat) and r.pat[r.pos] == '|' {
+    r.pos += 1
+    let nxt = parse_seq(r)
+    acc = new_node(r, 7, acc, nxt)
+  }
+  return acc
+}
+
+// Does node match text[i..j)?
+fn m(r: mut Re, node: Int, i: Int, j: Int) -> Bool {
+  let idx = (node * (r.tl + 1) + i) * (r.tl + 1) + j
+  if r.memo[idx] >= 0 { return r.memo[idx] == 1 }
+  var res = false
+  let k = r.kind[node]
+  if k == 0 {
+    res = i == j
+  } else if k == 1 {
+    res = j == i + 1 and r.text[i] == r.ca[node]
+  } else if k == 2 {
+    res = j == i + 1
+  } else if k == 3 {
+    if i == j {
+      res = true
+    } else {
+      var e = i + 1
+      while e <= j and not res {
+        if m(r, r.ca[node], i, e) and m(r, node, e, j) { res = true }
+        e += 1
+      }
+    }
+  } else if k == 4 {
+    var e = i + 1
+    while e <= j and not res {
+      if m(r, r.ca[node], i, e) {
+        if e == j or m(r, node, e, j) { res = true }
+      }
+      e += 1
+    }
+  } else if k == 5 {
+    res = i == j or m(r, r.ca[node], i, j)
+  } else if k == 6 {
+    var e = i
+    while e <= j and not res {
+      if m(r, r.ca[node], i, e) and m(r, r.cb[node], e, j) { res = true }
+      e += 1
+    }
+  } else {
+    res = m(r, r.ca[node], i, j) or m(r, r.cb[node], i, j)
+  }
+  if res { r.memo[idx] = 1 } else { r.memo[idx] = 0 }
+  return res
+}
+
+fn regex_match(pattern: Str, text: Str) -> Bool {
+  var r = Re(pat: pattern, pos: 0, kind: [], ca: [], cb: [], text: text, tl: len(text), memo: [])
+  let root = parse_alt(r)
+  let size = len(r.kind) * (len(text) + 1) * (len(text) + 1)
+  r.memo = array(size, -1)
+  return m(r, root, 0, len(text))
+}
+
+test "re" {
+  assert regex_match("", "")
+  assert not regex_match("", "a")
+  assert regex_match("a|", "")
+  assert regex_match("a|", "a")
+  assert regex_match("()", "")
+  assert regex_match("a*", "")
+  assert regex_match("a*", "aaa")
+  assert not regex_match("a+", "")
+  assert regex_match("(ab)+c?", "ababc")
+  assert regex_match(".*", "hello")
+  assert not regex_match("a.c", "ac")
+  assert regex_match("(a*)*b", "aaab")
+  assert regex_match("(a|b)*abb", "babb")
+  assert not regex_match("(a*)*b", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaac")
+  assert regex_match("(a?)+b", "aab")
+  assert regex_match("((a*)+)+", "")
+  assert regex_match("(|a)+", "aa")
+}

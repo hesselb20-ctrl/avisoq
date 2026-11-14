@@ -300,6 +300,33 @@ sat 0.37 / 0.28, to_infix 5.52 / 4.54.
   dominated by one or two tasks, and this is ten small programs. It supports "about as fast as
   Rust on this kind of code", not "faster than Rust".
 
+### Rerun on version 0.10: does the bigger library help?
+
+Version 0.10 added `std/bigint` and string and array helpers (0.9 had added bit operations).
+The two Avisoq agents were run again, fresh, with the same instructions. Solutions are in
+`results-expert/model-a-v10` and `model-b-v10`.
+
+| Avisoq, run A / run B | 0.8 | 0.10 | Python | Rust |
+|---|---:|---:|---:|---:|
+| Correct out of 10 | 10 / 10 | 10 / 10 | 10 / 10 | 10 / 10 |
+| Time the agent took | 164 s / 398 s | 162 s / 323 s | 117 s / 165 s | 116 s / 212 s |
+| Non-blank lines | 1024 / 1199 | 935 / 1127 | 562 / 669 | 1015 / 1186 |
+| Run time, all 10 tasks | 17 ms / 27 ms (on 0.9) | 12 ms / 15 ms | 238 ms / 229 ms | 25 ms / 27 ms |
+
+- **Both agents used the library where it fit.** Each solved the big-number division with
+  `std/bigint` (16 and 28 lines, against 121 before in run A), each used bit operations for the
+  SAT task, and 4 to 5 of the 10 solutions use the other new helpers.
+- **The code got about 7% shorter and the agents no slower**; run B was 19% faster. An agent
+  still takes 1.4 times (run A) to 2 times (run B) as long with Avisoq as with Python, and the
+  Avisoq solutions are still much longer than the Python ones.
+- **The programs run faster than before**: in total about twice as fast as the same agents' Rust
+  programs (2.0x and 1.9x) and 15 to 19 times as fast as their Python programs. Avisoq is ahead
+  of Rust on 6 of 10 tasks in run A and 7 of 10 in run B. It is still behind on `sat` in both
+  and on `big_divmod` against Python.
+- The usual caveats apply, and one more: more than half of each total is the `interp` task, and
+  the agents wrote different interpreters each time. A different draw could move the totals a
+  lot. "About as fast as Rust, sometimes faster" is what this supports.
+
 ## Running it yourself
 
 ```
