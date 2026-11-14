@@ -14,11 +14,11 @@ try {
 } catch { /* the hint is optional */ }
 import { elemOf, isArr, isMap, mangle, mapParts, showType, substType, typeArgs, typeHead, unify, walk } from './types.mjs';
 
-export const EFFECTS = new Set(['io', 'time', 'fs', 'net']);
-const BUILTIN_EFFECTS = { print: 'io', now_ms: 'time', read_file: 'fs', write_file: 'fs', file_exists: 'fs', http_get: 'net', http_post: 'net' };
+export const EFFECTS = new Set(['io', 'time', 'fs', 'net', 'run', 'ffi']);
+const BUILTIN_EFFECTS = { print: 'io', now_ms: 'time', read_file: 'fs', write_file: 'fs', file_exists: 'fs', http_get: 'net', http_post: 'net', run_command: 'run' };
 const BUILTINS = new Set(['print', 'len', 'array', 'float', 'int', 'sqrt', 'now_ms', 'str', 'substr', 'byte_at',
   'put', 'get', 'get_or', 'has', 'keys', 'remove', 'copy', 'push', 'pop', 'chr', 'read_file', 'write_file', 'file_exists', 'http_get', 'http_post',
-  'bit_and', 'bit_or', 'bit_xor', 'shift_left', 'shift_right']);
+  'bit_and', 'bit_or', 'bit_xor', 'shift_left', 'shift_right', 'run_command']);
 const BASE_TYPES = new Set(['Int', 'Float', 'Bool', 'Str']);
 const RESERVED_TYPES = new Set([...BASE_TYPES, 'Unit', 'Map', 'Fn']);
 // Constraints a type parameter can carry: fn max[T: Ord](a: T, b: T) -> T
@@ -277,6 +277,18 @@ export function check(program, diags) {
 
   function checkBody(owner, isTest) {
     currentFile = owner.file;
+    if (!isTest && owner.extern) {
+      // C code: only values C can take directly cross over, and there is no body to check.
+      const ok = (t) => ['Int', 'Float', 'Bool', 'Str'].includes(t);
+      for (const p of owner.params) {
+        if (p.mut || (p.ty !== '?' && !ok(p.ty))) err('E0802', `extern function '${owner.name}' cannot take ${p.mut ? 'a mut parameter' : showType(p.ty)}`, p, 'an extern function takes Int, Float, Bool and Str; convert other values on the Avisoq side or in the C file');
+      }
+      if (owner.ret !== 'Unit' && owner.ret !== '?' && !ok(owner.ret)) err('E0802', `extern function '${owner.name}' cannot return ${showType(owner.ret)}`, owner, 'an extern function returns Int, Float, Bool, Str or nothing');
+      owner.paramSyms = owner.params.map((p) => ({ name: p.name, ty: p.ty, isParam: true }));
+      owner.locals = [];
+      if (owner.ret !== 'Unit') { owner.resultSym = { name: 'result', ty: owner.ret, isResult: true }; owner.locals.push(owner.resultSym); }
+      return;
+    }
     const ret = isTest ? 'Unit' : owner.ret;
     const allowed = isTest ? new Set() : owner.effectSet;
     const label = isTest ? `test "${owner.name}"` : `function '${owner.name}'`;
@@ -787,6 +799,18 @@ export function check(program, diags) {
             want(e.args[1], 'Int', 'index of byte_at');
           }
           return 'Int';
+        case 'run_command': {
+          // run_command(program, arguments, input) -> Ok(what it printed) or Err(why it failed)
+          program.usesStrings = true;
+          if (argc(e, 3)) {
+            want(e.args[0], 'Str', 'the program name');
+            want(e.args[1], '[Str]', 'the arguments of run_command');
+            want(e.args[2], 'Str', 'the input of run_command');
+          }
+          if (!typeDecls.has('Result') || !validType('Result[Str,Str]', e) || !validType('[Str]', e)) return '?';
+          e.tmpSym = temp('Result[Str,Str]');
+          return 'Result[Str,Str]';
+        }
         case 'read_file': case 'http_get': case 'http_post': case 'write_file': {
           // Failures come back as values: Ok(value) or Err(error), never as a crash.
           program.usesStrings = true;

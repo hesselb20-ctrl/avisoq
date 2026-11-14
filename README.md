@@ -6,10 +6,10 @@ A small, fast, safe programming language designed to be written and verified by 
 
 <img src=".github/assets/figure/scene.webp" width="100%" alt="Three beats: a mandelbrot benchmark computed on one thread with every check on in 112 ms against 108 ms for C++; the same loop written as a sum, spread over 8 threads and 8 lanes; and the result, 4.6 ms against 15 ms for C++ parallelised by hand with OpenMP.">
 
-Version 0.12. One front end, two backends (native machine code through GCC, and sandboxed
+Version 0.13. One front end, two backends (native machine code through GCC, and sandboxed
 WebAssembly), a standard library written in Avisoq, a formatter, a compile-time contract prover,
 a language server, a package manager and a differential fuzzer. The test suites pass on both
-backends: 371 compiler cases each, 21 embedding tests, plus 26 editor, 17 package and 10 sandbox tests.
+backends: 371 compiler cases each, 21 embedding and 16 interop tests, plus 26 editor, 17 package and 10 sandbox tests.
 
 ```
 import "std/strings"
@@ -85,8 +85,21 @@ with avisoq.load("scoring.avq") as scoring:
 
 Any other language can use `avisoq serve file.avq` (one JSON request per line) or
 `avisoq call file.avq name '[args]'`. Structs, tuples, arrays and enums cross over as objects
-and arrays. See [`examples/embed`](examples/embed/README.md). Going the other way, Avisoq code
-reaches existing services through `http_get` / `http_post` and `std/json`.
+and arrays. See [`examples/embed`](examples/embed/README.md).
+
+### Use what already exists from Avisoq
+
+- **Web services:** `http_get`, `http_post` and `std/json`.
+- **Installed programs:** `run_command("python", ["script.py"], input)` starts a program directly
+  (never through a shell) and returns what it printed, or the reason it failed, as a `Result`.
+  It needs the `run` effect and a grant per program: `--allow run:python`.
+- **C libraries** (native backend): `extern "shim.c" link "sqlite3" fn db_count(path: Str) -> Int`
+  declares a function written in a C file that is compiled and linked with the program. It
+  needs the `ffi` effect and `--allow ffi`.
+
+The last two are deliberate holes in the sandbox. A program that is granted `run` or `ffi`
+runs without the reduced-rights launcher, and what the other program or the C code does is
+outside every guarantee Avisoq makes. See [`examples/interop`](examples/interop).
 
 ### For AI agents
 
@@ -246,6 +259,7 @@ contents.
 | Mutation of a `let`, a struct field or a non-`mut` parameter | Compile error |
 | Two bindings sharing one array or map | Compile error (the value moves, or use `copy`) |
 | Undeclared side effect; any effect or mutation in parallel code or a lambda | Compile error |
+| Starting a program that was not granted by name; calling C without the `ffi` grant | Refused at run time |
 | File outside a granted folder, host that was not granted | Refused at run time |
 | File or network failure | A `Result` value the program must handle |
 | Data race, use after free | Cannot happen by construction |
@@ -288,7 +302,7 @@ when the program was granted neither files nor network, no right to write any fi
 - **Modules:** `import "std/strings"`, `import "other_file"` (relative), `import "pkg:name/module"`.
   `private fn` / `private struct` / `private enum` are usable only in their own file.
 - **Built-ins:** `print`, `len`, `array`, `copy`, `push`, `pop`, `float`, `int`, `sqrt`, `str`,
-  `substr`, `byte_at`, `chr`, `now_ms`, `bit_and`, `bit_or`, `bit_xor`, `shift_left`, `shift_right`; maps: `put`, `get`, `get_or`, `has`, `remove`, `keys`;
+  `substr`, `byte_at`, `chr`, `now_ms`, `bit_and`, `bit_or`, `bit_xor`, `shift_left`, `shift_right`, `run_command`; maps: `put`, `get`, `get_or`, `has`, `remove`, `keys`;
   files: `read_file`, `write_file`, `file_exists`; network: `http_get`, `http_post`.
 
 ### Standard library
@@ -352,10 +366,11 @@ on an idle machine with 8 logical cores (Zen 4, AVX-512). Ratios are relative to
 
 ## Known limits
 
-- **It cannot call libraries written in other languages.** Other languages can call Avisoq, and
-  Avisoq can use web services with `http_get`, `http_post` and `std/json`, but there is no way
-  yet to call a C, Python or npm library from inside Avisoq, or to run another program.
-  Embedding goes through the WebAssembly backend, which is slower than the native one.
+- **Using other ecosystems goes through a boundary, not an import.** Avisoq cannot import a
+  Python or npm package. It can run a program (`run_command`), call C through a small C file
+  (`extern`, native backend only, plain values only), or be called from JavaScript and Python.
+  Native `run_command` works on Windows only so far. Embedding uses the WebAssembly backend,
+  which is slower than the native one.
 - **Big integers are a library, not built in.** `std/bigint` is faster than Python at
   factorials, parsing and printing, level on powers and multiplication, and 2 to 4 times
   slower on long chains of additions and on dividing very large numbers.

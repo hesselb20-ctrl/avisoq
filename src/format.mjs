@@ -227,6 +227,7 @@ export function format(src) {
         const params = d.params.map((p) => `${p.name}: ${p.mut ? 'mut ' : ''}${fmtType(p.ty)}`).join(', ');
         let head = `${d.private ? 'private ' : ''}fn ${d.name}${typeParams(d)}(${params})`;
         if (d.ret !== 'Unit') head += ` -> ${fmtType(d.ret)}`;
+        if (d.extern) { out.push(`extern ${quote(d.extern.source)}${d.extern.links.map((l) => ` link ${quote(l)}`).join('')} ${head}`); break; }
         if (d.effects.length) head += ` uses ${d.effects.map((e) => e.name).join(', ')}`;
         const contracts = [...d.requires.map((c) => ({ ...c, kw: 'requires' })), ...d.ensures.map((c) => ({ ...c, kw: 'ensures' }))]
           .sort((a, b) => a.line - b.line || a.col - b.col);

@@ -28,7 +28,7 @@ export function planRegions(program, backend) {
 
   const directAlloc = (n) => n.kind === 'ArrayLit' || n.kind === 'Comp' || n.kind === 'MapLit'
     || (n.kind === 'New' && backend === 'wasm')
-    || (n.kind === 'Call' && !n.fn && ['array', 'str', 'substr', 'chr', 'keys', 'copy', 'read_file', 'write_file', 'http_get', 'http_post'].includes(n.name))
+    || (n.kind === 'Call' && !n.fn && ['array', 'str', 'substr', 'chr', 'keys', 'copy', 'read_file', 'write_file', 'http_get', 'http_post', 'run_command'].includes(n.name))
     || (n.kind === 'Binary' && n.op === '+' && n.ty === 'Str');
 
   // Where a place ultimately lives: the variable at the bottom of xs[i].field..., or null.
@@ -68,7 +68,7 @@ export function planRegions(program, backend) {
   // anything that existed before the call point at memory the call allocated.
   const owners = [...program.fns, ...program.tests];
   for (const o of owners) {
-    o.allocs = false;
+    o.allocs = !!o.extern && o.ret === 'Str'; // a returned C string is copied into a new Str
     o.storesUnknown = false;
     o.storesParam = (o.params ?? []).map(() => false);
     o.callees = new Set();

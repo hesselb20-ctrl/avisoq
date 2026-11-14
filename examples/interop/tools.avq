@@ -1,0 +1,40 @@
+// Using programs that are already installed. Run with:
+//   avisoq run examples/interop/tools.avq --allow io,run:node
+fn show(what: Str, r: Result[Str, Str]) uses io {
+  match r {
+    Ok(value) => { print(what, "ok:", value) }
+    Err(error) => { print(what, "failed:", error) }
+  }
+}
+
+fn main() uses io, run {
+  show("arithmetic", run_command("node", ["-e", "process.stdout.write(String(6 * 7))"], ""))
+  show(
+    "input",
+    run_command(
+      "node",
+      ["-e", "process.stdin.on('data', (d) => process.stdout.write(String(d).toUpperCase()))"],
+      "hello from avisoq",
+    ),
+  )
+  show(
+    "arguments",
+    run_command(
+      "node",
+      [
+        "-e",
+        "process.stdout.write(process.argv.slice(1).join('|'))",
+        "a b",
+        "say \"hi\"",
+        "c:\\dir\\",
+        "",
+      ],
+      "",
+    ),
+  )
+  show(
+    "exit code",
+    run_command("node", ["-e", "console.error('  it broke  '); process.exit(3)"], ""),
+  )
+  show("missing", run_command("no-such-program-here", [], ""))
+}

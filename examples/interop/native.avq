@@ -1,0 +1,44 @@
+// Calling C from Avisoq. Native backend only:
+//   avisoq run examples/interop/native.avq --allow io,ffi --native
+//
+// `extern "file.c"` compiles that C file with the program; `extern "c"` and `extern "m"` are the
+// C standard library; any other name is a library to link, and `link "name"` adds more.
+extern "shim.c" fn add_squares(a: Int, b: Int) -> Int
+
+extern "shim.c" fn half(x: Float) -> Float
+
+extern "shim.c" fn is_palindrome(s: Str) -> Bool
+
+extern "shim.c" fn describe(name: Str, n: Int, ratio: Float, on: Bool) -> Str
+
+extern "shim.c" fn bump(by: Int)
+
+extern "shim.c" fn current() -> Int
+
+extern "shim.c" fn nothing() -> Str
+
+extern "m" fn cos(x: Float) -> Float
+
+extern "c" fn strlen(s: Str) -> Int
+
+fn total(xs: [Int]) -> Int uses ffi {
+  var t = 0
+  for x in xs { t += add_squares(x, 1) }
+  return t
+}
+
+fn main() uses io, ffi {
+  print(add_squares(3, 4), half(5.0), is_palindrome("racecar"), is_palindrome("avisoq"))
+  let text = describe("item", 42, 0.5, true)
+  bump(5)
+  bump(37)
+  print(
+    text,
+    len(text),
+    current(),
+    len(nothing()),
+    cos(0.0),
+    strlen("twelve chars"),
+    total([1, 2, 3]),
+  )
+}

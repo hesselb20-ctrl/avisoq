@@ -20,7 +20,7 @@
 #define VMAX_ARRAY_LEN (INT64_C(1) << 27)
 
 /* Reserved failure sites. */
-enum { VSITE_OOM = 0, VSITE_DIV_OVERFLOW = 1, VSITE_FLOAT_RANGE = 2, VSITE_FS_DENIED = 3, VSITE_NET_DENIED = 4 };
+enum { VSITE_OOM = 0, VSITE_DIV_OVERFLOW = 1, VSITE_FLOAT_RANGE = 2, VSITE_FS_DENIED = 3, VSITE_NET_DENIED = 4, VSITE_RUN_DENIED = 5 };
 
 __attribute__((noreturn, cold, noinline)) static void avisoq_fail(int site) {
 #pragma omp critical(avisoq_fail_lock)
@@ -523,6 +523,144 @@ static const vstr *avisoq_http(const char *method, const vstr *url, const vstr *
   (void)method; (void)url; (void)body; (void)ctype;
   *ok = false;
   return vstr_from_buf("http is not available in native builds on this platform yet");
+}
+#endif
+
+/* ---- running another program (capability run) ----
+   The program is started directly, never through a shell, so arguments cannot be reinterpreted.
+   Its input comes from a temporary file and its output goes to temporary files. */
+static bool avisoq_run_allowed(const vstr *program) {
+  if (avisoq_run_any) return true;
+  for (int i = 0; avisoq_run_programs[i]; i++) {
+#ifdef _WIN32
+    if (_stricmp(program->data, avisoq_run_programs[i]) == 0) return true;
+#else
+    if (strcmp(program->data, avisoq_run_programs[i]) == 0) return true;
+#endif
+  }
+  return false;
+}
+#ifdef _WIN32
+typedef struct { char *p; size_t len, cap; } vcmd;
+static void vcmd_put(vcmd *c, const char *s, size_t n) {
+  if (c->len + n + 1 > c->cap) { c->cap = (c->len + n + 1) * 2; c->p = (char *)realloc(c->p, c->cap); if (!c->p) avisoq_fail(VSITE_OOM); }
+  memcpy(c->p + c->len, s, n);
+  c->len += n;
+  c->p[c->len] = 0;
+}
+/* Quotes one argument the way the child's C runtime will split the command line back apart. */
+static void vcmd_arg(vcmd *c, const char *a) {
+  bool plain = *a != 0;
+  for (const char *p = a; *p; p++) if (*p == ' ' || *p == '\t' || *p == '"') plain = false;
+  if (plain) { vcmd_put(c, a, strlen(a)); return; }
+  vcmd_put(c, "\"", 1);
+  size_t slashes = 0;
+  for (const char *p = a;; p++) {
+    if (*p == '\\') { slashes++; continue; }
+    if (*p == 0) { for (size_t i = 0; i < slashes * 2; i++) vcmd_put(c, "\\", 1); break; }
+    if (*p == '"') { for (size_t i = 0; i < slashes * 2 + 1; i++) vcmd_put(c, "\\", 1); vcmd_put(c, "\"", 1); }
+    else { for (size_t i = 0; i < slashes; i++) vcmd_put(c, "\\", 1); vcmd_put(c, p, 1); }
+    slashes = 0;
+  }
+  vcmd_put(c, "\"", 1);
+}
+static const vstr *vrun_read(HANDLE h, int64_t limit) {
+  LARGE_INTEGER size;
+  if (!GetFileSizeEx(h, &size)) return vstr_new(0);
+  int64_t n = size.QuadPart;
+  if (limit >= 0 && n > limit) n = limit;
+  if (n > (INT64_C(1) << 30)) n = INT64_C(1) << 30;
+  vstr *s = vstr_new(n);
+  SetFilePointer(h, 0, NULL, FILE_BEGIN);
+  int64_t got = 0;
+  while (got < n) {
+    DWORD r = 0;
+    if (!ReadFile(h, s->data + got, (DWORD)(n - got), &r, NULL) || r == 0) break;
+    got += r;
+  }
+  s->len = got;
+  s->data[got] = 0;
+  return s;
+}
+static const vstr *avisoq_run(const vstr *program, const varr *args, const vstr *input, bool *ok) {
+  *ok = false;
+  if (!avisoq_run_allowed(program)) avisoq_fail(VSITE_RUN_DENIED);
+  vcmd c = { NULL, 0, 0 };
+  vcmd_arg(&c, program->data);
+  const vstr *const *av = VDATA(const vstr *, (varr *)args);
+  for (int64_t i = 0; i < args->len; i++) { vcmd_put(&c, " ", 1); vcmd_arg(&c, av[i]->data); }
+  wchar_t *wcmd = avisoq_wide(c.p, (int)c.len);
+  wchar_t dir[MAX_PATH], fin[MAX_PATH], fout[MAX_PATH], ferr[MAX_PATH];
+  GetTempPathW(MAX_PATH, dir);
+  GetTempFileNameW(dir, L"avi", 0, fin);
+  GetTempFileNameW(dir, L"avo", 0, fout);
+  GetTempFileNameW(dir, L"ave", 0, ferr);
+  HANDLE h = CreateFileW(fin, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_TEMPORARY, NULL);
+  int64_t sent = 0;
+  while (h != INVALID_HANDLE_VALUE && sent < input->len) {
+    DWORD w = 0;
+    if (!WriteFile(h, input->data + sent, (DWORD)(input->len - sent > 1 << 20 ? 1 << 20 : input->len - sent), &w, NULL) || w == 0) break;
+    sent += w;
+  }
+  if (h != INVALID_HANDLE_VALUE) CloseHandle(h);
+  SECURITY_ATTRIBUTES sa = { sizeof sa, NULL, TRUE };
+  HANDLE hin = CreateFileW(fin, GENERIC_READ, FILE_SHARE_READ, &sa, OPEN_EXISTING, FILE_ATTRIBUTE_TEMPORARY, NULL);
+  HANDLE hout = CreateFileW(fout, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, &sa, CREATE_ALWAYS, FILE_ATTRIBUTE_TEMPORARY, NULL);
+  HANDLE herr = CreateFileW(ferr, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, &sa, CREATE_ALWAYS, FILE_ATTRIBUTE_TEMPORARY, NULL);
+  STARTUPINFOW si;
+  memset(&si, 0, sizeof si);
+  si.cb = sizeof si;
+  si.dwFlags = STARTF_USESTDHANDLES;
+  si.hStdInput = hin;
+  si.hStdOutput = hout;
+  si.hStdError = herr;
+  PROCESS_INFORMATION pi;
+  const vstr *result;
+  if (!CreateProcessW(NULL, wcmd, NULL, NULL, TRUE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi)) {
+    result = vstr_from_buf("not found");
+  } else {
+    if (WaitForSingleObject(pi.hProcess, 60000) != WAIT_OBJECT_0) {
+      TerminateProcess(pi.hProcess, 1);
+      result = vstr_from_buf("timed out");
+    } else {
+      DWORD code = 0;
+      GetExitCodeProcess(pi.hProcess, &code);
+      if (code == 0) {
+        result = vrun_read(hout, -1);
+        *ok = true;
+      } else {
+        const vstr *e = vrun_read(herr, 8000);
+        int64_t a = 0, b = e->len;
+        while (a < b && (e->data[a] == ' ' || e->data[a] == '\t' || e->data[a] == '\r' || e->data[a] == '\n')) a++;
+        while (b > a && (e->data[b - 1] == ' ' || e->data[b - 1] == '\t' || e->data[b - 1] == '\r' || e->data[b - 1] == '\n')) b--;
+        if (b - a > 2000) b = a + 2000;
+        char head[48];
+        int hn = snprintf(head, sizeof head, "exit %lu: ", (unsigned long)code);
+        vstr *s = vstr_new(hn + (b - a));
+        memcpy(s->data, head, (size_t)hn);
+        memcpy(s->data + hn, e->data + a, (size_t)(b - a));
+        result = s;
+      }
+    }
+    CloseHandle(pi.hThread);
+    CloseHandle(pi.hProcess);
+  }
+  if (hin != INVALID_HANDLE_VALUE) CloseHandle(hin);
+  if (hout != INVALID_HANDLE_VALUE) CloseHandle(hout);
+  if (herr != INVALID_HANDLE_VALUE) CloseHandle(herr);
+  DeleteFileW(fin);
+  DeleteFileW(fout);
+  DeleteFileW(ferr);
+  free(wcmd);
+  free(c.p);
+  return result;
+}
+#else
+static const vstr *avisoq_run(const vstr *program, const varr *args, const vstr *input, bool *ok) {
+  (void)args; (void)input;
+  *ok = false;
+  if (!avisoq_run_allowed(program)) avisoq_fail(VSITE_RUN_DENIED);
+  return vstr_from_buf("run_command is not available in native programs on this platform");
 }
 #endif
 

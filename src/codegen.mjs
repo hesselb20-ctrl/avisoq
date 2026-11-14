@@ -63,7 +63,8 @@ export function codegen(program, opts = {}) {
   }
   if (used.has('http_get')) imp.http_get = m.addImport('net', 'http_get', [I32], [I32]);
   if (used.has('http_post')) imp.http_post = m.addImport('net', 'http_post', [I32, I32, I32], [I32]);
-  if (['read_file', 'write_file', 'http_get', 'http_post'].some((b) => used.has(b))) imp.last_ok = m.addImport('rt', 'last_ok', [], [I32]);
+  if (used.has('run_command')) imp.run_command = m.addImport('run', 'run_command', [I32, I32, I32], [I32]);
+  if (['read_file', 'write_file', 'http_get', 'http_post', 'run_command'].some((b) => used.has(b))) imp.last_ok = m.addImport('rt', 'last_ok', [], [I32]);
   if (program.usesMaps) {
     // Maps are kept by the host and addressed by handle.
     const add = (name, params, results) => { imp[name] = m.addImport('rt', name, params, results); };
@@ -512,7 +513,7 @@ export function codegen(program, opts = {}) {
           if (c !== null) call(c);
           break;
         }
-        case 'read_file': case 'http_get': case 'http_post': case 'write_file': {
+        case 'run_command': case 'read_file': case 'http_get': case 'http_post': case 'write_file': {
           // The host returns the value (or the reason for failure); last_ok says which.
           const tmp = e.tmpSym.idx, isWrite = e.name === 'write_file';
           e.args.forEach(expr);
@@ -716,6 +717,7 @@ export function codegen(program, opts = {}) {
     const fnMark = !isTest && owner.regionReset ? markHeap() : null;
     if (!isTest) contracts(owner.requires, FAIL.REQUIRES);
     emit(BLOCK, VOID);
+    if (owner.extern) fail(FAIL.EXTERN, owner, owner.name);
     block(owner.body);
     if (!isTest && owner.ret !== 'Unit') emit(UNREACHABLE);
     emit(END);

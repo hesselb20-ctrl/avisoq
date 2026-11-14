@@ -138,7 +138,7 @@ export function parse(src) {
     return ended({ kind: 'Import', path: path.value, line: kw.line, col: kw.col });
   }
 
-  function parseFn() {
+  function parseFn(ext = null) {
     const kw = next();
     const name = ident('a function name');
     const extra = {};
@@ -163,6 +163,12 @@ export function parse(src) {
     next();
     let ret = 'Unit';
     if (isOp('->')) { next(); ret = parseType(); }
+    if (ext) {
+      // A function written in C: it has no body here, and calling it needs the ffi effect.
+      if (typeParams.length) fail('an extern function cannot have type parameters');
+      const none = Object.assign([], { closeLine: prevLine });
+      return ended({ kind: 'Fn', name: name.value, typeParams, ...extra, params, ret, effects: [{ name: 'ffi', line: kw.line, col: kw.col }], requires: [], ensures: [], body: none, extern: ext, line: kw.line, col: name.col });
+    }
     const effects = [];
     if (isKw('uses')) {
       next();
@@ -571,6 +577,15 @@ export function parse(src) {
     else if (isKw('struct')) { d = parseStruct(); program.structs.push(d); }
     else if (isKw('enum')) { d = parseEnum(); program.enums.push(d); }
     else if (isKw('import')) { d = parseImport(); program.imports.push(d); }
+    else if (isKw('extern')) {
+      next();
+      const source = expect('str', undefined, 'an extern function names its C file or library: extern "shim.c" fn name(x: Int) -> Int').value;
+      const links = [];
+      while (is('id') && peek().value === 'link') { next(); links.push(expect('str', undefined, 'link is followed by a library name: link "sqlite3"').value); }
+      if (!isKw('fn')) fail(`expected 'fn' after extern "${source}" but found ${show(peek())}`);
+      d = parseFn({ source, links });
+      program.fns.push(d);
+    }
     else if (isKw('let')) {
       // A constant: let LIMIT = 5000
       const kw = next();

@@ -24,7 +24,7 @@ packages (run in the project folder):
   install                      fetch git dependencies into avisoq_modules
 
 options:
-  --allow io,time,fs:<folder>,net:<host>
+  --allow io,time,fs:<folder>,net:<host>,run:<program>,ffi
                     grant capabilities to the program (default: none)
   --native          compile to machine code through GCC instead of WebAssembly
   --json            machine-readable output on stdout

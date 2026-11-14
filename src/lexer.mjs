@@ -12,7 +12,7 @@ export class AvisoqError extends Error {
 
 export const KEYWORDS = new Set([
   'fn', 'let', 'var', 'if', 'else', 'while', 'for', 'in', 'return', 'assert',
-  'requires', 'ensures', 'uses', 'test', 'true', 'false', 'and', 'or', 'not', 'mut', 'struct', 'enum', 'match', 'import', 'invariant', 'private', 'break', 'continue', 'then',
+  'requires', 'ensures', 'uses', 'test', 'true', 'false', 'and', 'or', 'not', 'mut', 'struct', 'enum', 'match', 'import', 'invariant', 'private', 'break', 'continue', 'then', 'extern',
 ]);
 
 const OPS = ['+=', '-=', '*=', '/=', '%=', '->', '=>', '..', '.', '==', '!=', '<=', '>=', '+', '-', '*', '/', '%', '<', '>', '=',

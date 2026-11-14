@@ -28,6 +28,7 @@ export function cgen(program, opts = {}) {
     { kind: 'trap', message: 'float out of Int range' },
     { kind: 'capability_denied', message: 'file path is outside the folders granted with --allow fs:<folder>' },
     { kind: 'capability_denied', message: 'host was not granted; use --allow net:<host>' },
+    { kind: 'capability_denied', message: 'program was not granted; use --allow run:<program>' },
   ];
   const strings = new Map();
   let tmpCount = 0;
@@ -282,6 +283,18 @@ export function cgen(program, opts = {}) {
   }
 
   function genFn(owner, isTest, cname) {
+    if (!isTest && owner.extern) {
+      // A C function: declare it as the C file defines it, and wrap it so the rest of the program
+      // calls it like any other function. Standard library functions are already declared by the headers.
+      const C = { Int: 'long long', Float: 'double', Bool: 'bool', Str: 'const char*', Unit: 'void' };
+      const std = owner.extern.source === 'c' || owner.extern.source === 'm';
+      const proto = std ? '' : `extern ${C[owner.ret]} ${owner.name}(${owner.params.map((p) => C[p.ty]).join(', ') || 'void'});\n`;
+      const args = owner.params.map((p) => (p.ty === 'Str' ? `v_${p.name}->data` : p.ty === 'Int' ? `(long long)v_${p.name}` : `v_${p.name}`)).join(', ');
+      const call = `${owner.name}(${args})`;
+      const body = owner.ret === 'Unit' ? `${call};` : owner.ret === 'Str' ? `const char* r = (const char*)${call}; return vstr_from_buf(r ? r : "");` : owner.ret === 'Int' ? `return (int64_t)${call};` : owner.ret === 'Bool' ? `return ${call} != 0;` : `return (double)${call};`;
+      const sig = `static ${ctype(owner.ret)} ${cname}(${owner.params.map((p) => `${ctype(p.ty)} v_${p.name}`).join(', ') || 'void'})`;
+      return { sig, text: `${proto}${sig} { ${body} }` };
+    }
     const fnName = isTest ? `test "${owner.name}"` : owner.name;
     const ret = isTest ? 'Unit' : owner.ret;
     const reset = !isTest && owner.regionReset;
@@ -552,6 +565,11 @@ export function cgen(program, opts = {}) {
           return `({ bool ${ok}; const vstr* ${s} = ${seq(e.args.map(part), make)}; `
             + `${ok} ? ((${T}){ .tag = 0, .u.v0 = { ${s} } }) : ((${T}){ .tag = 1, .u.v1 = { ${s} } }); })`;
         }
+        case 'run_command': {
+          const T = ctype(e.ty), ok = tmp(), s = tmp();
+          return `({ bool ${ok}; const vstr* ${s} = ${seq(e.args.map(part), (xs) => `avisoq_run(${xs[0]}, ${xs[1]}, ${xs[2]}, &${ok})`)}; `
+            + `${ok} ? ((${T}){ .tag = 0, .u.v0 = { ${s} } }) : ((${T}){ .tag = 1, .u.v1 = { ${s} } }); })`;
+        }
         case 'file_exists': return `avisoq_file_exists(${expr(e.args[0])})`;
         case 'write_file': {
           const T = ctype(e.ty), ok = tmp(), n = tmp(), why = tmp();
@@ -718,6 +736,9 @@ export function cgen(program, opts = {}) {
   const netg = opts.grants?.net ?? { any: false, hosts: [] };
   out.push(`static const int avisoq_net_any = ${netg.any ? 1 : 0};`);
   out.push(`static const char* const avisoq_net_hosts[] = { ${[...netg.hosts.map((h) => cstring(h)), 'NULL'].join(', ')} };`);
+  const rung = opts.grants?.run ?? { any: false, programs: [] };
+  out.push(`static const int avisoq_run_any = ${rung.any ? 1 : 0};`);
+  out.push(`static const char* const avisoq_run_programs[] = { ${[...rung.programs.map((p) => cstring(p)), 'NULL'].join(', ')} };`);
   // Test builds can overwrite reclaimed memory, so a value that was handed back too early shows.
   if (opts.poison) out.push('#define AVISOQ_POISON 1');
   out.push(RUNTIME);

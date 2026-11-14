@@ -319,6 +319,32 @@ match parse_int(text) {
 }
 ```
 
+## Using programs and C code that already exist
+
+**Another program.** `run_command(program, arguments, input)` starts a program directly (no
+shell), gives it `input` on its standard input, and returns `Ok(what it printed)` or
+`Err(reason)`: `"exit 3: <its error output>"`, `"not found"` or `"timed out"`. It needs the
+`run` effect, and whoever runs the program must grant it by name: `--allow run:python`.
+
+```
+fn word_count(text: Str) -> Result[Str, Str] uses run {
+  return run_command("python", ["-c", "import sys; print(len(sys.stdin.read().split()))"], text)
+}
+```
+
+**C code** (native backend only). An `extern` function is written in C. It may take and
+return only `Int` (`long long`), `Float` (`double`), `Bool` and `Str` (`const char*`).
+Calling it needs the `ffi` effect and `--allow ffi`.
+
+```
+extern "shim.c" fn add_squares(a: Int, b: Int) -> Int      // a C file next to this one
+extern "m" fn cos(x: Float) -> Float                        // the C standard library: "c" or "m"
+extern "shim.c" link "sqlite3" fn db_count(path: Str) -> Int   // also link a library
+```
+
+Use these only when the task needs something that exists elsewhere. Code that calls them
+gives up Avisoq's guarantees for that call.
+
 ## Checking your work
 
 The fastest loop: put `test "name" { assert ... }` blocks at the bottom of the file you are

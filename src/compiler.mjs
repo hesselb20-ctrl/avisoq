@@ -35,13 +35,14 @@ function stamp(n, file) {
 
 // --allow io,fs:./data,net:example.com  ->  effect names plus the scopes of fs and net
 export function parseGrants(allow = []) {
-  const g = { names: new Set(), fs: { any: false, roots: [] }, net: { any: false, hosts: [] } };
+  const g = { names: new Set(), fs: { any: false, roots: [] }, net: { any: false, hosts: [] }, run: { any: false, programs: [] } };
   for (const item of allow) {
     const i = item.indexOf(':');
     const name = i < 0 ? item : item.slice(0, i), scope = i < 0 ? null : item.slice(i + 1);
     g.names.add(name);
     if (name === 'fs') { if (scope) g.fs.roots.push(resolve(scope)); else g.fs.any = true; }
     if (name === 'net') { if (scope) g.net.hosts.push(scope.toLowerCase()); else g.net.any = true; }
+    if (name === 'run') { if (scope) g.run.programs.push(scope.toLowerCase()); else g.run.any = true; }
   }
   return g;
 }
@@ -159,7 +160,16 @@ export function compile(src, opts = {}) {
   planRegions(program, backend);
   if (backend === 'native') {
     const { c, meta } = cgen(program, { ...opts, grants });
-    return { ok: true, diagnostics, backend, c, meta, proof };
+    // C files and libraries named by extern functions are compiled and linked with the program.
+    const sources = new Set(), links = new Set();
+    for (const f of program.fns) {
+      if (!f.extern) continue;
+      const src = f.extern.source;
+      if (src.toLowerCase().endsWith('.c')) sources.add(resolve(f.file ? dirname(resolve(f.file)) : process.cwd(), src));
+      else if (src !== 'c' && src !== 'm') links.add(src);
+      for (const l of f.extern.links) links.add(l);
+    }
+    return { ok: true, diagnostics, backend, c, meta, proof, extern: { sources: [...sources], links: [...links] } };
   }
   const { wasm, meta } = codegen(program, opts);
   return { ok: true, diagnostics, backend, wasm, meta, proof };
@@ -282,6 +292,21 @@ export async function instantiate(wasm, meta, { allow = [], write = (s) => proce
         try { writeFileSync(full, bytes); lastOk = 1; return BigInt(bytes.length); } catch (e) { lastOk = 0; return BigInt(newStr(enc.encode(ioReason(e)))); }
       },
       file_exists: (p) => (existsSync(fsPath(p)) ? 1 : 0),
+    },
+    run: {
+      // Starts a program directly (no shell), feeds it the input, and returns what it printed.
+      run_command: (p, a, inp) => {
+        const name = dec.decode(strBytes(p));
+        if (!grants.run.any && !grants.run.programs.includes(name.toLowerCase())) deny('program was not granted; use --allow run:<program>');
+        const v = new DataView(memory.buffer), n = v.getUint32(a, true), args = [];
+        for (let i = 0; i < n; i++) args.push(dec.decode(strBytes(v.getUint32(a + 8 + 4 * i, true))));
+        const r = spawnSync(name, args, { input: Buffer.from(strBytes(inp)), timeout: 60000, maxBuffer: 1 << 30, windowsHide: true });
+        const bad = (why) => { lastOk = 0; return newStr(enc.encode(why)); };
+        if (r.error) return bad(r.error.code === 'ETIMEDOUT' ? 'timed out' : 'not found');
+        if (r.status !== 0) return bad(`exit ${r.status}: ${r.stderr.toString('utf8').replace(/^[ \t\r\n]+|[ \t\r\n]+$/g, '').slice(0, 2000)}`);
+        lastOk = 1;
+        return newStr(r.stdout);
+      },
     },
     net: {
       http_get: (u) => http('GET', u, null, null),
@@ -447,14 +472,18 @@ export function buildNative(compiled, outPath, opts = {}) {
   const cache = join(tmpdir(), 'avisoq-cache');
   mkdirSync(cache, { recursive: true });
   const flags = opts.portable ? CFLAGS.map((f) => (f === '-march=native' ? '-march=x86-64-v2' : f)) : CFLAGS;
-  const hash = createHash('sha256').update(compiled.c).update(flags.join(' ')).digest('hex').slice(0, 24);
+  const ext = compiled.extern ?? { sources: [], links: [] };
+  for (const s of ext.sources) if (!existsSync(s)) throw new Error(`extern C file not found: ${s}`);
+  const hasher = createHash('sha256').update(compiled.c).update(flags.join(' ')).update(ext.links.join(' '));
+  for (const s of ext.sources) hasher.update(readFileSync(s));
+  const hash = hasher.digest('hex').slice(0, 24);
   const exe = join(cache, `${hash}${process.platform === 'win32' ? '.exe' : ''}`);
   if (!existsSync(exe)) {
     const cfile = join(cache, `${hash}.c`);
     writeFileSync(cfile, compiled.c);
     const env = gccEnv(gcc);
-    const r = spawnSync(gcc, [...flags, '-o', exe, cfile, '-lm', ...(process.platform === 'win32' ? ['-lwinhttp'] : [])], { encoding: 'utf8', env });
-    if (r.status !== 0) throw new Error(`internal error: generated C failed to compile (${cfile})\n${r.stderr}`);
+    const r = spawnSync(gcc, [...flags, '-o', exe, cfile, ...ext.sources, '-lm', ...ext.links.map((l) => `-l${l}`), ...(process.platform === 'win32' ? ['-lwinhttp'] : [])], { encoding: 'utf8', env });
+    if (r.status !== 0) throw new Error(ext.sources.length || ext.links.length ? `the C code named by extern functions failed to build:\n${(r.stderr || '').replace(/-w\b/g, '').slice(0, 3000)}` : `internal error: generated C failed to compile (${cfile})\n${r.stderr}`);
   }
   if (outPath) copyFileSync(exe, outPath);
   return outPath ?? exe;
@@ -486,7 +515,9 @@ export async function run(compiled, { allow = [], write, sandbox, portable, memo
   if (denied) return { ok: false, error: denied };
   if (compiled.backend === 'native') {
     // A program that was granted neither files nor network also loses the right to write anywhere.
-    const mode = sandbox === false ? null : compiled.meta.effects.some((e) => e === 'fs' || e === 'net') ? 'std' : 'low';
+    // A program that may start other programs or call C code cannot run under the reduced-rights launcher.
+    const open = compiled.meta.effects.some((e) => e === 'run' || e === 'ffi');
+    const mode = sandbox === false || open ? null : compiled.meta.effects.some((e) => e === 'fs' || e === 'net') ? 'std' : 'low';
     return execNative(buildNative(compiled, undefined, { portable }), [], write, mode, memoryMb);
   }
   const instance = await instantiate(compiled.wasm, compiled.meta, { allow, write });
