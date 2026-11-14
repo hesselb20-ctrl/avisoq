@@ -1,0 +1,285 @@
+// Integers of any size.
+//
+//   let a = big("123456789012345678901234567890")
+//   print(big_str(big_mul(a, big_from_int(1000))))
+//
+// A BigInt is a value like any other struct. `limbs` holds the magnitude in base one billion,
+// least significant part first, with no leading zero parts; zero has no parts and is not negative.
+import "std/core"
+import "std/strings"
+
+struct BigInt { negative: Bool, limbs: [Int] }
+
+let BIG_BASE = 1000000000
+
+// ---- magnitudes: arrays of base-1e9 parts, least significant first ----
+
+private fn mag_trim(xs: mut [Int]) {
+  while len(xs) > 0 and xs[len(xs) - 1] == 0 { pop(xs) }
+}
+
+private fn mag_cmp(a: [Int], b: [Int]) -> Int {
+  if len(a) != len(b) { return if len(a) < len(b) then -1 else 1 }
+  var i = len(a) - 1
+  while i >= 0 {
+    if a[i] != b[i] { return if a[i] < b[i] then -1 else 1 }
+    i -= 1
+  }
+  return 0
+}
+
+private fn mag_add(a: [Int], b: [Int]) -> [Int] {
+  var out: [Int] = []
+  var carry = 0
+  let n = if len(a) > len(b) then len(a) else len(b)
+  for i in 0..n {
+    var t = carry
+    if i < len(a) { t += a[i] }
+    if i < len(b) { t += b[i] }
+    push(out, t % BIG_BASE)
+    carry = t / BIG_BASE
+  }
+  if carry > 0 { push(out, carry) }
+  return out
+}
+
+// a - b, for a >= b
+private fn mag_sub(a: [Int], b: [Int]) -> [Int] {
+  var out: [Int] = []
+  var borrow = 0
+  for i in 0..len(a) {
+    var t = a[i] - borrow
+    if i < len(b) { t -= b[i] }
+    if t < 0 {
+      t += BIG_BASE
+      borrow = 1
+    } else {
+      borrow = 0
+    }
+    push(out, t)
+  }
+  mag_trim(out)
+  return out
+}
+
+private fn mag_mul(a: [Int], b: [Int]) -> [Int] {
+  if len(a) == 0 or len(b) == 0 { return [] }
+  var out = array(len(a) + len(b), 0)
+  for i in 0..len(a) {
+    var carry = 0
+    for j in 0..len(b) {
+      let t = out[i + j] + a[i] * b[j] + carry
+      out[i + j] = t % BIG_BASE
+      carry = t / BIG_BASE
+    }
+    var k = i + len(b)
+    while carry > 0 {
+      let t = out[k] + carry
+      out[k] = t % BIG_BASE
+      carry = t / BIG_BASE
+      k += 1
+    }
+  }
+  mag_trim(out)
+  return out
+}
+
+private fn mag_mul_small(a: [Int], m: Int) -> [Int]
+  requires m >= 0 and m < 1000000000
+{
+  if m == 0 { return [] }
+  var out: [Int] = []
+  var carry = 0
+  for x in a {
+    let t = x * m + carry
+    push(out, t % BIG_BASE)
+    carry = t / BIG_BASE
+  }
+  if carry > 0 { push(out, carry) }
+  return out
+}
+
+// Long division of magnitudes. The parts of the quotient are stored in `quotient`; the remainder
+// is returned.
+private fn mag_divmod(a: [Int], b: [Int], quotient: mut [Int]) -> [Int]
+  requires len(b) > 0
+{
+  var parts = array(len(a), 0)
+  var rest: [Int] = []
+  var i = len(a) - 1
+  while i >= 0 {
+    // rest = rest * BASE + a[i]
+    var shifted = [a[i]]
+    for x in rest { push(shifted, x) }
+    mag_trim(shifted)
+    // Bounds for this part of the quotient from the leading parts of both numbers; the
+    // bisection below then needs only a few steps.
+    var low = 0
+    var high = 0
+    if len(shifted) >= len(b) {
+      let top = len(shifted) - 1
+      let leading = if len(shifted) > len(b) then shifted[top] * BIG_BASE + shifted[top - 1] else shifted[top]
+      let divisor = b[len(b) - 1]
+      low = leading / (divisor + 1)
+      high = (leading + 1) / divisor
+      if high > BIG_BASE - 1 { high = BIG_BASE - 1 }
+    }
+    while low < high {
+      let middle = low + (high - low + 1) / 2
+      if mag_cmp(mag_mul_small(b, middle), shifted) <= 0 {
+        low = middle
+      } else {
+        high = middle - 1
+      }
+    }
+    parts[i] = low
+    rest = mag_sub(shifted, mag_mul_small(b, low))
+    i -= 1
+  }
+  mag_trim(parts)
+  for p in parts { push(quotient, p) }
+  return rest
+}
+
+private fn big_make(negative: Bool, limbs: [Int]) -> BigInt {
+  return BigInt(negative: negative and len(limbs) > 0, limbs: copy(limbs))
+}
+
+// ---- making and showing ----
+
+fn big_zero() -> BigInt {
+  return BigInt(negative: false, limbs: [])
+}
+
+fn big_from_int(n: Int) -> BigInt {
+  var limbs: [Int] = []
+  // worked on as a negative number, so the smallest Int needs no special case
+  var rest = if n > 0 then -n else n
+  while rest != 0 {
+    push(limbs, -(rest % BIG_BASE))
+    rest = rest / BIG_BASE
+  }
+  return BigInt(negative: n < 0, limbs: limbs)
+}
+
+// Reads a decimal integer of any length, with an optional leading "-". None if s is not one.
+fn big_parse(s: Str) -> Option[BigInt] {
+  let first = if len(s) > 0 and s[0] == '-' then 1 else 0
+  if len(s) == first { return None }
+  for i in first..len(s) {
+    if not is_digit(s[i]) { return None }
+  }
+  var limbs: [Int] = []
+  var end = len(s)
+  while end > first {
+    let start = if end - 9 > first then end - 9 else first
+    var part = 0
+    for i in start..end { part = part * 10 + (s[i] - '0') }
+    push(limbs, part)
+    end = start
+  }
+  mag_trim(limbs)
+  return Some(value: BigInt(negative: first == 1 and len(limbs) > 0, limbs: limbs))
+}
+
+// As big_parse, for text known to be a number: anything else gives zero.
+fn big(s: Str) -> BigInt {
+  match big_parse(s) {
+    Some(value) => { return copy(value) }
+    None => { return big_zero() }
+  }
+}
+
+fn big_str(a: BigInt) -> Str {
+  if len(a.limbs) == 0 { return "0" }
+  var out = if a.negative then "-" else ""
+  var i = len(a.limbs) - 1
+  out += str(a.limbs[i])
+  i -= 1
+  while i >= 0 {
+    out += pad_left(str(a.limbs[i]), 9, "0")
+    i -= 1
+  }
+  return out
+}
+
+// The value as an Int, or None if it does not fit.
+fn big_to_int(a: BigInt) -> Option[Int] {
+  if len(a.limbs) > 3 { return None }
+  return parse_int(big_str(a))
+}
+
+// ---- comparing ----
+
+fn big_is_zero(a: BigInt) -> Bool {
+  return len(a.limbs) == 0
+}
+
+// -1, 0 or 1 as a is below, equal to or above b.
+fn big_cmp(a: BigInt, b: BigInt) -> Int {
+  if a.negative != b.negative { return if a.negative then -1 else 1 }
+  let c = mag_cmp(a.limbs, b.limbs)
+  return if a.negative then -c else c
+}
+
+fn big_eq(a: BigInt, b: BigInt) -> Bool {
+  return big_cmp(a, b) == 0
+}
+
+// ---- arithmetic ----
+
+fn big_neg(a: BigInt) -> BigInt {
+  return big_make(not a.negative, a.limbs)
+}
+
+fn big_abs(a: BigInt) -> BigInt {
+  return big_make(false, a.limbs)
+}
+
+fn big_add(a: BigInt, b: BigInt) -> BigInt {
+  if a.negative == b.negative { return big_make(a.negative, mag_add(a.limbs, b.limbs)) }
+  let c = mag_cmp(a.limbs, b.limbs)
+  if c == 0 { return big_zero() }
+  if c > 0 { return big_make(a.negative, mag_sub(a.limbs, b.limbs)) }
+  return big_make(b.negative, mag_sub(b.limbs, a.limbs))
+}
+
+fn big_sub(a: BigInt, b: BigInt) -> BigInt {
+  return big_add(a, big_neg(b))
+}
+
+fn big_mul(a: BigInt, b: BigInt) -> BigInt {
+  return big_make(a.negative != b.negative, mag_mul(a.limbs, b.limbs))
+}
+
+// Quotient rounded toward zero. Dividing by zero stops the program.
+fn big_div(a: BigInt, b: BigInt) -> BigInt
+  requires len(b.limbs) > 0
+{
+  var quotient: [Int] = []
+  let rest = mag_divmod(a.limbs, b.limbs, quotient)
+  assert len(rest) >= 0
+  return big_make(a.negative != b.negative, quotient)
+}
+
+// Remainder with the sign of a, so that a == big_div(a, b) * b + big_rem(a, b).
+fn big_rem(a: BigInt, b: BigInt) -> BigInt
+  requires len(b.limbs) > 0
+{
+  var quotient: [Int] = []
+  return big_make(a.negative, mag_divmod(a.limbs, b.limbs, quotient))
+}
+
+fn big_pow(base: BigInt, exponent: Int) -> BigInt
+  requires exponent >= 0
+{
+  var out = big_from_int(1)
+  var square = copy(base)
+  var left = exponent
+  while left > 0 {
+    if left % 2 == 1 { out = big_mul(out, square) }
+    left = left / 2
+    if left > 0 { square = big_mul(square, square) }
+  }
+  return out
+}

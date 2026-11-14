@@ -362,7 +362,12 @@ export function codegen(program, opts = {}) {
     // depend on evaluation order, matching the parallel native backend.
     // Region marks: save the heap pointer, and put it back once the allocations are dead.
     const markHeap = () => { const mk = addLocal(I32); emit(GGET, 0); lset(mk); return mk; };
-    const resetHeap = (mk) => { lget(mk); emit(GSET, 0); };
+    // In a poison build the reclaimed bytes are overwritten first (memory.fill), so a value that
+    // was handed back too early cannot go unnoticed.
+    const resetHeap = (mk) => {
+      if (opts.poison) { lget(mk); emit(...i32c(0xa5), GGET, 0); lget(mk); emit(0x6b, 0xfc, 0x0b, 0x00); }
+      lget(mk); emit(GSET, 0);
+    };
 
     function compExpr(e) {
       const i = e.sym.idx, end = e.endSym.idx, arr = e.arrSym.idx, cur = e.curSym.idx;

@@ -6,10 +6,10 @@ A small, fast, safe programming language designed to be written and verified by 
 
 <img src=".github/assets/figure/scene.webp" width="100%" alt="Three beats: a mandelbrot benchmark computed on one thread with every check on in 112 ms against 108 ms for C++; the same loop written as a sum, spread over 8 threads and 8 lanes; and the result, 4.6 ms against 15 ms for C++ parallelised by hand with OpenMP.">
 
-Version 0.9. One front end, two backends (native machine code through GCC, and sandboxed
+Version 0.10. One front end, two backends (native machine code through GCC, and sandboxed
 WebAssembly), a standard library written in Avisoq, a formatter, a compile-time contract prover,
 a language server, a package manager and a differential fuzzer. The test suites pass on both
-backends: 368 compiler cases each, plus 26 editor, 17 package and 10 sandbox tests.
+backends: 370 compiler cases each, plus 26 editor, 17 package and 10 sandbox tests.
 
 ```
 import "std/strings"
@@ -105,8 +105,11 @@ module itself and runs it in a sandbox. Both keep every run-time check.
   (the sign of negative zero, and partial output from a failing `print`), both fixed.
 - **Adversarial memory tests.** Programs that would exhaust memory without reclamation, and
   programs that check live data survives it.
+- **Poison builds.** `npm run test:memory` reruns the suite and the fuzzer with every piece of
+  reclaimed memory overwritten first, so a value handed back while still in use fails loudly
+  instead of passing by luck.
 
-<img src=".github/assets/how/scene.webp" width="100%" alt="368 test programs go through one front end, are compiled by both the native and the WebAssembly backend, and all 368 print the same on both. The fuzzer found two mismatches, both fixed.">
+<img src=".github/assets/how/scene.webp" width="100%" alt="370 test programs go through one front end, are compiled by both the native and the WebAssembly backend, and all 370 print the same on both. The fuzzer found two mismatches, both fixed.">
 
 ## Capabilities
 
@@ -260,9 +263,10 @@ when the program was granted neither files nor network, no right to write any fi
 | Module | Contents |
 |---|---|
 | `std/core` (always available) | `Option[T]`, `Result[T, E]`, `is_some`, `unwrap_or`, `is_ok`, `value_or` |
-| `std/strings` | `split`, `join`, `lines`, `trim`, `replace`, `repeat`, `contains`, `index_of`, `starts_with`, `ends_with`, `parse_int` |
-| `std/arrays` | `map`, `filter`, `fold`, `each`, `any`, `all`, `count_if`, `find_index`, `equal`, `sort`, `sort_by` (stable), `sorted`, `reverse`, `concat`, `append`, `index_in`, `max_of`, `min_of` |
+| `std/strings` | `split`, `join`, `lines`, `trim`, `replace`, `repeat`, `contains`, `index_of`, `starts_with`, `ends_with`, `parse_int`, `to_upper`, `to_lower`, `count_of`, `last_index_of`, `reversed`, `matches_at`, `matches_glob`, `is_digit`, `is_letter`, `is_alnum`, `is_space`, `pad_left`, `pad_right` |
+| `std/arrays` | `map`, `filter`, `fold`, `each`, `any`, `all`, `count_if`, `find_index`, `equal`, `sort`, `sort_by` (stable), `sorted`, `reverse`, `concat`, `append`, `index_in`, `max_of`, `min_of`, `sum_of`, `includes`, `last_of`, `slice`, `range`, `swap`, `unique` |
 | `std/math` | `min`, `max`, `clamp`, `abs`, `abs_float`, `pow`, `checked_add`, `checked_sub`, `checked_mul`, `int_max`, `int_min` |
+| `std/bigint` | `BigInt`: `big`, `big_parse`, `big_from_int`, `big_str`, `big_to_int`, `big_add`, `big_sub`, `big_mul`, `big_div`, `big_rem`, `big_pow`, `big_neg`, `big_abs`, `big_cmp`, `big_eq`, `big_is_zero` |
 
 ## Packages
 

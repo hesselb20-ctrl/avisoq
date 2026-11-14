@@ -177,3 +177,86 @@ fn parse_int(s: Str) -> Option[Int] {
   if value == -9223372036854775808 { return None }
   return Some(value: -value)
 }
+
+fn is_alnum(byte: Int) -> Bool {
+  return is_letter(byte) or is_digit(byte)
+}
+
+fn to_upper(s: Str) -> Str {
+  var out = ""
+  for b in s { out += chr(if is_lower(b) then b - 32 else b) }
+  return out
+}
+
+fn to_lower(s: Str) -> Str {
+  var out = ""
+  for b in s { out += chr(if is_upper(b) then b + 32 else b) }
+  return out
+}
+
+// How many times needle occurs in s, not counting overlaps.
+fn count_of(s: Str, needle: Str) -> Int
+  requires len(needle) > 0
+  ensures result >= 0
+{
+  var found = 0
+  var i = 0
+  while i + len(needle) <= len(s) {
+    if matches_at(s, i, needle) {
+      found += 1
+      i += len(needle)
+    } else {
+      i += 1
+    }
+  }
+  return found
+}
+
+// Position of the last occurrence of needle, or -1.
+fn last_index_of(s: Str, needle: Str) -> Int
+  ensures result >= -1
+{
+  var i = len(s) - len(needle)
+  while i >= 0 {
+    if matches_at(s, i, needle) { return i }
+    i -= 1
+  }
+  return -1
+}
+
+// The characters of s in reverse order (byte by byte).
+fn reversed(s: Str) -> Str {
+  var out = ""
+  var i = len(s) - 1
+  while i >= 0 {
+    out += chr(s[i])
+    i -= 1
+  }
+  return out
+}
+
+// Does text match pattern, where * stands for any run of characters and ? for any one character?
+fn matches_glob(pattern: Str, text: Str) -> Bool {
+  var p = 0
+  var t = 0
+  var star = -1
+  var mark = 0
+  while t < len(text) {
+    if p < len(pattern) and (pattern[p] == '?' or pattern[p] == text[t]) {
+      p += 1
+      t += 1
+    } else if p < len(pattern) and pattern[p] == '*' {
+      star = p
+      mark = t
+      p += 1
+    } else if star >= 0 {
+      p = star + 1
+      mark += 1
+      t = mark
+    } else {
+      return false
+    }
+  }
+  while p < len(pattern) and pattern[p] == '*' { p += 1 }
+  return p == len(pattern)
+}

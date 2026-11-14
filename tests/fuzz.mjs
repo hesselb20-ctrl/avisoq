@@ -62,6 +62,15 @@ function generate(seed) {
         if (r === 10) { const i = fresh('i'); return `sum(${i} in 0..${int(12)}: ${expr('Int', [...scope, { name: i, ty: 'Int' }], d - 1)})`; }
         if (r === 11) { const i = fresh('i'); return `sum(${i} in ${int(4)}..${int(40)}: int(float(${i}) * ${floatLit()} + ${expr('Float', [...scope, { name: i, ty: 'Int' }], Math.min(d - 1, 1))}))`; }
         if (r === 12 && strs.length) return `len(${pick(strs).name})`;
+        const recs = ofType(scope, 'Rec');
+        const q = int(9);
+        if (q === 0) return `${pick(['bit_and', 'bit_or', 'bit_xor'])}(${a()}, ${a()})`;
+        if (q === 1) return `${pick(['shift_left', 'shift_right'])}(${a()}, ${chance(0.9) ? int(64) : a()})`;
+        if (q === 2) return `(if ${expr('Bool', scope, d - 1)} then ${a()} else ${a()})`;
+        if (q === 3 && recs.length) return pick([`${pick(recs).name}.n`, `len(${pick(recs).name}.xs)`, `len(${pick(recs).name}.tag)`, `total(${pick(recs).name}.xs)`]);
+        if (q === 4 && arrs.length) return `total(${pick(arrs).name})`;
+        if (q === 5) return `len(build(${a()} % 40))`;
+        if (q === 6 && strs.length) { const v = pick(strs).name; return `(if len(${v}) > 0 then ${v}[0] else -1)`; }
         return `(${a()} + ${a()})`;
       }
       case 'Float': {
@@ -111,21 +120,55 @@ function generate(seed) {
   }
 
   const SCALARS = ['Int', 'Int', 'Float', 'Bool', 'Str'];
-  const printable = (scope) => scope.filter((v) => v.ty !== '[Int]');
+  const printable = (scope) => scope.filter((v) => v.ty !== '[Int]' && v.ty !== 'Rec');
 
   function block(scope, d, pad, out, inFn) {
     const local = [...scope];
     const n = 2 + int(4);
     for (let k = 0; k < n; k++) {
       const r = int(12);
-      if (r <= 2) {
+      const recs = ofType(local, 'Rec', true);
+      const extra = chance(0.3) ? int(8) : -1; // the newer features: structs with arrays, mut parameters, for-in, tuples, ?
+      if (extra === 0) {
+        const name = fresh('r');
+        out.push(`${pad}var ${name} = Rec(n: ${expr('Int', local, 1)}, tag: ${expr('Str', local, 1)}, xs: ${expr('[Int]', local, 1)})`);
+        local.push({ name, ty: 'Rec', mutable: true });
+      } else if (extra === 1 && recs.length) {
+        const v = pick(recs).name;
+        out.push(pick([`${pad}bump(${v}, ${expr('Int', local, 1)})`, `${pad}${v}.n = ${expr('Int', local, 1)}`, `${pad}push(${v}.xs, ${expr('Int', local, 1)})`,
+          `${pad}${v}.tag = ${v}.tag + ${expr('Str', local, 1)}`, `${pad}${v}.n += len(${v}.tag)`]));
+      } else if (extra === 2) {
+        const strs = ofType(local, 'Str', true);
+        if (strs.length) { const v = pick(strs).name; out.push(chance(0.5) ? `${pad}${v} += ${expr('Str', local, 1)}` : `${pad}${v} = ${v} + chr(97 + ${int(26)}) + str(len(${v}))`); }
+      } else if (extra === 3 && d > 0) {
+        const arrs = ofType(local, '[Int]');
+        if (arrs.length) {
+          const x = fresh('x');
+          out.push(`${pad}for ${x} in ${pick(arrs).name} {`);
+          block([...local.filter((v) => v.ty !== '[Int]' || !v.mutable), { name: x, ty: 'Int' }], d - 1, `${pad}  `, out, inFn);
+          out.push(`${pad}}`);
+        }
+      } else if (extra === 4) {
+        const a = fresh('t'), b = fresh('t');
+        out.push(`${pad}let (${a}, ${b}) = pair(${expr('Int', local, 1)})`);
+        local.push({ name: a, ty: 'Int' }, { name: b, ty: 'Str' });
+      } else if (extra === 5 && !inFn) {
+        out.push(`${pad}print(show(chain(${expr('Int', local, 1)}, ${expr('Int', local, 1)}, ${expr('Int', local, 1)})))`);
+      } else if (extra === 6 && recs.length && !inFn) {
+        const v = pick(recs).name;
+        out.push(`${pad}print(${v}.n, ${v}.tag, len(${v}.xs), total(${v}.xs))`);
+      } else if (extra === 7 && recs.length) {
+        const v = pick(recs).name, w = fresh('r');
+        out.push(`${pad}var ${w} = copy(${v})`, `${pad}bump(${w}, ${int(9)})`);
+        local.push({ name: w, ty: 'Rec', mutable: true });
+      } else if (r <= 2) {
         const ty = chance(0.2) ? '[Int]' : pick(SCALARS);
         const mutable = chance(0.5);
         const name = fresh('v');
         out.push(`${pad}${mutable ? 'var' : 'let'} ${name} = ${expr(ty, local, 2)}`);
         local.push({ name, ty, mutable });
       } else if (r === 3) {
-        const targets = local.filter((v) => v.mutable && v.ty !== '[Int]');
+        const targets = local.filter((v) => v.mutable && v.ty !== '[Int]' && v.ty !== 'Rec');
         if (targets.length) { const v = pick(targets); out.push(`${pad}${v.name} = ${expr(v.ty, local, 2)}`); }
       } else if (r === 4 && d > 0) {
         out.push(`${pad}if ${expr('Bool', local, 2)} {`);
@@ -159,7 +202,16 @@ function generate(seed) {
     return local;
   }
 
-  const out = [];
+  const out = [
+    'struct Rec { n: Int, tag: Str, xs: [Int] }', '',
+    'fn bump(r: mut Rec, k: Int) {', '  r.n += k % 1000', '  push(r.xs, k)', '  r.tag += str(k % 7)', '}', '',
+    'fn build(n: Int) -> Str {', '  var s = ""', "  for i in 0..n { s += chr('a' + i % 26) }", '  return s', '}', '',
+    'fn total(xs: [Int]) -> Int {', '  var t = 0', '  for x in xs { t = t + x % 1000 }', '  return t', '}', '',
+    'fn pair(a: Int) -> (Int, Str) {', '  return (a % 100, build(a % 5))', '}', '',
+    'fn safe_div(a: Int, b: Int) -> Result[Int, Str] {', '  if b == 0 { return Err(error: "zero after " + str(a % 10)) }', '  return Ok(value: a / b)', '}', '',
+    'fn chain(a: Int, b: Int, c: Int) -> Result[Int, Str] {', '  let x = safe_div(a, b)?', '  var y = safe_div(x, c)?', '  y += 1', '  return Ok(value: x % 1000 + y % 1000)', '}', '',
+    'fn show(r: Result[Int, Str]) -> Str {', '  match r {', '    Ok(value) => { return "ok " + str(value) }', '    Err(error) => { return "err " + error }', '  }', '}', '',
+  ];
   for (let k = 0; k < 1 + int(3); k++) {
     const name = fresh('f');
     const params = Array.from({ length: 1 + int(2) }, () => pick(['Int', 'Int', 'Float', 'Bool']));

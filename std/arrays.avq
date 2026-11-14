@@ -221,3 +221,50 @@ fn equal[T: Eq](a: [T], b: [T]) -> Bool {
   }
   return true
 }
+
+fn sum_of[T: Num](xs: [T], zero: T) -> T {
+  var total = zero
+  for x in xs { total = total + x }
+  return total
+}
+
+fn includes[T: Eq](xs: [T], x: T) -> Bool {
+  return index_in(xs, x) >= 0
+}
+
+fn last_of[T](xs: [T]) -> T
+  requires len(xs) > 0
+{
+  return copy(xs[len(xs) - 1])
+}
+
+// The elements from position start up to, not including, position end.
+fn slice[T](xs: [T], start: Int, end: Int) -> [T]
+  requires start >= 0 and start <= end and end <= len(xs)
+{
+  var out: [T] = []
+  for i in start..end { push(out, copy(xs[i])) }
+  return out
+}
+
+// The integers from start up to, not including, end.
+fn range(start: Int, end: Int) -> [Int] {
+  return [i in start..end: i]
+}
+
+fn swap[T](xs: mut [T], i: Int, j: Int)
+  requires i >= 0 and i < len(xs) and j >= 0 and j < len(xs)
+{
+  let held = copy(xs[i])
+  xs[i] = copy(xs[j])
+  xs[j] = held
+}
+
+// The distinct elements of xs, in order of first appearance.
+fn unique[T: Eq](xs: [T]) -> [T] {
+  var out: [T] = []
+  for x in xs {
+    if index_in(out, x) < 0 { push(out, x) }
+  }
+  return out
+}

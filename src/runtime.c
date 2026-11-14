@@ -112,6 +112,19 @@ __attribute__((noinline)) static void avisoq_reset_slow(vtls *t, vmark m) {
 /* Usually nothing large and no map was created inside the region: restoring the mark is all. */
 static inline void avisoq_reset(vmark m) {
   vtls *t = vt();
+#ifdef AVISOQ_POISON
+  /* Test builds: overwrite everything being handed back, after the maps in it are released
+     (their headers live in this memory). */
+  vmark was = t->cur;
+  if (t->cur.big != m.big || t->cur.maps != m.maps) avisoq_reset_slow(t, m);
+  for (int64_t c = m.chunk < 0 ? 0 : m.chunk; c <= was.chunk; c++) {
+    char *lo = c == m.chunk ? m.p : t->chunks[c];
+    char *hi = c == was.chunk ? was.p : t->chunks[c] + VARENA_CHUNK;
+    if (hi > lo) memset(lo, 0xA5, (size_t)(hi - lo));
+  }
+  t->cur = m;
+  return;
+#endif
   if (VUNLIKELY(t->cur.big != m.big || t->cur.maps != m.maps)) { avisoq_reset_slow(t, m); return; }
   t->cur = m;
 }

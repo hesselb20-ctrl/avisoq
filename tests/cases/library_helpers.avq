@@ -1,0 +1,66 @@
+import "std/strings"
+import "std/arrays"
+
+fn main() uses io {
+  print(
+    to_upper("Hello, w0rld"),
+    to_lower("Hello, W0RLD"),
+    count_of("banana", "an"),
+    count_of("aaaa", "aa"),
+    count_of("abc", "x"),
+  )
+  print(
+    last_index_of("a.b.c", "."),
+    last_index_of("abc", "x"),
+    last_index_of("abc", ""),
+    reversed("abc"),
+    reversed(""),
+    is_alnum('q'),
+    is_alnum('7'),
+    is_alnum('-'),
+  )
+  print(
+    matches_glob("*.txt", "notes.txt"),
+    matches_glob("*.txt", "notes.md"),
+    matches_glob("a?c", "abc"),
+    matches_glob("a?c", "ac"),
+    matches_glob("*", ""),
+    matches_glob("a*b*c", "aXXbYYc"),
+    matches_glob("a*b*c", "aXXbYY"),
+    matches_glob("", ""),
+    matches_glob("", "a"),
+    matches_glob("**a", "bca"),
+  )
+  let xs = [5, 3, 5, 1, 3]
+  print(
+    sum_of(xs, 0),
+    sum_of([1.5, 2.5], 0.0),
+    includes(xs, 1),
+    includes(xs, 9),
+    last_of(xs),
+    last_of(["a", "b"]),
+  )
+  let middle = slice(xs, 1, 4)
+  let none = slice(xs, 2, 2)
+  let numbers = range(3, 7)
+  let distinct = unique(xs)
+  var ys = [1, 2, 3]
+  swap(ys, 0, 2)
+  let words = unique(["b", "a", "b"])
+  print(
+    len(middle),
+    middle[0],
+    middle[2],
+    len(none),
+    len(numbers),
+    numbers[0],
+    numbers[3],
+    len(range(5, 5)),
+    len(distinct),
+    distinct[2],
+    ys[0],
+    ys[2],
+    len(words),
+    words[1],
+  )
+}

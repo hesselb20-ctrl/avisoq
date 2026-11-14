@@ -141,6 +141,8 @@ function dedupe(diagnostics) {
 // opts: { backend: 'wasm' | 'native', checked, simd, path, allow }
 export function compile(src, opts = {}) {
   const backend = opts.backend ?? 'wasm';
+  // AVISOQ_POISON=1 (or poison: true) builds test programs that overwrite reclaimed memory.
+  if (opts.poison === undefined && process.env.AVISOQ_POISON === '1') opts = { ...opts, poison: true };
   const diagnostics = [];
   const program = loadProgram(src, opts.path, diagnostics);
   if (!program) return { ok: false, diagnostics };

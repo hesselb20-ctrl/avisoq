@@ -718,6 +718,8 @@ export function cgen(program, opts = {}) {
   const netg = opts.grants?.net ?? { any: false, hosts: [] };
   out.push(`static const int avisoq_net_any = ${netg.any ? 1 : 0};`);
   out.push(`static const char* const avisoq_net_hosts[] = { ${[...netg.hosts.map((h) => cstring(h)), 'NULL'].join(', ')} };`);
+  // Test builds can overwrite reclaimed memory, so a value that was handed back too early shows.
+  if (opts.poison) out.push('#define AVISOQ_POISON 1');
   out.push(RUNTIME);
   out.push('#ifndef _OPENMP\nstatic inline int omp_get_max_threads(void) { return 1; }\n#endif');
   for (const [s, name] of strings) {
