@@ -167,7 +167,6 @@ fn noisy(v: Int) -> Int uses io { print(v)
  return v }
 fn three(a: Int, b: Int, c: Int) -> Int { return a * 100 + b * 10 + c }
 ${main('print(three(noisy(1), noisy(2), noisy(3)), noisy(4) - noisy(5))')}`, '1\n2\n3\n4\n5\n123 -1\n');
-rejects('field assignment', `${POINT}${main('var p = Point(x: 1.0, y: 1.0)\np.x = 2.0')}`, 'E0204');
 rejects('unknown field', `${POINT}${main('let p = Point(x: 1.0, y: 1.0)\nprint(p.z)')}`, 'E0208');
 rejects('missing field', `${POINT}${main('let p = Point(x: 1.0)')}`, 'E0209');
 rejects('fields out of order', `${POINT}${main('let p = Point(y: 1.0, x: 1.0)')}`, 'E0209');
@@ -666,6 +665,56 @@ await prints('arrays are compared with equal', `import "std/arrays"\n${main('let
   await prints('a stored value that grows the array lands in the grown array', helpers + main('var b = [1, 2]\nb[0] = grow_to(b, 500) + 40\nprint(len(b), b[0])\nvar c = [7]\nprint(c[grow_to(c, 300) - 1], len(c))\nvar a: [Int] = []\npush(a, add_one(a, 5))\nprint(len(a), a[0], a[1])'), '500 41\n7 300\n2 5 5\n');
   const c = compile(main('var xs = [3, 1]\nsort(xs)'), { backend: BACKEND });
   report('an unknown standard library function names its module', !c.ok && c.diagnostics.some((d) => (d.hint ?? '').includes('import "std/arrays"')), JSON.stringify(c.diagnostics));
+}
+
+// ---- constants, tuples, ?, field assignment, mut struct parameters ----
+{
+  const STATE = 'struct State { pos: Int, errors: Int, name: Str }\nstruct Line { from: State, to: State }\n';
+  await prints('constants', `let LIMIT = 5000\nlet HALF = LIMIT / 2\nlet NAME = "x" + "y"\nlet ON = true\nlet RATIO = 0.5\n${main('print(LIMIT, HALF, NAME, ON, RATIO, LIMIT + HALF)\nvar t = 0\nfor i in 0..HALF { t = t + 1 }\nprint(t)')}`, '5000 2500 xy true 0.5 7500\n2500\n');
+  rejects('a constant needs a constant value', `let START = now_ms()\n${main('print(START)')}`, 'E0223');
+  rejects('a constant cannot be defined by itself', `let A = B + 1\nlet B = A + 1\n${main('print(A)')}`, 'E0223');
+  rejects('a constant cannot be assigned', `let LIMIT = 3\n${main('LIMIT = 4')}`, 'E0204');
+  rejects('a variable cannot reuse a constant name', `let LIMIT = 3\n${main('let LIMIT = 4\nprint(LIMIT)')}`, 'E0103');
+  rejects('there are no global variables', 'var counter = 0\nfn main() { }', 'E0001');
+
+  await prints('tuples', `fn divmod(a: Int, b: Int) -> (Int, Int) {\n  return (a / b, a % b)\n}\nfn label(n: Int) -> (Str, Bool, Float) {\n  return ("n" + str(n), n > 2, float(n) / 2.0)\n}\n${main('let (q, r) = divmod(17, 5)\nprint(q, r)\nlet pair = (1, "two")\nprint(pair.first, pair.second)\nvar (name, big, half) = label(3)\nname = name + "!"\nprint(name, big, half)\nlet nested: ((Int, Int), Str) = ((1, 2), "x")\nprint(nested.first.second, nested.second)')}`, '3 2\n1 two\nn3! true 1.5\n2 x\n');
+  await prints('tuples in arrays', main('var ps: [(Int, Str)] = []\npush(ps, (1, "a"))\npush(ps, (2, "b"))\nlet (n, s) = ps[1]\nprint(len(ps), n, s, ps[0].second)'), '2 2 b a\n');
+  rejects('a tuple pattern must match the number of parts', main('let (a, b, c) = (1, 2)\nprint(a)'), 'E0208');
+
+  const TRY = 'fn half(x: Int) -> Result[Int, Str] {\n  if x % 2 != 0 { return Err(error: "odd " + str(x)) }\n  return Ok(value: x / 2)\n}\nfn quarter(x: Int) -> Result[Int, Str] {\n  let h = half(x)?\n  var q = half(h)?\n  q = half(q * 4)?\n  return Ok(value: q)\n}\nfn show(r: Result[Int, Str]) -> Str {\n  match r {\n    Ok(value) => { return "ok " + str(value) }\n    Err(error) => { return "err " + error }\n  }\n}\n';
+  await prints('? passes an error up', TRY + main('print(show(quarter(8)), show(quarter(6)), show(quarter(7)))'), 'ok 4 err odd 3 err odd 7\n');
+  await prints('? on an Option', `import "std/strings"\nfn next_after(s: Str) -> Option[Int] {\n  let n = parse_int(s)?\n  return Some(value: n + 1)\n}\n${main('print(unwrap_or(next_after("41"), -1), unwrap_or(next_after("x"), -1))')}`, '42 -1\n');
+  await prints('? inside loops and branches', TRY + 'fn total(xs: [Int]) -> Result[Int, Str] {\n  var t = 0\n  for i in 0..len(xs) {\n    if xs[i] < 0 { continue }\n    let h = half(xs[i])?\n    t = t + h\n    if t >= 100 { break }\n  }\n  return Ok(value: t)\n}\n' + main('print(show(total([2, 4, -3, 6])), show(total([2, 5, 6])), show(total([200, 3])))'), 'ok 6 err odd 5 ok 100\n');
+  await prints('? on a call that returns arrays and on a statement', 'fn load(n: Int) -> Result[[Int], Str] {\n  if n < 0 { return Err(error: "negative") }\n  return Ok(value: [i in 0..n: i * i])\n}\nfn check(n: Int) -> Result[Bool, Str] {\n  if n > 3 { return Err(error: "too many") }\n  return Ok(value: true)\n}\nfn sum_squares(n: Int) -> Result[Int, Str] {\n  check(n)?\n  var xs = load(n)?\n  push(xs, 100)\n  let (a, b) = (len(xs), xs[len(xs) - 1])\n  return Ok(value: a * 1000 + b + sum(i in 0..len(xs): xs[i]))\n}\nfn show(r: Result[Int, Str]) -> Str {\n  match r {\n    Ok(value) => { return str(value) }\n    Err(error) => { return error }\n  }\n}\n' + main('print(show(sum_squares(3)), show(sum_squares(-1)), show(sum_squares(9)))'), '4205 negative too many\n');
+  rejects('? needs a Result or an Option', main('let x = len("abc")?\nprint(x)'), 'E0224');
+  rejects('? needs a function that returns the same kind', TRY + 'fn f(x: Int) -> Int {\n  let h = half(x)?\n  return h\n}\nfn main() { }', 'E0224');
+  rejects('? only at the end of a statement', TRY + 'fn f(x: Int) -> Result[Int, Str] {\n  return Ok(value: half(x)? + 1)\n}\nfn main() { }', 'E0001');
+
+  await prints('field assignment makes a new value', STATE + main('var st = State(pos: 0, errors: 0, name: "p")\nlet before = st\nst.pos = st.pos + 3\nst.name = st.name + "!"\nprint(st.pos, st.errors, st.name, before.pos, before.name)\nvar ln = Line(from: st, to: st)\nln.to.pos = 9\nln.from.errors = 2\nprint(ln.from.pos, ln.from.errors, ln.to.pos, ln.to.errors)\nvar items = [st, st]\nitems[1].pos = 20\nlet k = 0\nitems[k].name = "first"\nprint(items[0].pos, items[0].name, items[1].pos, items[1].name)'), '3 0 p! 0 p\n3 2 9 0\n3 first 20 p!\n');
+  rejects('a field of a let cannot be assigned', STATE + main('let st = State(pos: 0, errors: 0, name: "p")\nst.pos = 1'), 'E0204');
+  rejects('an unknown field cannot be assigned', STATE + main('var st = State(pos: 0, errors: 0, name: "p")\nst.size = 1'), 'E0204');
+  rejects('a field assignment checks the type', STATE + main('var st = State(pos: 0, errors: 0, name: "p")\nst.pos = "one"'), 'E0201');
+
+  const MUT = STATE + 'fn advance(st: mut State, by: Int) {\n  st.pos = st.pos + by\n}\nfn fail_at(st: mut State) -> Int {\n  st.errors = st.errors + 1\n  advance(st, 10)\n  return st.errors\n}\nfn skip(st: mut State, n: Int) -> Int {\n  var done = 0\n  while done < n {\n    advance(st, 1)\n    done = done + 1\n  }\n  return done\n}\n';
+  await prints('a mut struct parameter changes the caller\'s variable', MUT + main('var st = State(pos: 0, errors: 0, name: "p")\nadvance(st, 3)\nprint(fail_at(st), st.pos, st.errors)\nprint(skip(st, 500) + skip(st, 4), st.pos)\nlet copy_of = st\nadvance(st, 1)\nprint(copy_of.pos, st.pos)'), '1 13 1\n504 517\n517 518\n');
+  await prints('mut struct parameters in recursion and nested calls', MUT + 'fn count_down(st: mut State, n: Int) -> Int {\n  if n == 0 { return st.pos }\n  advance(st, n)\n  return count_down(st, n - 1)\n}\nfn two(st: mut State, a: Int, b: Int) -> Int {\n  advance(st, 100)\n  return a + b\n}\n' + main('var st = State(pos: 0, errors: 0, name: "p")\nprint(count_down(st, 4), st.pos)\nprint(two(st, fail_at(st), fail_at(st)), st.pos, st.errors)'), '10 10\n3 130 2\n');
+  rejects('a mut struct argument must be a var', MUT + main('let st = State(pos: 0, errors: 0, name: "p")\nadvance(st, 1)'), 'E0303');
+  rejects('a mut struct argument must be a plain variable', MUT + main('var items = [State(pos: 0, errors: 0, name: "p")]\nadvance(items[0], 1)'), 'E0221');
+  rejects('a number cannot be a mut parameter', 'fn bump(x: mut Int) { }\nfn main() { }', 'E0001');
+  {
+    const c = compile(main('print(1 == not true)'), { backend: BACKEND });
+    report('not after a comparison explains the brackets', !c.ok && (c.diagnostics[0].hint ?? '').includes('brackets'), JSON.stringify(c.diagnostics));
+  }
+}
+
+// ---- whole programs in tests/cases, each with its expected output next to it ----
+{
+  const { readdirSync, readFileSync } = await import('node:fs');
+  const dir = new URL('./cases/', import.meta.url);
+  for (const f of readdirSync(dir).filter((x) => x.endsWith('.avq')).sort()) {
+    const expected = readFileSync(new URL(f.replace(/[.]avq$/, '.out'), dir), 'utf8').split(String.fromCharCode(13)).join('');
+    await prints(`case ${f}`, readFileSync(new URL(f, dir), 'utf8'), expected);
+  }
 }
 
 console.log(`[${BACKEND}] ${passed} passed, ${failed} failed`);

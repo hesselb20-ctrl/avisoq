@@ -656,7 +656,7 @@ export function cgen(program, opts = {}) {
       }
     }
 
-    const params = isTest ? 'void' : owner.params.map((p) => `${p.grows ? 'varr**' : ctype(p.ty)} v_${p.name}`).join(', ') || 'void';
+    const params = isTest ? 'void' : owner.params.map((p) => `${p.grows ? `${ctype(p.ty)}*` : ctype(p.ty)} v_${p.name}`).join(', ') || 'void';
     const sig = `static ${ctype(ret)} ${cname}(${params})`;
     if (!isTest) {
       for (const c of owner.requires) line(`if (VUNLIKELY(!${expr(c.expr)})) avisoq_fail(${site(FAIL.REQUIRES, c, c.text)});`);

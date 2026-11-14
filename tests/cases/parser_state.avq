@@ -1,0 +1,66 @@
+import "std/strings"
+import "std/arrays"
+
+struct Bag { items: [Int], names: [Str], total: Int }
+struct P { src: Str, pos: Int, out: [Str] }
+
+fn add(b: mut Bag, v: Int) {
+  var its = copy(b.items)
+  push(its, v)
+  b.items = its
+  b.total = b.total + v
+}
+
+fn word(p: mut P) -> Option[Str] {
+  while p.pos < len(p.src) and byte_at(p.src, p.pos) == 32 { p.pos = p.pos + 1 }
+  if p.pos >= len(p.src) { return None }
+  let start = p.pos
+  while p.pos < len(p.src) and byte_at(p.src, p.pos) != 32 { p.pos = p.pos + 1 }
+  return Some(value: substr(p.src, start, p.pos))
+}
+
+fn two_words(p: mut P) -> Option[(Str, Str)] {
+  let a = word(p)?
+  let b = word(p)?
+  return Some(value: (a, b))
+}
+
+fn collect(p: mut P) -> Int {
+  var n = 0
+  while true {
+    match word(p) {
+      Some(value) => {
+        var o = copy(p.out)
+        push(o, value + "!")
+        p.out = o
+        n = n + 1
+      }
+      None => { break }
+    }
+  }
+  return n
+}
+
+fn main() uses io {
+  var b = Bag(items: [], names: ["x"], total: 0)
+  for i in 0..2000 {
+    add(b, i)
+    if i % 500 == 0 { b.names = [str(i)] }
+  }
+  print(len(b.items), b.total, b.items[1999], b.names[0])
+  var p = P(src: "  alpha beta  gamma delta epsilon ", pos: 0, out: [])
+  match two_words(p) {
+    Some(value) => { print(value.first, value.second, p.pos) }
+    None => { print("none") }
+  }
+  print(collect(p), join(p.out, ","), p.pos)
+  match two_words(p) {
+    Some(value) => { print("unexpected") }
+    None => { print("none", p.pos) }
+  }
+  var grid: [[Int]] = [[1, 2], [3, 4]]
+  grid[1][0] = 30
+  var bags = [copy(b)]
+  bags[0].total = -1
+  print(grid[1][0], bags[0].total, b.total)
+}

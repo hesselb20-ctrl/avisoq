@@ -35,6 +35,15 @@ export function parse(src) {
 
   // Types are canonical strings: Int, [T], Map[K,V], Name, Name[A,B].
   function parseType() {
+    if (isOp('(')) {
+      // A tuple type: (A, B) is kept as Tuple2[A,B]
+      const open = next();
+      const parts = [parseType()];
+      while (isOp(',')) { next(); parts.push(parseType()); }
+      expect('op', ')', 'a tuple type is written (A, B)');
+      if (parts.length < 2 || parts.length > 4) fail('a tuple has 2 to 4 parts', 'for more values, declare a struct with named fields', open);
+      return `Tuple${parts.length}[${parts.join(',')}]`;
+    }
     if (isOp('[')) {
       next();
       const inner = parseType();
@@ -142,11 +151,13 @@ export function parse(src) {
       let mut = false;
       if (isKw('mut')) { next(); mut = true; }
       const ty = parseType();
-      if (mut && ty[0] !== '[' && !ty.startsWith('Map[')) {
-        throw new AvisoqError('E0001', `only array and Map parameters can be 'mut', but '${pn.value}' is ${ty}`, pn.line, pn.col,
-          'values other than arrays and maps are immutable; return a new value instead');
+      if (mut && (['Int', 'Float', 'Bool', 'Str'].includes(ty) || ty.startsWith('Fn['))) {
+        throw new AvisoqError('E0001', `a ${ty} parameter cannot be 'mut'`, pn.line, pn.col,
+          'arrays, maps and structs can be mut parameters; for a single number, return the new value or keep it in a struct');
       }
-      params.push({ name: pn.value, ty, mut, line: pn.line, col: pn.col });
+      // A mut struct is handed back to the caller's variable when the function returns.
+      const byValue = mut && ty[0] !== '[' && !ty.startsWith('Map[');
+      params.push({ name: pn.value, ty, mut, ...(byValue ? { grows: true, mutValue: true } : {}), line: pn.line, col: pn.col });
       if (!isOp(')')) expect('op', ',');
     }
     next();
@@ -189,6 +200,9 @@ export function parse(src) {
     return stmts;
   }
 
+  // A trailing ? on a let, an assignment or a call statement: pass an Err or None up to the caller.
+  const tryMark = () => { if (isOp('?') && !peek().nl) { next(); return true; } return false; };
+
   function parseStmt() {
     const t = peek();
     const at = { line: t.line, col: t.col };
@@ -197,12 +211,23 @@ export function parse(src) {
         case 'let':
         case 'var': {
           next();
+          if (isOp('(')) {
+            // let (a, b) = pair
+            next();
+            const names = [];
+            while (!isOp(')')) { const b = ident('a variable name'); names.push({ name: b.value, line: b.line, col: b.col }); if (!isOp(')')) expect('op', ','); }
+            next();
+            if (names.length < 2 || names.length > 4) fail('a tuple pattern has 2 to 4 names', 'write: let (a, b) = value');
+            expect('op', '=', 'every variable must be initialised: let (a, b) = value');
+            const init = parseExpr();
+            return { kind: 'LetTuple', mutable: t.value === 'var', names, init, try: tryMark(), ...at };
+          }
           const name = ident('a variable name');
           let ty = null;
           if (isOp(':')) { next(); ty = parseType(); }
           expect('op', '=', 'every variable must be initialised: let name = value');
           const init = parseExpr();
-          return { kind: 'Let', mutable: t.value === 'var', name: name.value, ty, init, line: name.line, col: name.col, stmtLine: t.line };
+          return { kind: 'Let', mutable: t.value === 'var', name: name.value, ty, init, try: tryMark(), line: name.line, col: name.col, stmtLine: t.line };
         }
         case 'if':
           return parseIf();
@@ -257,18 +282,14 @@ export function parse(src) {
     const expr = parseExpr();
     if (isOp('=')) {
       next();
-      if (expr.kind === 'Field') {
-        throw new AvisoqError('E0204', `cannot assign to field '${expr.name}': struct values are immutable`, expr.line, expr.col,
-          'build a new value instead, for example p = Point(x: p.x + 1.0, y: p.y)');
-      }
-      if (expr.kind !== 'Name' && expr.kind !== 'Index') {
-        throw new AvisoqError('E0001', 'left side of = must be a variable or an array element', expr.line, expr.col,
+      if (expr.kind !== 'Name' && expr.kind !== 'Index' && expr.kind !== 'Field') {
+        throw new AvisoqError('E0001', 'left side of = must be a variable, an array element or a field', expr.line, expr.col,
           'to compare values use ==');
       }
       const value = parseExpr();
-      return { kind: 'Assign', target: expr, value, ...at };
+      return { kind: 'Assign', target: expr, value, try: tryMark(), ...at };
     }
-    return { kind: 'ExprStmt', expr, ...at };
+    return { kind: 'ExprStmt', expr, try: tryMark(), ...at };
   }
 
   function parseIf() {
@@ -462,6 +483,13 @@ export function parse(src) {
     if (isOp('(')) {
       next();
       const e = parseExpr();
+      if (isOp(',')) {
+        const elems = [e];
+        while (isOp(',')) { next(); elems.push(parseExpr()); }
+        expect('op', ')', 'a tuple is written (a, b)');
+        if (elems.length > 4) fail('a tuple has 2 to 4 parts', 'for more values, declare a struct with named fields', t);
+        return { kind: 'Tuple', elems, ...at };
+      }
       expect('op', ')');
       return e;
     }
@@ -483,26 +511,37 @@ export function parse(src) {
       next();
       return { kind: 'MapLit', ...at };
     }
-    fail(`expected an expression but found ${show(t)}`);
+    fail(`expected an expression but found ${show(t)}`,
+      t.kind === 'kw' && t.value === 'not' ? "'not' binds looser than comparisons; put it in brackets: a == (not b)"
+        : t.kind === 'op' && t.value === '?' ? 'the ? operator goes at the very end of a let, an assignment or a call statement: let x = f()?'
+          : undefined);
   }
 
-  const program = { fns: [], tests: [], structs: [], enums: [], imports: [], decls: [], comments: toks.comments };
+  const program = { fns: [], tests: [], structs: [], enums: [], consts: [], imports: [], decls: [], comments: toks.comments };
   while (!is('eof')) {
     let d;
     // private: usable only inside the file that declares it
     const isPrivate = isKw('private');
     if (isPrivate) {
       next();
-      if (!isKw('fn') && !isKw('struct') && !isKw('enum')) fail(`'private' must be followed by fn, struct or enum, but found ${show(peek())}`);
+      if (!isKw('fn') && !isKw('struct') && !isKw('enum') && !isKw('let')) fail(`'private' must be followed by fn, struct or enum, but found ${show(peek())}`);
     }
     if (isKw('fn')) { d = parseFn(); program.fns.push(d); }
     else if (isKw('test')) { d = parseTest(); program.tests.push(d); }
     else if (isKw('struct')) { d = parseStruct(); program.structs.push(d); }
     else if (isKw('enum')) { d = parseEnum(); program.enums.push(d); }
     else if (isKw('import')) { d = parseImport(); program.imports.push(d); }
+    else if (isKw('let')) {
+      // A constant: let LIMIT = 5000
+      const kw = next();
+      const name = ident('a constant name');
+      expect('op', '=', 'a constant is written: let NAME = value');
+      d = ended({ kind: 'Const', name: name.value, init: parseExpr(), line: kw.line, col: name.col });
+      program.consts.push(d);
+    }
     else {
-      fail(`expected 'fn', 'struct', 'enum', 'import' or 'test' at top level but found ${show(peek())}`,
-        'all code lives inside functions; the program starts at fn main()');
+      fail(`expected 'fn', 'struct', 'enum', 'let', 'import' or 'test' at top level but found ${show(peek())}`,
+        isKw('var') ? 'there are no global variables; a top-level let is a constant' : 'all code lives inside functions; the program starts at fn main()');
     }
     if (isPrivate) d.private = true;
     program.decls.push(d);

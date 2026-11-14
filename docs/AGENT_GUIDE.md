@@ -15,7 +15,7 @@ differ from the languages you know. Print this guide any time with `avisoq guide
 3. **No implicit conversions.** `Int` and `Float` never mix: write `float(i)` or `int(f)`.
    Build text with `str(x)`: `"n = " + str(n)`.
 4. **`let` is immutable, `var` is mutable.** Parameters are immutable. To change an array or
-   map argument, the parameter must be `mut`: `fn fill(xs: mut [Int])`.
+   map or struct argument, the parameter must be `mut`: `fn fill(xs: mut [Int])`.
 5. **Blocks always use braces**, and `if` conditions have no parentheses: `if x > 0 { ... }`.
    There is no `else if` shorthand problem: `else if` works. There is no ternary and no
    `if` expression; use an `if` statement.
@@ -72,6 +72,92 @@ fn main() uses io {
 }
 ```
 
+## State, constants, tuples and errors
+
+These four features remove most of the bookkeeping from larger programs. Use them.
+
+**Constants.** A top-level `let` is a constant. Its value must be built from literals, operators
+and other constants.
+
+```
+let MAX_STEPS = 5000
+let TOKEN_NUMBER = 1
+let TOKEN_NAME = TOKEN_NUMBER + 1
+```
+
+**Mutable state: a `var` struct, passed as `mut`.** A field of a `var` struct can be assigned,
+and a function can take a struct as a `mut` parameter and change the caller's variable. This is
+the way to write a parser or an interpreter: put the position, flags and tables in one struct.
+
+```
+struct Parser { src: Str, pos: Int, errors: [Str] }
+
+fn skip_spaces(p: mut Parser) {
+  while p.pos < len(p.src) and byte_at(p.src, p.pos) == 32 { p.pos = p.pos + 1 }
+}
+
+fn expect(p: mut Parser, ch: Int) {
+  skip_spaces(p)
+  if p.pos < len(p.src) and byte_at(p.src, p.pos) == ch {
+    p.pos = p.pos + 1
+  } else {
+    push(p.errors, "expected " + chr(ch) + " at " + str(p.pos))
+  }
+}
+
+fn main() uses io {
+  var p = Parser(src: " (x", pos: 0, errors: [])
+  expect(p, 40)
+  expect(p, 41)
+  print(p.pos, len(p.errors))
+}
+```
+
+- The argument for a `mut` struct parameter must be a plain `var` variable or a `mut` parameter.
+- `p.pos = v`, `p.a.b = v` and `items[i].count = v` all work. So do `push(p.errors, x)` and
+  `pop(p.errors)` as statements, and `put(p.table, k, v)`.
+- A struct is still a value: `let saved = p` keeps the old state when `p` changes afterwards.
+- `Int`, `Float`, `Bool` and `Str` parameters cannot be `mut`; put them in a struct.
+
+**Tuples.** `(a, b)` builds a tuple of 2 to 4 values, its type is written `(A, B)`, and
+`let (x, y) = pair` takes it apart. The parts are also `.first`, `.second`, `.third`, `.fourth`.
+
+```
+fn divmod(a: Int, b: Int) -> (Int, Int) requires b != 0 {
+  return (a / b, a % b)
+}
+
+fn main() uses io {
+  let (q, r) = divmod(17, 5)
+  print(q, r)
+}
+```
+
+**Passing errors up with `?`.** In a function that returns a `Result`, write `?` at the end of
+a `let`, an assignment or a call statement whose value is a `Result`: an `Err` returns from
+the function at once, an `Ok` gives its value. The same works for `Option` (a `None` returns
+`None`) in a function that returns an `Option`.
+
+```
+fn parse_pair(s: Str) -> Result[(Int, Int), Str] {
+  let parts = split(s, ",")
+  if len(parts) != 2 { return Err(error: "expected two numbers") }
+  let a = number(parts[0])?
+  let b = number(parts[1])?
+  return Ok(value: (a, b))
+}
+
+fn number(s: Str) -> Result[Int, Str] {
+  match parse_int(trim(s)) {
+    Some(value) => { return Ok(value: value) }
+    None => { return Err(error: "not a number: " + s) }
+  }
+}
+```
+
+`?` is only allowed at the very end of a statement (`let x = f()?`, `x = f()?`, `f()?`), not
+inside a larger expression. The error types must match: the `Err` is passed up unchanged.
+
 ## Types
 
 | Type | Notes |
@@ -82,7 +168,7 @@ fn main() uses io {
 | `Str` | Immutable bytes (UTF-8). `"text"`, escapes `\n \t \" \\`. |
 | `[T]` | Array. `[1, 2, 3]`, `xs[i]`, `len(xs)`. Empty: `let xs: [Int] = []`. |
 | `Map[K, V]` | Keys are `Int` or `Str`. Empty: `var m: Map[Str, Int] = {}`. |
-| struct | `struct Point { x: Int, y: Int }`, built `Point(x: 1, y: 2)`, read `p.x`. Immutable. |
+| struct | `struct Point { x: Int, y: Int }`, built `Point(x: 1, y: 2)`, read `p.x`. A field of a `var` struct can be assigned: `p.x = 3`. |
 | enum | `enum Shape { Circle(r: Int), Empty }`, built `Circle(r: 2)` or bare `Empty`. |
 
 Only `Int`, `Float`, `Bool` and `Str` can be compared with `==` and `!=`. `<`, `<=`, `>`, `>=`

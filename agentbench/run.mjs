@@ -96,7 +96,7 @@ function gradeOne(lang, t, tmp) {
     }
     t.tests.forEach((args, i) => {
       writeFileSync(probe, program(args));
-      const r = run(process.execPath, [cli, 'run', probe, '--allow', 'io', '--json']);
+      const r = run(process.execPath, [cli, 'run', probe, '--allow', 'io', '--json', ...(process.env.AVISOQ_BENCH_NATIVE ? ['--native'] : [])], { timeout: 60000 });
       let j = null;
       try { j = JSON.parse(r.stdout); } catch { /* crashed or timed out */ }
       if (!j) outcomes.push({ kind: 'error', error: r.error?.code === 'ETIMEDOUT' ? 'timed out' : clip(r.stderr || 'crashed') });

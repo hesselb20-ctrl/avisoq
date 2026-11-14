@@ -15,6 +15,7 @@ function expr(e, min = 0) {
     case 'StrLit': return quote(e.value);
     case 'Name': return e.name;
     case 'MapLit': return '{}';
+    case 'Tuple': return `(${e.elems.map((x) => expr(x)).join(', ')})`;
     case 'Lambda': return wrap(0.5, `fn(${e.params.map((p) => p.name).join(', ')}) => ${expr(e.body)}`);
     case 'Unary':
       return e.op === 'not' ? wrap(3, `not ${expr(e.operand, 3)}`) : wrap(7, `-${expr(e.operand, 7)}`);
@@ -75,19 +76,20 @@ export function format(src) {
     if (out.length && lastLine && line - lastLine > 1 && out[out.length - 1] !== '' && !out[out.length - 1].endsWith('{')) out.push('');
   }
 
-  const simple = (s) => ['Let', 'Assign', 'Return', 'Assert', 'ExprStmt', 'Break', 'Continue'].includes(s.kind);
+  const simple = (s) => ['Let', 'LetTuple', 'Assign', 'Return', 'Assert', 'ExprStmt', 'Break', 'Continue'].includes(s.kind);
   // { stmt } stays on one line when it was written that way.
   const inlineBody = (body, openLine) => body.length === 1 && simple(body[0]) && body.closeLine === openLine
     && !comments.some((c) => c.line === openLine);
   const one = (s) => {
     switch (s.kind) {
-      case 'Let': return `${s.mutable ? 'var' : 'let'} ${s.name}${s.ty ? `: ${fmtType(s.ty)}` : ''} = ${expr(s.init)}`;
-      case 'Assign': return `${expr(s.target)} = ${expr(s.value)}`;
+      case 'Let': return `${s.mutable ? 'var' : 'let'} ${s.name}${s.ty ? `: ${fmtType(s.ty)}` : ''} = ${expr(s.init)}${s.try ? '?' : ''}`;
+      case 'LetTuple': return `${s.mutable ? 'var' : 'let'} (${s.names.map((x) => x.name).join(', ')}) = ${expr(s.init)}${s.try ? '?' : ''}`;
+      case 'Assign': return `${expr(s.target)} = ${expr(s.value)}${s.try ? '?' : ''}`;
       case 'Return': return s.value ? `return ${expr(s.value)}` : 'return';
       case 'Break': return 'break';
       case 'Continue': return 'continue';
       case 'Assert': return `assert ${expr(s.cond)}`;
-      case 'ExprStmt': return expr(s.expr);
+      case 'ExprStmt': return `${expr(s.expr)}${s.try ? '?' : ''}`;
       default: throw new Error('unreachable');
     }
   };
@@ -130,19 +132,24 @@ export function format(src) {
     switch (s.kind) {
       case 'Let': {
         const head = `${s.mutable ? 'var' : 'let'} ${s.name}${s.ty ? `: ${fmtType(s.ty)}` : ''} = `;
-        out.push(`${indent}${head}${exprAt(s.init, head, indent)}`);
+        out.push(`${indent}${head}${exprAt(s.init, head, indent)}${s.try ? '?' : ''}`);
+        break;
+      }
+      case 'LetTuple': {
+        const head = `${s.mutable ? 'var' : 'let'} (${s.names.map((x) => x.name).join(', ')}) = `;
+        out.push(`${indent}${head}${exprAt(s.init, head, indent)}${s.try ? '?' : ''}`);
         break;
       }
       case 'Assign': {
         const head = `${expr(s.target)} = `;
-        out.push(`${indent}${head}${exprAt(s.value, head, indent)}`);
+        out.push(`${indent}${head}${exprAt(s.value, head, indent)}${s.try ? '?' : ''}`);
         break;
       }
       case 'Return': out.push(`${indent}${s.value ? `return ${exprAt(s.value, 'return ', indent)}` : 'return'}`); break;
       case 'Assert': out.push(`${indent}assert ${expr(s.cond)}`); break;
       case 'Break': out.push(`${indent}break`); break;
       case 'Continue': out.push(`${indent}continue`); break;
-      case 'ExprStmt': out.push(`${indent}${exprAt(s.expr, '', indent)}`); break;
+      case 'ExprStmt': out.push(`${indent}${exprAt(s.expr, '', indent)}${s.try ? '?' : ''}`); break;
       case 'If': ifStmt(s, indent, ''); break;
       case 'While':
         if (s.invariants.length) {
@@ -180,7 +187,7 @@ export function format(src) {
   for (const d of program.decls) {
     if (prev) {
       // One blank line between declarations; imports written together stay together.
-      const tight = prev.kind === 'Import' && d.kind === 'Import' && d.line - prev.endLine <= 1;
+      const tight = prev.kind === d.kind && (d.kind === 'Import' || d.kind === 'Const') && d.line - prev.endLine <= 1;
       if (!tight && out[out.length - 1] !== '') out.push('');
     }
     const before = out.length;
@@ -188,6 +195,7 @@ export function format(src) {
     if (out.length > before && d.line - lastLine > 1) out.push('');
     switch (d.kind) {
       case 'Import': out.push(`import ${quote(d.path)}`); break;
+      case 'Const': out.push(`${d.private ? 'private ' : ''}let ${d.name} = ${expr(d.init)}`); break;
       case 'Struct': {
         const head = `${d.private ? 'private ' : ''}struct ${d.name}${typeParams(d)}`;
         if (d.line === d.endLine) out.push(`${head} { ${fieldList(d.fields).join(', ')} }`);

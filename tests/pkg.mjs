@@ -19,7 +19,7 @@ const codes = (src) => compile(src).diagnostics.map((d) => d.code);
 report('a private function cannot be used from another file', codes('import "std/strings"\nfn main() uses io { print(is_space(32)) }').includes('E0702'), codes('import "std/strings"\nfn main() uses io { print(is_space(32)) }').join(','));
 report('a private function works inside its own file', compile('private fn helper(x: Int) -> Int { return x + 1 }\nfn main() uses io { print(helper(1)) }').ok, '');
 report('private applies to structs', codes('private struct Hidden { x: Int }\nfn main() { }').length === 0, '');
-report('private must precede a declaration', codes('private let x = 1').includes('E0001'), '');
+report('private must precede a declaration', codes('private var x = 1').includes('E0001'), '');
 
 // ---- packages ----
 const root = mkdtempSync(join(tmpdir(), 'avisoq-pkg-'));

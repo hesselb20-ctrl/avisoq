@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import v8 from 'node:v8';
 import { parse } from './parser.mjs';
 import { check } from './checker.mjs';
+import { desugar } from './desugar.mjs';
 import { planRegions } from './regions.mjs';
 import { resolvePackageImport } from './pkg.mjs';
 import { prove } from './prove.mjs';
@@ -87,6 +88,7 @@ function loadProgram(src, entryPath, diagnostics, lenient = false) {
     program.fns.push(...mod.fns);
     program.structs.push(...mod.structs);
     program.enums.push(...mod.enums);
+    program.consts.push(...mod.consts);
     program.allDecls.push(...mod.decls.filter((d) => d.kind !== 'Import' && d.kind !== 'Test'));
     queue.push(...mod.imports.map((x) => ({ imp: x, from: target })));
   }
@@ -99,6 +101,7 @@ export function analyze(src, opts = {}) {
   const program = loadProgram(src, opts.path, diagnostics, true);
   if (!program) return { program: null, diagnostics, decls: [] };
   const decls = program.allDecls;
+  desugar(program);
   check(program, diagnostics);
   if (!diagnostics.length) prove(program, diagnostics);
   dedupe(diagnostics);
@@ -120,6 +123,7 @@ export function compile(src, opts = {}) {
   const diagnostics = [];
   const program = loadProgram(src, opts.path, diagnostics);
   if (!program) return { ok: false, diagnostics };
+  desugar(program);
   check(program, diagnostics);
   dedupe(diagnostics);
   if (diagnostics.length) {

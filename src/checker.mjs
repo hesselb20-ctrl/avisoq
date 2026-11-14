@@ -44,12 +44,18 @@ export function check(program, diags) {
   const fnInstances = new Map(); // 'name[Args]' -> instantiated function
   let lambdaCount = 0;
   const growCalls = []; // every call, for working out which array parameters may grow
-  const taken = (name) => typeDecls.has(name) || variants.has(name) || fns.has(name) || fnTemplates.has(name);
+  const taken = (name) => typeDecls.has(name) || variants.has(name) || fns.has(name) || fnTemplates.has(name) || consts.has(name);
   const definedIn = (name) => {
     const d = fns.get(name) ?? fnTemplates.get(name);
     const m = /std[\\/](\w+)\.avq$/.exec(d?.file ?? '');
     return m ? ` (a function in std/${m[1]})` : '';
   };
+
+  // Constants: a top-level let whose value is built from literals, operators and other constants.
+  const consts = new Map();
+  const constExpr = (e) => ['IntLit', 'FloatLit', 'BoolLit', 'StrLit'].includes(e.kind) || (e.kind === 'Name') || (e.kind === 'Unary' && constExpr(e.operand)) || (e.kind === 'Binary' && constExpr(e.left) && constExpr(e.right));
+  const cloneExpr = (e) => (e.kind === 'Unary' ? { ...e, operand: cloneExpr(e.operand) } : e.kind === 'Binary' ? { ...e, left: cloneExpr(e.left), right: cloneExpr(e.right) } : { ...e });
+  const constsInUse = new Set();
 
   for (const d of [...program.structs, ...program.enums]) {
     currentFile = d.file;
@@ -191,6 +197,13 @@ export function check(program, diags) {
     }
     if (!fnTemplates.has(f.name) || fnTemplates.get(f.name) !== f) { setupSignature(f); concreteFns.push(f); }
   }
+  let tryCount = 0;
+  for (const c of program.consts ?? []) {
+    currentFile = c.file;
+    if (BUILTINS.has(c.name) || taken(c.name)) err('E0102', `'${c.name}' is already the name of a function, type, variant or constant`, c, 'constant names must be unique in a program');
+    else if (!constExpr(c.init)) err('E0223', `the value of constant '${c.name}' must be built from literals, operators and other constants`, c.init, 'values that need a function call belong in a function');
+    else consts.set(c.name, c);
+  }
   program.usedBuiltins = new Set();
   program.usesStrings = false;
   program.usesSum = false;
@@ -291,7 +304,7 @@ export function check(program, diags) {
     const temp = (ty) => { const s = { name: '<tmp>', ty }; locals.push(s); return s; };
 
     if (!isTest) {
-      owner.paramSyms = owner.params.map((p) => declare(p.name, p.ty, p, { isParam: true, mutParam: p.mut }));
+      owner.paramSyms = owner.params.map((p) => declare(p.name, p.ty, p, { isParam: true, mutParam: p.mut, mutable: !!p.mutValue }));
       // Function-valued parameters are names for the functions this instance was built with.
       for (const [name, b] of owner.fnParams ?? []) {
         scopes[0].set(name, { name, ty: b.ty, isParam: true, fnBinding: { fn: b.fn, captureSyms: b.capNames.map((n) => lookup(n)) } });
@@ -347,9 +360,51 @@ export function check(program, diags) {
       return e.kind === 'Name' && e.sym ? e.sym : null;
     };
     const canMutate = (sym) => sym.mutable || sym.mutParam;
+
+    // The declared type of a place (a variable, a field of a place, an element of a place), without checking it.
+    const placeType = (e) => {
+      if (e.kind === 'Name') { const sym = lookup(e.name); return sym ? sym.ty : '?'; }
+      const bt = placeType(e.base);
+      if (bt === '?') return '?';
+      if (e.kind === 'Index') return isArr(bt) ? elemOf(bt) : '?';
+      const sd = structs.get(bt) ?? (validType(bt, e) ? structs.get(bt) : null);
+      const f = sd && sd.fields.find((x) => x.name === e.name);
+      return f ? f.ty : '?';
+    };
+    // p.x = v  becomes  p = Point(x: v, y: p.y): a struct is a value, so changing a field makes a new one.
+    function assignField(s) {
+      const simpleIndex = (e) => e.kind === 'Name' || (e.kind === 'Field' ? simpleIndex(e.base) : e.kind === 'Index' && simpleIndex(e.base) && ['Name', 'IntLit'].includes(e.index.kind));
+      const clone = (e) => (e.kind === 'Name' ? { ...e } : e.kind === 'Field' ? { ...e, base: clone(e.base) } : { ...e, base: clone(e.base), index: { ...e.index } });
+      let target = s.target, value = s.value;
+      if (!simpleIndex(target)) {
+        err('E0204', 'this field cannot be assigned in place', target, 'the left side must be a variable, with fields and simple indexes after it: st.pos = 1 or items[i].count = 2');
+        s.target = { kind: 'Name', name: '?', line: target.line, col: target.col };
+        return;
+      }
+      while (target.kind === 'Field') {
+        const bt = placeType(target.base);
+        const sd = structs.get(bt);
+        const at = { line: target.line, col: target.col };
+        if (bt === '?' || !sd || !sd.fields.some((f) => f.name === target.name)) {
+          // let the ordinary check of the read report the unknown variable, field or type
+          expr(target);
+          if (bt !== '?') err('E0204', `'${target.name}' is not a field that can be assigned`, target);
+          s.target = { kind: 'Name', name: '?', ...at };
+          return;
+        }
+        const name = typeHead(bt);
+        value = { kind: 'New', name, fields: sd.fields.map((f) => ({ name: f.name, expr: f.name === target.name ? value : { kind: 'Field', base: clone(target.base), name: f.name, carried: true, ...at }, ...at })), ...at };
+        target = target.base;
+      }
+      s.target = target;
+      s.value = value;
+    }
     // Arrays and maps are never shared between bindings: storing one somewhere new needs a fresh value.
     const owned = (e, what) => {
       if (!e.ty || e.ty === '?' || !hasContainer(e.ty)) return;
+      // The other fields of a struct whose field is being assigned: the old struct is replaced in the
+      // same step, so its fields are carried over, not shared.
+      if (e.carried) return;
       const root = placeRoot(e);
       if (!root) return;
       const report = () => err('E0210', `${what} would share data with '${root.name}'`, e,
@@ -429,6 +484,20 @@ export function check(program, diags) {
             e.kind = 'New';
             e.fields = [];
             return construct(e, v.decl, v.decl.variants[v.index].fields, v.index, hint);
+          }
+          const cd = consts.get(e.name);
+          if (cd) {
+            visible(cd, e);
+            if (constsInUse.has(e.name)) { err('E0223', `constant '${e.name}' is defined in terms of itself`, e); return '?'; }
+            // A constant is its value: the expression is checked in place, at each use.
+            const at = { line: e.line, col: e.col, file: e.file };
+            const value = cloneExpr(cd.init);
+            for (const k of Object.keys(e)) delete e[k];
+            Object.assign(e, value, at);
+            constsInUse.add(cd.name);
+            const t = expr(e, hint);
+            constsInUse.delete(cd.name);
+            return t;
           }
           const td = typeDecls.get(e.name);
           err('E0101', `unknown name '${e.name}'`, e,
@@ -752,6 +821,37 @@ export function check(program, diags) {
     }
 
     // Checks shared by plain and generic calls, once the callee and argument types are known.
+    // let x = e?  was turned into a match by the desugaring pass; now that the type of e is known, give it its arms.
+    function buildTryArms(s, t) {
+      const { bind, first, rest } = s.tryOf;
+      s.tryOf = null;
+      const at = { line: s.line, col: s.col, endLine: s.endLine };
+      const head = typeHead(t), retHead = typeHead(ret);
+      const en = enums.get(t);
+      const arm = (variant, binds, body) => ({ variant, binds: binds.map((name) => ({ name, ...at })), body, ...at });
+      if (t === '?') { s.arms = [arm(null, [], rest)]; if (bind) scopes[scopes.length - 1].set(bind, { name: bind, ty: '?' }); return; }
+      if ((head !== 'Result' && head !== 'Option') || !en) {
+        err('E0224', `? needs a Result or an Option, but this is ${showType(t)}`, s.scrut, 'remove the ?, or make the function called here return Result[T, E] or Option[T]');
+      } else if (retHead !== head) {
+        err('E0224', `? passes ${head === 'Result' ? 'an Err' : 'None'} up to the caller, so ${label} must return ${head === 'Result' ? 'a Result' : 'an Option'}`, s.scrut,
+          isTest ? 'in a test, use match to handle both cases' : `declare the return type as ${head === 'Result' ? 'Result[T, E]' : 'Option[T]'}, or use match to handle both cases here`);
+      } else {
+        const payload = en.variants[0].fields[0];
+        // The value is taken out of a temporary nobody else holds; copy it so it is a value of its own.
+        if (first && payload && payload.ok !== false && hasContainer(payload.ty)) {
+          const value = { kind: 'Call', name: 'copy', args: [{ kind: 'Name', name: bind, ...at }], ...at };
+          if (first.kind === 'Let') first.init = value; else first.value = value;
+        }
+        const e = `__e${tryCount++}`;
+        s.arms = head === 'Result'
+          ? [arm('Ok', bind ? [bind] : [], rest), arm('Err', [e], [{ kind: 'Return', value: { kind: 'New', name: 'Err', fields: [{ name: 'error', expr: { kind: 'Name', name: e, ...at }, ...at }], ...at }, ...at }])]
+          : [arm('Some', bind ? [bind] : [], rest), arm('None', [], [{ kind: 'Return', value: { kind: 'Name', name: 'None', ...at }, ...at }])];
+        return;
+      }
+      if (bind) scopes[scopes.length - 1].set(bind, { name: bind, ty: '?' });
+      s.arms = [arm(null, [], rest)];
+    }
+
     function finishCall(e, f) {
       e.fn = f;
       growCalls.push({ e, f, owner, isTest });
@@ -762,7 +862,7 @@ export function check(program, diags) {
         impure(a, `'${f.generic ?? f.name}' may modify its argument '${p.name}'`);
         const root = placeRoot(a);
         if (!root || !canMutate(root)) {
-          err('E0303', `'${f.generic ?? f.name}' may modify its argument '${p.name}', so it needs a mutable array or map`, a,
+          err('E0303', `'${f.generic ?? f.name}' may modify its argument '${p.name}', so it needs a mutable variable`, a,
             a.kind === 'Name' ? `declare '${a.name}' with var instead of let (or as a mut parameter)` : 'pass a var binding or a mut parameter');
         } else if (e.args.some((o, j) => j !== i && o.ty && o.ty !== '?' && hasContainer(o.ty) && placeRoot(o) === root)) {
           err('E0211', `'${root.name}' is passed to '${f.generic ?? f.name}' both as the mutable argument '${p.name}' and as another argument`, a,
@@ -962,6 +1062,7 @@ export function check(program, diags) {
           break;
         }
         case 'Assign': {
+          if (s.target.kind === 'Field') assignField(s);
           const tt = expr(s.target);
           const root = placeRoot(s.target);
           if (s.target.kind === 'Name') {
@@ -1014,6 +1115,7 @@ export function check(program, diags) {
           if (scrutRoot && s.arms.some((a) => a.binds.length)) scrutRoot.viewed = true;
           const en = enums.get(t);
           if (t !== '?' && !en) err('E0215', `match needs an enum value but got ${t}`, s.scrut, 'match works on values of an enum type');
+          if (s.tryOf) buildTryArms(s, t);
           const seen = new Set();
           let hasElse = false;
           for (const arm of s.arms) {
@@ -1081,6 +1183,23 @@ export function check(program, diags) {
           break;
         }
         case 'ExprStmt':
+          // push(st.items, v) and pop(st.items): take the array out of the struct, change it, put it back.
+          if (s.expr.kind === 'Call' && (s.expr.name === 'push' || s.expr.name === 'pop') && !fns.has(s.expr.name) && !fnTemplates.has(s.expr.name)
+            && s.expr.args.length >= 1 && s.expr.args[0].kind === 'Field') {
+            const at = { line: s.line, col: s.col, endLine: s.endLine };
+            const place = s.expr.args[0], held = `__held${tryCount++}`;
+            const copyPlace = (e) => (e.kind === 'Name' ? { ...e } : e.kind === 'Field' ? { ...e, base: copyPlace(e.base) } : e.kind === 'Index' ? { ...e, base: copyPlace(e.base), index: { ...e.index } } : e);
+            s.expr.args[0] = { kind: 'Name', name: held, ...at };
+            const body = [
+              { kind: 'Let', mutable: true, name: held, ty: null, init: { ...copyPlace(place), carried: true }, stmtLine: s.line, ...at },
+              { kind: 'ExprStmt', expr: s.expr, ...at },
+              { kind: 'Assign', target: place, value: { kind: 'Name', name: held, ...at }, ...at },
+            ];
+            for (const k of Object.keys(s)) delete s[k];
+            Object.assign(s, { kind: 'If', cond: { kind: 'BoolLit', value: true, ...at }, then: body, els: null, ...at });
+            stmt(s);
+            break;
+          }
           if (s.expr.kind !== 'Call') {
             expr(s.expr);
             err('E0206', 'this expression computes a value that is never used', s.expr, 'bind it with let, return it, or remove it');
@@ -1134,7 +1253,7 @@ export function check(program, diags) {
           if (!a.growReported) {
             a.growReported = true;
             currentFile = owner.file;
-            err('E0221', `'${f.generic ?? f.name}' may add elements to its argument '${p.name}', so it needs a plain variable`, a, 'bind the array to a var first and pass that');
+            err('E0221', `'${f.generic ?? f.name}' may replace or grow its argument '${p.name}', so it needs a plain variable`, a, 'bind the value to a var first and pass that');
           }
           return;
         }

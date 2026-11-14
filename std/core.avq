@@ -4,6 +4,13 @@ enum Option[T] { Some(value: T), None }
 
 enum Result[T, E] { Ok(value: T), Err(error: E) }
 
+// Tuples: (a, b) builds a Tuple2, and the type is written (A, B).
+struct Tuple2[A, B] { first: A, second: B }
+
+struct Tuple3[A, B, C] { first: A, second: B, third: C }
+
+struct Tuple4[A, B, C, D] { first: A, second: B, third: C, fourth: D }
+
 fn is_some[T](o: Option[T]) -> Bool {
   match o {
     Some => { return true }

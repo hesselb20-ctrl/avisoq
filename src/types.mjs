@@ -23,7 +23,8 @@ export function children(n) {
     case 'Index': return [n.base, n.index];
     case 'Field': return [n.base];
     case 'New': return n.fields.map((f) => f.expr);
-    case 'ArrayLit': return n.elems;
+    case 'ArrayLit': case 'Tuple': return n.elems;
+    case 'LetTuple': return [n.init];
     case 'Sum': case 'Comp': return [n.start, n.end, n.body];
     case 'Call': return n.args;
     case 'Lambda': return [n.body];
@@ -84,6 +85,7 @@ export function showType(t) {
   if (isArr(t)) return `[${showType(elemOf(t))}]`;
   const args = typeArgs(t);
   if (!args.length) return t;
+  if (/^Tuple[2-4]$/.test(typeHead(t))) return `(${args.map(showType).join(', ')})`;
   if (typeHead(t) === 'Fn') return `fn(${args.slice(1).map(showType).join(', ')})${args[0] === 'Unit' ? '' : ` -> ${showType(args[0])}`}`;
   return `${typeHead(t)}[${args.map(showType).join(', ')}]`;
 }

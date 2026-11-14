@@ -33,6 +33,8 @@ export function planRegions(program, backend) {
 
   const pointerStore = (n) => (n.kind === 'Assign' && n.target.kind === 'Index' && !flat(n.target.ty))
     || (n.kind === 'Call' && !n.fn && n.name === 'put' && !mapParts(n.args[0].ty).every(flat))
+    // a mut struct parameter is handed back to the caller, so what it holds must outlive this code
+    || (n.kind === 'Assign' && n.target.kind === 'Name' && !!n.target.sym && !!n.target.sym.byRef)
     // push may move an array into newly allocated memory that has to outlive this code
     || (n.kind === 'Call' && !n.fn && n.name === 'push');
 

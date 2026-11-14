@@ -179,7 +179,12 @@ function generate(seed) {
 
 async function outcome(src, backend) {
   const c = compile(src, { backend, allow: ['io'] });
-  if (!c.ok) return { compiled: false, codes: c.diagnostics.map((d) => d.code) };
+  if (!c.ok) {
+    // FUZZ_SHOW=E0001 prints the programs rejected with that code, to tell generator gaps from compiler bugs
+    const d = c.diagnostics[0];
+    if (process.env.FUZZ_SHOW && c.diagnostics.some((x) => x.code === process.env.FUZZ_SHOW)) console.log(JSON.stringify(d), src.split(/\n/).slice(Math.max(0, d.line - 2), d.line + 1));
+    return { compiled: false, codes: c.diagnostics.map((x) => x.code) };
+  }
   let stdout = '';
   const r = await run(c, { allow: ['io'], write: (s) => { stdout += s; } });
   return { compiled: true, ok: r.ok, kind: r.ok ? null : r.error.kind, stdout };

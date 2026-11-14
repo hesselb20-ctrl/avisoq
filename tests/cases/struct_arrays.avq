@@ -1,0 +1,23 @@
+struct Bag { items: [Int], names: [Str], seen: Map[Str, Int], total: Int }
+struct Box { bag: Bag, label: Str }
+
+fn add(b: mut Bag, v: Int) {
+  push(b.items, v)
+  push(b.names, "n" + str(v))
+  put(b.seen, str(v % 10), v)
+  b.total = b.total + v
+}
+
+fn main() uses io {
+  var b = Bag(items: [], names: [], seen: {}, total: 0)
+  for i in 0..3000 { add(b, i) }
+  pop(b.items)
+  print(len(b.items), len(b.names), b.names[2999], len(b.seen), get(b.seen, "7"), b.total)
+  var box = Box(bag: b, label: "x")
+  push(box.bag.items, -5)
+  box.bag.total = 1
+  print(len(box.bag.items), box.bag.items[2999], box.bag.total, box.label)
+  var boxes = [box]
+  push(boxes[0].bag.names, "last")
+  print(len(boxes[0].bag.names), boxes[0].bag.names[3000])
+}
