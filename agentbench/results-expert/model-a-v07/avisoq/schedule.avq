@@ -1,0 +1,94 @@
+import "std/strings"
+import "std/arrays"
+
+fn is_digit(b: Int) -> Bool {
+  return b >= 48 and b <= 57
+}
+
+fn two_digits(s: Str, at: Int) -> Int {
+  return (byte_at(s, at) - 48) * 10 + (byte_at(s, at + 1) - 48)
+}
+
+// Returns start * 2000 + end, or -1 when the entry is invalid.
+fn parse_range(e: Str) -> Int {
+  if len(e) != 11 { return -1 }
+  for i in 0..11 {
+    if i == 2 or i == 8 {
+      if byte_at(e, i) != 58 { return -1 }
+    } else if i == 5 {
+      if byte_at(e, i) != 45 { return -1 }
+    } else {
+      if not is_digit(byte_at(e, i)) { return -1 }
+    }
+  }
+  let h1 = two_digits(e, 0)
+  let m1 = two_digits(e, 3)
+  let h2 = two_digits(e, 6)
+  let m2 = two_digits(e, 9)
+  if h1 > 23 or h2 > 23 or m1 > 59 or m2 > 59 { return -1 }
+  let a = h1 * 60 + m1
+  let b = h2 * 60 + m2
+  if b <= a { return -1 }
+  return a * 2000 + b
+}
+
+fn pad2(n: Int) -> Str {
+  if n < 10 { return "0" + str(n) }
+  return str(n)
+}
+
+fn clock(t: Int) -> Str {
+  return pad2(t / 60) + ":" + pad2(t % 60)
+}
+
+fn schedule(s: Str) -> Str {
+  var invalid = 0
+  var codes: [Int] = []
+  if len(s) > 0 {
+    let parts = split(s, ",")
+    for i in 0..len(parts) {
+      let c = parse_range(parts[i])
+      if c < 0 {
+        invalid = invalid + 1
+      } else {
+        push(codes, c)
+      }
+    }
+  }
+  sort(codes)
+  var out: [Str] = []
+  var total = 0
+  var have = false
+  var cs = 0
+  var ce = 0
+  for k in 0..len(codes) {
+    let a = codes[k] / 2000
+    let b = codes[k] % 2000
+    if not have {
+      have = true
+      cs = a
+      ce = b
+    } else if a <= ce {
+      if b > ce { ce = b }
+    } else {
+      push(out, clock(cs) + "-" + clock(ce))
+      total = total + (ce - cs)
+      cs = a
+      ce = b
+    }
+  }
+  if have {
+    push(out, clock(cs) + "-" + clock(ce))
+    total = total + (ce - cs)
+  }
+  return join(out, ",") + ";total=" + str(total) + ";invalid=" + str(invalid)
+}
+
+test "schedule" {
+  assert schedule("") == ";total=0;invalid=0"
+  assert schedule("09:00-10:00,10:00-11:30,13:00-14:00") == "09:00-11:30,13:00-14:00;total=210;invalid=0"
+  assert schedule("09:00-09:00,x,,9:00-10:00") == ";total=0;invalid=4"
+  assert schedule("10:00-12:00,11:00-11:30") == "10:00-12:00;total=120;invalid=0"
+  assert schedule("23:00-23:59,24:00-24:30") == "23:00-23:59;total=59;invalid=1"
+  assert schedule(",") == ";total=0;invalid=2"
+}

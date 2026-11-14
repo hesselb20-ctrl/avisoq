@@ -1,0 +1,39 @@
+import "std/strings"
+
+// Precedence levels: 1 for + and -, 2 for * and /, 3 for ^, 4 for an operand.
+fn prec_of(tok: Str) -> Int {
+  if tok == "^" { return 3 }
+  if tok == "*" or tok == "/" { return 2 }
+  if tok == "+" or tok == "-" { return 1 }
+  return 4
+}
+
+fn to_infix(postfix: Str) -> Str {
+  let toks = split(postfix, " ")
+  var st: [Str] = []
+  var sp: [Int] = []
+  for i in 0..len(toks) {
+    let t = toks[i]
+    let p = prec_of(t)
+    if p == 4 {
+      push(st, t)
+      push(sp, 4)
+    } else {
+      let rt = pop(st)
+      let rp = pop(sp)
+      let lt = pop(st)
+      let lp = pop(sp)
+      var left = lt
+      if lp < p or (lp == p and t == "^") {
+        left = "(" + lt + ")"
+      }
+      var right = rt
+      if rp < p or (rp == p and (t == "-" or t == "/")) {
+        right = "(" + rt + ")"
+      }
+      push(st, left + t + right)
+      push(sp, p)
+    }
+  }
+  return st[0]
+}

@@ -6,10 +6,10 @@ A small, fast, safe programming language designed to be written and verified by 
 
 <img src=".github/assets/figure/scene.webp" width="100%" alt="Three beats: a mandelbrot benchmark computed on one thread with every check on in 112 ms against 108 ms for C++; the same loop written as a sum, spread over 8 threads and 8 lanes; and the result, 4.6 ms against 15 ms for C++ parallelised by hand with OpenMP.">
 
-Version 0.6.1. One front end, two backends (native machine code through GCC, and sandboxed
+Version 0.7. One front end, two backends (native machine code through GCC, and sandboxed
 WebAssembly), a standard library written in Avisoq, a formatter, a compile-time contract prover,
 a language server, a package manager and a differential fuzzer. The test suites pass on both
-backends: 338 compiler cases each, plus 26 editor, 17 package and 10 sandbox tests.
+backends: 366 compiler cases each, plus 26 editor, 17 package and 10 sandbox tests.
 
 ```
 import "std/strings"
@@ -106,7 +106,7 @@ module itself and runs it in a sandbox. Both keep every run-time check.
 - **Adversarial memory tests.** Programs that would exhaust memory without reclamation, and
   programs that check live data survives it.
 
-<img src=".github/assets/how/scene.webp" width="100%" alt="338 test programs go through one front end, are compiled by both the native and the WebAssembly backend, and all 338 print the same on both. The fuzzer found two mismatches, both fixed.">
+<img src=".github/assets/how/scene.webp" width="100%" alt="366 test programs go through one front end, are compiled by both the native and the WebAssembly backend, and all 366 print the same on both. The fuzzer found two mismatches, both fixed.">
 
 ## Capabilities
 
@@ -149,7 +149,10 @@ not a proof; the solutions are still about twice as long as Python's.
 A third, expert round (10 larger programs, 373 hidden tests) produced the first failure, and
 it was Avisoq's: 19 of 20 correct against 20 of 20 for Python and for Rust. The failure was a
 loud overflow stop, not a wrong answer. That round also exposed two compiler bugs, both fixed
-in 0.6.1. Avisoq is not yet better for agents than Python or Rust on anything measured here.
+in 0.6.1. Version 0.7 added mutable struct state, tuples, constants and the `?` operator;
+rerun on it, both Avisoq agents scored 10 of 10, level with Python and Rust, but still took
+about twice as long as the Python agents. Avisoq is not yet better for agents than Python or
+Rust on anything measured here.
 
 <img src=".github/assets/agents/scene.webp" width="100%" alt="Two models each solved 24 of 24 tasks on the first attempt in Avisoq, Python and Rust. The Avisoq solutions were the longest: about 380 lines against 200 for Python and 330 for Rust.">
 
@@ -214,7 +217,13 @@ when the program was granted neither files nor network, no right to write any fi
 - **Generics:** `struct Pair[A, B]`, `enum Option[T]`, `fn max[T: Ord](a: T, b: T) -> T`.
   Constraints: `Ord` (Int, Float, Str), `Eq` (Int, Float, Bool, Str), `Num` (Int, Float).
   Type arguments are worked out from the arguments or the expected type.
-- **Structs:** `struct Point { x: Float, y: Float }`, `Point(x: 1.0, y: 2.0)`, `p.x`. Immutable.
+- **Structs:** `struct Point { x: Float, y: Float }`, `Point(x: 1.0, y: 2.0)`, `p.x`. A struct is
+  a value. A field of a `var` struct can be assigned (`p.x = 2.0`), and a function can take a
+  struct as a `mut` parameter and change the caller's variable.
+- **Tuples:** `(a, b)` with type `(A, B)`, 2 to 4 parts, taken apart with `let (x, y) = pair`.
+- **Constants:** a top-level `let LIMIT = 5000`, built from literals, operators and other constants.
+- **Passing errors up:** `let x = f()?` returns the `Err` (or `None`) from the enclosing function
+  and otherwise gives the value. Only at the end of a `let`, an assignment or a call statement.
 - **Enums and match:** `enum Shape { Circle(r: Float), Empty }`, built with `Circle(r: 2.0)` or
   a bare `Empty`. `match value { Circle(r) => { ... } else => { ... } }` must cover every variant.
 - **Functions as arguments:** a parameter of type `fn(T) -> U` accepts a function name or a
@@ -317,6 +326,11 @@ on an idle machine with 8 logical cores (Zen 4, AVX-512). Ratios are relative to
 - **Native sandbox:** the launcher restricts the process but is not a full container. A
   program granted files or network can still write wherever your user account can; the
   per-folder and per-host limits are enforced by the compiled program itself.
-- **Maps and strings on the WebAssembly backend** go through the host and are slow.
+- **Strings on the WebAssembly backend** still call into the host for concatenation, comparison
+  and substrings. A string-and-map test that took 21 s before 0.7 now takes under 1 s there and
+  78 ms native (Python: 108 ms), but building a long string one piece at a time is still slow.
+- **Field assignment copies the struct.** `p.x = v` builds a new struct value, and
+  `push(p.items, v)` takes the array out and puts it back. Fine for parser state; costly in a
+  hot loop on the WebAssembly backend, where structs live on the heap.
 - **The VS Code extension has not been exercised by hand inside VS Code.** The analysis and
   the language server are tested; the wiring into VS Code is not.

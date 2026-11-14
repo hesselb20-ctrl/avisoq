@@ -1,0 +1,146 @@
+// Node kinds: 0 letter, 1 dot, 2 concatenation, 3 alternation, 4 star,
+// 5 plus, 6 optional, 7 empty.
+struct RX {
+  src: Str,
+  pos: Int,
+  kind: [Int],
+  left: [Int],
+  right: [Int],
+  ch: [Int]
+}
+
+fn cur_c(g: RX) -> Int {
+  if g.pos < len(g.src) { return byte_at(g.src, g.pos) }
+  return -1
+}
+
+fn new_node(g: mut RX, k: Int, l: Int, r: Int, c: Int) -> Int {
+  push(g.kind, k)
+  push(g.left, l)
+  push(g.right, r)
+  push(g.ch, c)
+  return len(g.kind) - 1
+}
+
+fn parse_atom(g: mut RX) -> Int {
+  let c = cur_c(g)
+  g.pos = g.pos + 1
+  if c == 40 {
+    let inner = parse_alt(g)
+    g.pos = g.pos + 1
+    return inner
+  }
+  if c == 46 { return new_node(g, 1, 0, 0, 0) }
+  return new_node(g, 0, 0, 0, c)
+}
+
+fn parse_postfix(g: mut RX) -> Int {
+  var node = parse_atom(g)
+  while cur_c(g) == 42 or cur_c(g) == 43 or cur_c(g) == 63 {
+    let c = cur_c(g)
+    g.pos = g.pos + 1
+    var k = 4
+    if c == 43 { k = 5 }
+    if c == 63 { k = 6 }
+    node = new_node(g, k, node, 0, 0)
+  }
+  return node
+}
+
+fn parse_seq(g: mut RX) -> Int {
+  let c = cur_c(g)
+  if c == -1 or c == 124 or c == 41 { return new_node(g, 7, 0, 0, 0) }
+  var node = parse_postfix(g)
+  while true {
+    let d = cur_c(g)
+    if d == -1 or d == 124 or d == 41 { break }
+    let r = parse_postfix(g)
+    node = new_node(g, 2, node, r, 0)
+  }
+  return node
+}
+
+fn parse_alt(g: mut RX) -> Int {
+  var node = parse_seq(g)
+  while cur_c(g) == 124 {
+    g.pos = g.pos + 1
+    let r = parse_seq(g)
+    node = new_node(g, 3, node, r, 0)
+  }
+  return node
+}
+
+// Set of positions reachable from the positions in s after matching child repeatedly.
+fn closure(g: RX, child: Int, s: [Bool], text: Str) -> [Bool] {
+  var cur = copy(s)
+  var changed = true
+  while changed {
+    changed = false
+    let nxt = ev(g, child, cur, text)
+    for j in 0..len(cur) {
+      if nxt[j] and not cur[j] {
+        cur[j] = true
+        changed = true
+      }
+    }
+  }
+  return cur
+}
+
+// Given the set s of start positions in text, return the set of end positions
+// reachable by matching the node.
+fn ev(g: RX, node: Int, s: [Bool], text: Str) -> [Bool] {
+  let n = len(text)
+  let k = g.kind[node]
+  if k == 7 { return copy(s) }
+  if k == 0 or k == 1 {
+    var out = array(n + 1, false)
+    for j in 0..n {
+      if s[j] and (k == 1 or byte_at(text, j) == g.ch[node]) {
+        out[j + 1] = true
+      }
+    }
+    return out
+  }
+  if k == 2 {
+    let mid = ev(g, g.left[node], s, text)
+    return ev(g, g.right[node], mid, text)
+  }
+  if k == 3 {
+    let u1 = ev(g, g.left[node], s, text)
+    let u2 = ev(g, g.right[node], s, text)
+    var uni = array(n + 1, false)
+    for j in 0..n + 1 {
+      uni[j] = u1[j] or u2[j]
+    }
+    return uni
+  }
+  if k == 4 {
+    return closure(g, g.left[node], s, text)
+  }
+  if k == 5 {
+    let first = ev(g, g.left[node], s, text)
+    return closure(g, g.left[node], first, text)
+  }
+  // optional
+  let o1 = ev(g, g.left[node], s, text)
+  var opt = copy(s)
+  for j in 0..n + 1 {
+    if o1[j] { opt[j] = true }
+  }
+  return opt
+}
+
+fn regex_match(pattern: Str, text: Str) -> Bool {
+  var kinds: [Int] = []
+  var lefts: [Int] = []
+  var rights: [Int] = []
+  var chs: [Int] = []
+  var g = RX(src: pattern, pos: 0, kind: kinds, left: lefts, right: rights, ch: chs)
+  let root = parse_alt(g)
+  let n = len(text)
+  var start = array(n + 1, false)
+  start[0] = true
+  let fin = ev(g, root, start, text)
+  return fin[n]
+}

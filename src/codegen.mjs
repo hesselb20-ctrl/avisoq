@@ -543,7 +543,13 @@ export function codegen(program, opts = {}) {
           e.args.forEach(expr); emit(...i32c(site(e))); call(imp.substr);
           break;
         case 'byte_at':
-          e.args.forEach(expr); emit(...i32c(site(e))); call(imp.byte_at);
+          // a string is its length (4 bytes) followed by its bytes
+          expr(e.args[0]); expr(e.args[1]);
+          lset(t1); lset(p1);
+          lget(t1); lget(p1); emit(I32_LOAD, 2, 0, I64_EXTEND_U, I64_GE_U, IF, VOID);
+          fail(FAIL.BOUNDS, e);
+          emit(END);
+          lget(p1); lget(t1); emit(I32_WRAP, I32_ADD, I32_LOAD8_U, 0, 4, I64_EXTEND_U);
           break;
         case 'chr':
           expr(e.args[0]); emit(...i32c(site(e))); call(imp.str_from_byte);

@@ -1,0 +1,123 @@
+import "std/strings"
+import "std/arrays"
+
+// status: 0 = not started (or unassigned), 1 = in progress, 2 = done, 3 = cycle
+struct Sheet { forms: Map[Str, Str], status: Map[Str, Int], vals: Map[Str, Int] }
+
+struct FormP { src: Str, pos: Int, cyc: Bool }
+
+fn cur_byte(p: mut FormP) -> Int {
+  if p.pos >= len(p.src) { return -1 }
+  return byte_at(p.src, p.pos)
+}
+
+fn eval_cell(st: mut Sheet, name: Str) {
+  if not has(st.forms, name) { return }
+  if get_or(st.status, name, 0) != 0 { return }
+  put(st.status, name, 1)
+  var p = FormP(src: get(st.forms, name), pos: 0, cyc: false)
+  let v = f_sum(st, p)
+  if p.cyc {
+    put(st.status, name, 3)
+  } else {
+    put(st.status, name, 2)
+    put(st.vals, name, v)
+  }
+}
+
+fn f_atom(st: mut Sheet, p: mut FormP) -> Int {
+  let b = cur_byte(p)
+  if b == 40 {
+    p.pos = p.pos + 1
+    let inner = f_sum(st, p)
+    p.pos = p.pos + 1
+    return inner
+  }
+  if b >= 65 and b <= 90 {
+    let name = substr(p.src, p.pos, p.pos + 2)
+    p.pos = p.pos + 2
+    eval_cell(st, name)
+    let s = get_or(st.status, name, 0)
+    if s == 1 or s == 3 {
+      p.cyc = true
+      return 0
+    }
+    if s == 2 { return get(st.vals, name) }
+    return 0
+  }
+  var v = 0
+  while cur_byte(p) >= 48 and cur_byte(p) <= 57 {
+    v = v * 10 + (cur_byte(p) - 48)
+    p.pos = p.pos + 1
+  }
+  return v
+}
+
+fn f_unary(st: mut Sheet, p: mut FormP) -> Int {
+  if cur_byte(p) == 45 {
+    p.pos = p.pos + 1
+    let x = f_unary(st, p)
+    return -x
+  }
+  return f_atom(st, p)
+}
+
+fn f_term(st: mut Sheet, p: mut FormP) -> Int {
+  var acc = f_unary(st, p)
+  while cur_byte(p) == 42 {
+    p.pos = p.pos + 1
+    let r = f_unary(st, p)
+    acc = acc * r
+  }
+  return acc
+}
+
+fn f_sum(st: mut Sheet, p: mut FormP) -> Int {
+  var acc = f_term(st, p)
+  while cur_byte(p) == 43 or cur_byte(p) == 45 {
+    let op = cur_byte(p)
+    p.pos = p.pos + 1
+    let r = f_term(st, p)
+    if op == 43 {
+      acc = acc + r
+    } else {
+      acc = acc - r
+    }
+  }
+  return acc
+}
+
+fn sheet(cells: Str) -> Str {
+  var st = Sheet(forms: {}, status: {}, vals: {})
+  let parts = split(cells, ";")
+  for i in 0..len(parts) {
+    let e = parts[i]
+    if len(e) >= 3 {
+      put(st.forms, substr(e, 0, 2), substr(e, 3, len(e)))
+    }
+  }
+  var names = keys(st.forms)
+  sort(names)
+  var out: [Str] = []
+  for k in 0..len(names) {
+    eval_cell(st, names[k])
+    if get_or(st.status, names[k], 0) == 3 {
+      push(out, names[k] + "=#CYCLE")
+    } else {
+      push(out, names[k] + "=" + str(get(st.vals, names[k])))
+    }
+  }
+  return join(out, ",")
+}
+
+test "sheet" {
+  assert sheet("") == ""
+  assert sheet("A1=1;B1=A1+2") == "A1=1,B1=3"
+  assert sheet("A1=B1;B1=A1") == "A1=#CYCLE,B1=#CYCLE"
+  assert sheet("A1=1;A1=2") == "A1=2"
+  assert sheet("A1=C3+1") == "A1=1"
+  assert sheet("A1=A1;B1=A1+1;C1=5") == "A1=#CYCLE,B1=#CYCLE,C1=5"
+  assert sheet("A1=-(2+3)*-2-1") == "A1=9"
+  assert sheet("A1=2+3*4;B2=(A1)*A1") == "A1=14,B2=196"
+  assert sheet("B1=A1+A1;A1=B2+0;B2=A1") == "A1=#CYCLE,B1=#CYCLE,B2=#CYCLE"
+}

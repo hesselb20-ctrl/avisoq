@@ -1,0 +1,122 @@
+import "std/strings"
+
+struct Fr {
+  n: Int,
+  d: Int
+}
+
+struct FC {
+  src: Str,
+  pos: Int,
+  bad: Bool
+}
+
+fn gcd_pos(a: Int, b: Int) -> Int {
+  var x = a
+  var y = b
+  while y != 0 {
+    let t = x % y
+    x = y
+    y = t
+  }
+  return x
+}
+
+// Fraction in lowest terms with a positive denominator.
+fn norm(num: Int, den: Int) -> Fr {
+  var a = num
+  var b = den
+  if b < 0 {
+    a = -a
+    b = -b
+  }
+  var m = a
+  if m < 0 { m = -m }
+  let g = gcd_pos(m, b)
+  if g > 1 {
+    a = a / g
+    b = b / g
+  }
+  return Fr(n: a, d: b)
+}
+
+fn skip_sp(f: mut FC) {
+  while f.pos < len(f.src) and byte_at(f.src, f.pos) == 32 {
+    f.pos = f.pos + 1
+  }
+}
+
+fn peek_c(f: mut FC) -> Int {
+  skip_sp(f)
+  if f.pos < len(f.src) { return byte_at(f.src, f.pos) }
+  return -1
+}
+
+fn fop(f: mut FC, op: Int, a: Fr, b: Fr) -> Fr {
+  if f.bad { return Fr(n: 0, d: 1) }
+  if op == 43 { return norm(a.n * b.d + b.n * a.d, a.d * b.d) }
+  if op == 45 { return norm(a.n * b.d - b.n * a.d, a.d * b.d) }
+  if op == 42 { return norm(a.n * b.n, a.d * b.d) }
+  if b.n == 0 {
+    f.bad = true
+    return Fr(n: 0, d: 1)
+  }
+  return norm(a.n * b.d, a.d * b.n)
+}
+
+fn fexpr(f: mut FC) -> Fr {
+  var v = fterm(f)
+  while peek_c(f) == 43 or peek_c(f) == 45 {
+    let op = peek_c(f)
+    f.pos = f.pos + 1
+    let r = fterm(f)
+    v = fop(f, op, v, r)
+  }
+  return v
+}
+
+fn fterm(f: mut FC) -> Fr {
+  var v = funary(f)
+  while peek_c(f) == 42 or peek_c(f) == 47 {
+    let op = peek_c(f)
+    f.pos = f.pos + 1
+    let r = funary(f)
+    v = fop(f, op, v, r)
+  }
+  return v
+}
+
+fn funary(f: mut FC) -> Fr {
+  if peek_c(f) == 45 {
+    f.pos = f.pos + 1
+    let v = funary(f)
+    return Fr(n: -v.n, d: v.d)
+  }
+  return fprimary(f)
+}
+
+fn fprimary(f: mut FC) -> Fr {
+  let c = peek_c(f)
+  if c == 40 {
+    f.pos = f.pos + 1
+    let v = fexpr(f)
+    skip_sp(f)
+    f.pos = f.pos + 1
+    return v
+  }
+  var j = f.pos
+  while j < len(f.src) and byte_at(f.src, j) >= 48 and byte_at(f.src, j) <= 57 {
+    j = j + 1
+  }
+  let text = substr(f.src, f.pos, j)
+  f.pos = j
+  return Fr(n: unwrap_or(parse_int(text), 0), d: 1)
+}
+
+fn frac_calc(s: Str) -> Str {
+  var f = FC(src: s, pos: 0, bad: false)
+  let v = fexpr(f)
+  if f.bad { return "div0" }
+  if v.d == 1 { return str(v.n) }
+  return str(v.n) + "/" + str(v.d)
+}

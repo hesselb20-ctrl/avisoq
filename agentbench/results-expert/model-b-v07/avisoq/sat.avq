@@ -1,0 +1,47 @@
+// Bits of assignment number m: variable 1 is the most significant bit, so counting m upward
+// tries the assignments in the required order (0 before 1, compared from the left).
+fn assign_bits(m: Int, n: Int) -> [Int] {
+  var bits = array(n, 0)
+  var x = m
+  var j = n - 1
+  while j >= 0 {
+    bits[j] = x % 2
+    x = x / 2
+    j = j - 1
+  }
+  return bits
+}
+
+fn satisfied(bits: [Int], clauses: [Int]) -> Bool {
+  var clause_true = false
+  var i = 0
+  while i < len(clauses) {
+    let v = clauses[i]
+    if v == 0 {
+      if not clause_true { return false }
+      clause_true = false
+    } else {
+      var a = v
+      if a < 0 { a = -a }
+      let idx = a - 1
+      if v > 0 and bits[idx] == 1 { clause_true = true }
+      if v < 0 and bits[idx] == 0 { clause_true = true }
+    }
+    i = i + 1
+  }
+  return true
+}
+
+fn sat(n: Int, clauses: [Int]) -> [Int] {
+  var total = 1
+  for i in 0..n {
+    total = total * 2
+  }
+  var m = 0
+  while m < total {
+    let bits = assign_bits(m, n)
+    if satisfied(bits, clauses) { return bits }
+    m = m + 1
+  }
+  return [-1]
+}

@@ -1,0 +1,86 @@
+import "std/strings"
+import "std/arrays"
+
+fn is_digit_at(e: Str, i: Int) -> Bool {
+  let b = byte_at(e, i)
+  return b >= 48 and b <= 57
+}
+
+// Two-digit number starting at position i (the digits are already checked).
+fn num2(e: Str, i: Int) -> Int {
+  return (byte_at(e, i) - 48) * 10 + (byte_at(e, i + 1) - 48)
+}
+
+// Returns start * 10000 + end in minutes for a valid entry, or -1 when invalid.
+fn valid_entry(e: Str) -> Int {
+  if len(e) != 11 { return -1 }
+  if byte_at(e, 2) != 58 or byte_at(e, 5) != 45 or byte_at(e, 8) != 58 { return -1 }
+  let digits_ok = is_digit_at(e, 0) and is_digit_at(e, 1) and is_digit_at(e, 3)
+  let more_ok = is_digit_at(e, 4) and is_digit_at(e, 6) and is_digit_at(e, 7)
+  if not digits_ok or not more_ok { return -1 }
+  if not (is_digit_at(e, 9) and is_digit_at(e, 10)) { return -1 }
+  let h1 = num2(e, 0)
+  let m1 = num2(e, 3)
+  let h2 = num2(e, 6)
+  let m2 = num2(e, 9)
+  if h1 > 23 or h2 > 23 or m1 > 59 or m2 > 59 { return -1 }
+  let start = h1 * 60 + m1
+  let finish = h2 * 60 + m2
+  if finish <= start { return -1 }
+  return start * 10000 + finish
+}
+
+fn pad2(x: Int) -> Str {
+  if x < 10 { return "0" + str(x) }
+  return str(x)
+}
+
+fn clock(t: Int) -> Str {
+  return pad2(t / 60) + ":" + pad2(t % 60)
+}
+
+fn range_text(a: Int, b: Int) -> Str {
+  return clock(a) + "-" + clock(b)
+}
+
+fn schedule(s: Str) -> Str {
+  var ks: [Int] = []
+  var invalid = 0
+  if len(s) > 0 {
+    let parts = split(s, ",")
+    for i in 0..len(parts) {
+      let k = valid_entry(parts[i])
+      if k < 0 {
+        invalid = invalid + 1
+      } else {
+        push(ks, k)
+      }
+    }
+  }
+  sort(ks)
+  var merged: [Str] = []
+  var total = 0
+  var have = false
+  var cs = 0
+  var ce = 0
+  for i in 0..len(ks) {
+    let st = ks[i] / 10000
+    let en = ks[i] % 10000
+    if have and st <= ce {
+      if en > ce { ce = en }
+    } else {
+      if have {
+        push(merged, range_text(cs, ce))
+        total = total + (ce - cs)
+      }
+      cs = st
+      ce = en
+      have = true
+    }
+  }
+  if have {
+    push(merged, range_text(cs, ce))
+    total = total + (ce - cs)
+  }
+  return join(merged, ",") + ";total=" + str(total) + ";invalid=" + str(invalid)
+}

@@ -1,0 +1,139 @@
+import "std/strings"
+import "std/arrays"
+
+struct SS {
+  forms: Map[Str, Str],
+  state: Map[Str, Int],
+  vals: Map[Str, Int],
+  cyc: Map[Str, Bool]
+}
+
+struct FP {
+  src: Str,
+  pos: Int,
+  bad: Bool
+}
+
+fn fp_cur(f: FP) -> Int {
+  if f.pos < len(f.src) { return byte_at(f.src, f.pos) }
+  return -1
+}
+
+fn is_dig(b: Int) -> Bool {
+  return b >= 48 and b <= 57
+}
+
+fn apply_op(f: mut FP, op: Int, a: Int, b: Int) -> Int {
+  if f.bad { return 0 }
+  if op == 43 { return a + b }
+  if op == 45 { return a - b }
+  return a * b
+}
+
+fn expr(s: mut SS, f: mut FP) -> Int {
+  var v = term(s, f)
+  while fp_cur(f) == 43 or fp_cur(f) == 45 {
+    let op = fp_cur(f)
+    f.pos = f.pos + 1
+    let r = term(s, f)
+    v = apply_op(f, op, v, r)
+  }
+  return v
+}
+
+fn term(s: mut SS, f: mut FP) -> Int {
+  var v = unary(s, f)
+  while fp_cur(f) == 42 {
+    f.pos = f.pos + 1
+    let r = unary(s, f)
+    v = apply_op(f, 42, v, r)
+  }
+  return v
+}
+
+fn unary(s: mut SS, f: mut FP) -> Int {
+  if fp_cur(f) == 45 {
+    f.pos = f.pos + 1
+    let v = unary(s, f)
+    if f.bad { return 0 }
+    return 0 - v
+  }
+  return primary(s, f)
+}
+
+fn primary(s: mut SS, f: mut FP) -> Int {
+  let c = fp_cur(f)
+  if c == 40 {
+    f.pos = f.pos + 1
+    let v = expr(s, f)
+    f.pos = f.pos + 1
+    return v
+  }
+  if is_dig(c) {
+    var j = f.pos
+    while j < len(f.src) and is_dig(byte_at(f.src, j)) { j = j + 1 }
+    let text = substr(f.src, f.pos, j)
+    f.pos = j
+    if f.bad { return 0 }
+    return unwrap_or(parse_int(text), 0)
+  }
+  let cell = substr(f.src, f.pos, f.pos + 2)
+  f.pos = f.pos + 2
+  return ref_value(s, cell, f)
+}
+
+// Value of a referenced cell; sets f.bad when the cell is #CYCLE or on the current path.
+fn ref_value(s: mut SS, name: Str, f: mut FP) -> Int {
+  if not has(s.forms, name) { return 0 }
+  let st = get_or(s.state, name, 0)
+  if st == 1 {
+    f.bad = true
+    return 0
+  }
+  if st == 0 { eval_cell(s, name) }
+  if get(s.cyc, name) {
+    f.bad = true
+    return 0
+  }
+  return get(s.vals, name)
+}
+
+fn eval_cell(s: mut SS, name: Str) {
+  put(s.state, name, 1)
+  var f = FP(src: get(s.forms, name), pos: 0, bad: false)
+  let v = expr(s, f)
+  if f.bad {
+    put(s.cyc, name, true)
+  } else {
+    put(s.vals, name, v)
+    put(s.cyc, name, false)
+  }
+  put(s.state, name, 2)
+}
+
+fn sheet(cells: Str) -> Str {
+  var forms: Map[Str, Str] = {}
+  var state: Map[Str, Int] = {}
+  var vals: Map[Str, Int] = {}
+  var cyc: Map[Str, Bool] = {}
+  var s = SS(forms: forms, state: state, vals: vals, cyc: cyc)
+  let entries = split(cells, ";")
+  for i in 0..len(entries) {
+    let e = entries[i]
+    if len(e) >= 3 {
+      put(s.forms, substr(e, 0, 2), substr(e, 3, len(e)))
+    }
+  }
+  let names = sorted(keys(s.forms))
+  var parts: [Str] = []
+  for i in 0..len(names) {
+    let nm = names[i]
+    if get_or(s.state, nm, 0) == 0 { eval_cell(s, nm) }
+    if get(s.cyc, nm) {
+      push(parts, nm + "=#CYCLE")
+    } else {
+      push(parts, nm + "=" + str(get(s.vals, nm)))
+    }
+  }
+  return join(parts, ",")
+}

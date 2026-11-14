@@ -1,0 +1,189 @@
+import "std/arrays"
+import "std/strings"
+
+struct JP { src: Str, pos: Int, bad: Bool }
+
+fn cur(p: mut JP) -> Int {
+  if p.pos >= len(p.src) { return -1 }
+  return byte_at(p.src, p.pos)
+}
+
+fn skip_ws(p: mut JP) {
+  while cur(p) == 32 { p.pos = p.pos + 1 }
+}
+
+fn is_digit_byte(b: Int) -> Bool {
+  return b >= 48 and b <= 57
+}
+
+// Parses 'text' and returns the text between the quotes.
+fn parse_str(p: mut JP) -> Str {
+  if cur(p) != 39 {
+    p.bad = true
+    return ""
+  }
+  p.pos = p.pos + 1
+  let start = p.pos
+  while p.pos < len(p.src) and byte_at(p.src, p.pos) != 39 { p.pos = p.pos + 1 }
+  if p.pos >= len(p.src) {
+    p.bad = true
+    return ""
+  }
+  let body = substr(p.src, start, p.pos)
+  p.pos = p.pos + 1
+  return body
+}
+
+fn parse_number(p: mut JP) -> Str {
+  var negative = false
+  if cur(p) == 45 {
+    negative = true
+    p.pos = p.pos + 1
+  }
+  let start = p.pos
+  if not is_digit_byte(cur(p)) {
+    p.bad = true
+    return ""
+  }
+  if cur(p) == 48 {
+    p.pos = p.pos + 1
+  } else {
+    while is_digit_byte(cur(p)) { p.pos = p.pos + 1 }
+  }
+  let digits = substr(p.src, start, p.pos)
+  if negative and digits != "0" { return "-" + digits }
+  return digits
+}
+
+fn parse_word(p: mut JP, word: Str) -> Str {
+  if p.pos + len(word) <= len(p.src) and substr(p.src, p.pos, p.pos + len(word)) == word {
+    p.pos = p.pos + len(word)
+    return word
+  }
+  p.bad = true
+  return ""
+}
+
+fn parse_value(p: mut JP) -> Str {
+  skip_ws(p)
+  let b = cur(p)
+  if b == 123 { return parse_object(p) }
+  if b == 91 { return parse_array(p) }
+  if b == 39 {
+    let body = parse_str(p)
+    return "'" + body + "'"
+  }
+  if b == 45 or is_digit_byte(b) { return parse_number(p) }
+  if b == 116 { return parse_word(p, "true") }
+  if b == 102 { return parse_word(p, "false") }
+  if b == 110 { return parse_word(p, "null") }
+  p.bad = true
+  return ""
+}
+
+fn parse_array(p: mut JP) -> Str {
+  p.pos = p.pos + 1
+  skip_ws(p)
+  if cur(p) == 93 {
+    p.pos = p.pos + 1
+    return "[]"
+  }
+  var items: [Str] = []
+  while not p.bad {
+    let v = parse_value(p)
+    if p.bad { return "" }
+    push(items, v)
+    skip_ws(p)
+    let c = cur(p)
+    p.pos = p.pos + 1
+    if c == 93 { return "[" + join(items, ",") + "]" }
+    if c != 44 {
+      p.bad = true
+      return ""
+    }
+  }
+  return ""
+}
+
+fn parse_object(p: mut JP) -> Str {
+  p.pos = p.pos + 1
+  skip_ws(p)
+  if cur(p) == 125 {
+    p.pos = p.pos + 1
+    return "{}"
+  }
+  var table: Map[Str, Str] = {}
+  while not p.bad {
+    skip_ws(p)
+    let k = parse_str(p)
+    if p.bad { return "" }
+    skip_ws(p)
+    if cur(p) != 58 {
+      p.bad = true
+      return ""
+    }
+    p.pos = p.pos + 1
+    let v = parse_value(p)
+    if p.bad { return "" }
+    put(table, k, v)
+    skip_ws(p)
+    let c = cur(p)
+    p.pos = p.pos + 1
+    if c == 125 {
+      var ks = keys(table)
+      sort(ks)
+      var parts: [Str] = []
+      for i in 0..len(ks) {
+        push(parts, "'" + ks[i] + "':" + get(table, ks[i]))
+      }
+      return "{" + join(parts, ",") + "}"
+    }
+    if c != 44 {
+      p.bad = true
+      return ""
+    }
+  }
+  return ""
+}
+
+fn json_canon(s: Str) -> Str {
+  var p = JP(src: s, pos: 0, bad: false)
+  let v = parse_value(p)
+  if p.bad { return "error" }
+  skip_ws(p)
+  if p.pos != len(s) { return "error" }
+  return v
+}
+
+test "json_canon" {
+  assert json_canon("") == "error"
+  assert json_canon("  ") == "error"
+  assert json_canon("[1,]") == "error"
+  assert json_canon("[ 1 , 2 ]") == "[1,2]"
+  assert json_canon("{ 'b' : 1 , 'a' : [ ] , 'b' : -0 }") == "{'a':[],'b':0}"
+  assert json_canon("01") == "error"
+  assert json_canon("-") == "error"
+  assert json_canon("1.5") == "error"
+  assert json_canon("+1") == "error"
+  assert json_canon("-5") == "-5"
+  assert json_canon("0") == "0"
+  assert json_canon("'a b' ") == "'a b'"
+  assert json_canon("'a") == "error"
+  assert json_canon("{}") == "{}"
+  assert json_canon("{ }") == "{}"
+  assert json_canon("[ ]") == "[]"
+  assert json_canon("[true,false,null]") == "[true,false,null]"
+  assert json_canon("[tru]") == "error"
+  assert json_canon("[1 2]") == "error"
+  assert json_canon("{'a' 1}") == "error"
+  assert json_canon("{'a':1,}") == "error"
+  assert json_canon("{1:2}") == "error"
+  assert json_canon("1 2") == "error"
+  assert json_canon("{'z':{'y':1,'x':[2]},'A':null}") == "{'A':null,'z':{'x':[2],'y':1}}"
+  assert json_canon("[-]") == "error"
+  assert json_canon("[1") == "error"
+  assert json_canon("[,1]") == "error"
+  assert json_canon("{'a':1") == "error"
+  assert json_canon("-9223372036854775808") == "-9223372036854775808"
+  assert json_canon("truefalse") == "error"
+}

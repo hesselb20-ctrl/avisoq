@@ -1,0 +1,101 @@
+// Magnitudes are arrays of decimal digits, most significant first, without leading zeros
+// (zero is [0]).
+
+fn strip(xs: [Int]) -> [Int] {
+  var i = 0
+  while i < len(xs) - 1 and xs[i] == 0 {
+    i = i + 1
+  }
+  var out: [Int] = []
+  for k in i..len(xs) {
+    push(out, xs[k])
+  }
+  return out
+}
+
+fn cmp_mag(x: [Int], y: [Int]) -> Int {
+  if len(x) < len(y) { return -1 }
+  if len(x) > len(y) { return 1 }
+  for i in 0..len(x) {
+    if x[i] < y[i] { return -1 }
+    if x[i] > y[i] { return 1 }
+  }
+  return 0
+}
+
+// x minus y, requires x >= y.
+fn sub_mag(x: [Int], y: [Int]) -> [Int] {
+  var res = array(len(x), 0)
+  var borrow = 0
+  var i = len(x) - 1
+  var j = len(y) - 1
+  while i >= 0 {
+    var d = x[i] - borrow
+    if j >= 0 { d = d - y[j] }
+    if d < 0 {
+      d = d + 10
+      borrow = 1
+    } else {
+      borrow = 0
+    }
+    res[i] = d
+    i = i - 1
+    j = j - 1
+  }
+  return strip(res)
+}
+
+// r * 10 + d
+fn append_digit(r: [Int], d: Int) -> [Int] {
+  var out = copy(r)
+  push(out, d)
+  return strip(out)
+}
+
+fn divmod_mag(a: [Int], b: [Int]) -> ([Int], [Int]) {
+  var q = array(len(a), 0)
+  var r: [Int] = [0]
+  for i in 0..len(a) {
+    r = append_digit(r, a[i])
+    var c = 0
+    while cmp_mag(r, b) >= 0 {
+      r = sub_mag(r, b)
+      c = c + 1
+    }
+    q[i] = c
+  }
+  return (strip(q), r)
+}
+
+fn to_digits(t: Str) -> [Int] {
+  var out: [Int] = []
+  for i in 0..len(t) {
+    push(out, byte_at(t, i) - 48)
+  }
+  return strip(out)
+}
+
+fn mag_str(d: [Int]) -> Str {
+  var s = ""
+  for i in 0..len(d) {
+    s = s + str(d[i])
+  }
+  return s
+}
+
+fn big_divmod(a: Str, b: Str) -> Str {
+  let neg_a = byte_at(a, 0) == 45
+  let neg_b = byte_at(b, 0) == 45
+  var ua = a
+  if neg_a { ua = substr(a, 1, len(a)) }
+  var ub = b
+  if neg_b { ub = substr(b, 1, len(b)) }
+  let (qd, rd) = divmod_mag(to_digits(ua), to_digits(ub))
+  let q_zero = len(qd) == 1 and qd[0] == 0
+  let r_zero = len(rd) == 1 and rd[0] == 0
+  var qs = mag_str(qd)
+  if neg_a != neg_b and not q_zero { qs = "-" + qs }
+  var rs = mag_str(rd)
+  if neg_a and not r_zero { rs = "-" + rs }
+  return qs + " " + rs
+}

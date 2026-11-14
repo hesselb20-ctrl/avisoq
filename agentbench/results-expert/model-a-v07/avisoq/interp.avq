@@ -1,0 +1,343 @@
+import "std/strings"
+import "std/arrays"
+
+// Expression nodes: ek 0 = number (ea), 1 = variable (en), 2 = negate (ea = child),
+// 3 = binary (ea = op, eb = left, ec = right).
+// Ops: 1 +, 2 -, 3 *, 4 /, 5 %, 6 <, 7 <=, 8 >, 9 >=, 10 ==, 11 !=
+// Statement nodes: sk 0 = assign (sname, sb = expr), 1 = print (sb), 2 = while (sb cond, sc body),
+// 3 = if (sb cond, sc then, sd else or -1); sn = next statement or -1.
+struct Prog {
+  toks: [Str],
+  pos: Int,
+  ek: [Int],
+  ea: [Int],
+  eb: [Int],
+  ec: [Int],
+  en: [Str],
+  sk: [Int],
+  sname: [Str],
+  sb: [Int],
+  sc: [Int],
+  sd: [Int],
+  sn: [Int]
+}
+
+struct Vm { vars: Map[Str, Int], steps: Int, err: Int, out: [Str] }
+
+fn is_letter(b: Int) -> Bool {
+  return b >= 97 and b <= 122
+}
+
+fn is_digit(b: Int) -> Bool {
+  return b >= 48 and b <= 57
+}
+
+fn tokenize(src: Str) -> [Str] {
+  var toks: [Str] = []
+  var i = 0
+  let n = len(src)
+  while i < n {
+    let b = byte_at(src, i)
+    if b == 32 or b == 10 or b == 9 or b == 13 {
+      i = i + 1
+    } else if is_digit(b) {
+      let start = i
+      while i < n and is_digit(byte_at(src, i)) { i = i + 1 }
+      push(toks, substr(src, start, i))
+    } else if is_letter(b) {
+      let start = i
+      while i < n and is_letter(byte_at(src, i)) { i = i + 1 }
+      push(toks, substr(src, start, i))
+    } else {
+      var two = ""
+      if i + 1 < n { two = substr(src, i, i + 2) }
+      if two == "<=" or two == ">=" or two == "==" or two == "!=" {
+        push(toks, two)
+        i = i + 2
+      } else {
+        push(toks, chr(b))
+        i = i + 1
+      }
+    }
+  }
+  return toks
+}
+
+fn tok(p: mut Prog) -> Str {
+  if p.pos >= len(p.toks) { return "" }
+  return p.toks[p.pos]
+}
+
+fn new_expr(p: mut Prog, k: Int, a: Int, b: Int, c: Int, name: Str) -> Int {
+  push(p.ek, k)
+  push(p.ea, a)
+  push(p.eb, b)
+  push(p.ec, c)
+  push(p.en, name)
+  return len(p.ek) - 1
+}
+
+fn is_number_tok(t: Str) -> Bool {
+  return len(t) > 0 and is_digit(byte_at(t, 0))
+}
+
+fn parse_atom(p: mut Prog) -> Int {
+  let t = tok(p)
+  p.pos = p.pos + 1
+  if t == "(" {
+    let inner = parse_cmp(p)
+    p.pos = p.pos + 1
+    return inner
+  }
+  if is_number_tok(t) {
+    return new_expr(p, 0, unwrap_or(parse_int(t), 0), 0, 0, "")
+  }
+  return new_expr(p, 1, 0, 0, 0, t)
+}
+
+fn parse_unary(p: mut Prog) -> Int {
+  if tok(p) == "-" {
+    p.pos = p.pos + 1
+    if p.pos < len(p.toks) and is_number_tok(p.toks[p.pos]) {
+      let lit = "-" + p.toks[p.pos]
+      p.pos = p.pos + 1
+      return new_expr(p, 0, unwrap_or(parse_int(lit), 0), 0, 0, "")
+    }
+    let child = parse_unary(p)
+    return new_expr(p, 2, child, 0, 0, "")
+  }
+  return parse_atom(p)
+}
+
+fn parse_term(p: mut Prog) -> Int {
+  var left = parse_unary(p)
+  while tok(p) == "*" or tok(p) == "/" or tok(p) == "%" {
+    let t = tok(p)
+    var op = 3
+    if t == "/" { op = 4 }
+    if t == "%" { op = 5 }
+    p.pos = p.pos + 1
+    let right = parse_unary(p)
+    left = new_expr(p, 3, op, left, right, "")
+  }
+  return left
+}
+
+fn parse_sum(p: mut Prog) -> Int {
+  var left = parse_term(p)
+  while tok(p) == "+" or tok(p) == "-" {
+    var op = 1
+    if tok(p) == "-" { op = 2 }
+    p.pos = p.pos + 1
+    let right = parse_term(p)
+    left = new_expr(p, 3, op, left, right, "")
+  }
+  return left
+}
+
+fn cmp_op(t: Str) -> Int {
+  if t == "<" { return 6 }
+  if t == "<=" { return 7 }
+  if t == ">" { return 8 }
+  if t == ">=" { return 9 }
+  if t == "==" { return 10 }
+  if t == "!=" { return 11 }
+  return 0
+}
+
+fn parse_cmp(p: mut Prog) -> Int {
+  let left = parse_sum(p)
+  let op = cmp_op(tok(p))
+  if op == 0 { return left }
+  p.pos = p.pos + 1
+  let right = parse_sum(p)
+  return new_expr(p, 3, op, left, right, "")
+}
+
+fn new_stmt(p: mut Prog, k: Int, name: Str, b: Int, c: Int, d: Int) -> Int {
+  push(p.sk, k)
+  push(p.sname, name)
+  push(p.sb, b)
+  push(p.sc, c)
+  push(p.sd, d)
+  push(p.sn, -1)
+  return len(p.sk) - 1
+}
+
+fn parse_stmt(p: mut Prog) -> Int {
+  let t = tok(p)
+  if t == "print" {
+    p.pos = p.pos + 1
+    let e = parse_cmp(p)
+    p.pos = p.pos + 1
+    return new_stmt(p, 1, "", e, -1, -1)
+  }
+  if t == "while" {
+    p.pos = p.pos + 1
+    let cond = parse_cmp(p)
+    p.pos = p.pos + 1
+    let body = parse_block(p)
+    p.pos = p.pos + 1
+    return new_stmt(p, 2, "", cond, body, -1)
+  }
+  if t == "if" {
+    p.pos = p.pos + 1
+    let cond = parse_cmp(p)
+    p.pos = p.pos + 1
+    let then_block = parse_block(p)
+    p.pos = p.pos + 1
+    var else_block = -1
+    if tok(p) == "else" {
+      p.pos = p.pos + 1
+      p.pos = p.pos + 1
+      else_block = parse_block(p)
+      p.pos = p.pos + 1
+    }
+    return new_stmt(p, 3, "", cond, then_block, else_block)
+  }
+  p.pos = p.pos + 2
+  let e = parse_cmp(p)
+  p.pos = p.pos + 1
+  return new_stmt(p, 0, t, e, -1, -1)
+}
+
+// Parses statements up to a closing brace or the end; returns the first statement or -1.
+fn parse_block(p: mut Prog) -> Int {
+  var head = -1
+  var tail = -1
+  while p.pos < len(p.toks) and tok(p) != "}" {
+    let s = parse_stmt(p)
+    if head < 0 {
+      head = s
+    } else {
+      p.sn[tail] = s
+    }
+    tail = s
+  }
+  return head
+}
+
+fn charge(vm: mut Vm) {
+  vm.steps = vm.steps + 1
+  if vm.steps > 5000 and vm.err == 0 { vm.err = 3 }
+}
+
+fn eval(p: Prog, vm: mut Vm, id: Int) -> Int {
+  let k = p.ek[id]
+  if k == 0 { return p.ea[id] }
+  if k == 1 {
+    let name = p.en[id]
+    if not has(vm.vars, name) {
+      if vm.err == 0 { vm.err = 1 }
+      return 0
+    }
+    return get(vm.vars, name)
+  }
+  if k == 2 {
+    let v = eval(p, vm, p.ea[id])
+    if vm.err != 0 { return 0 }
+    return -v
+  }
+  let l = eval(p, vm, p.eb[id])
+  if vm.err != 0 { return 0 }
+  let r = eval(p, vm, p.ec[id])
+  if vm.err != 0 { return 0 }
+  let op = p.ea[id]
+  if op == 1 { return l + r }
+  if op == 2 { return l - r }
+  if op == 3 { return l * r }
+  if op == 4 or op == 5 {
+    if r == 0 {
+      vm.err = 2
+      return 0
+    }
+    if op == 4 { return l / r }
+    return l % r
+  }
+  var res = false
+  if op == 6 { res = l < r }
+  if op == 7 { res = l <= r }
+  if op == 8 { res = l > r }
+  if op == 9 { res = l >= r }
+  if op == 10 { res = l == r }
+  if op == 11 { res = l != r }
+  if res { return 1 }
+  return 0
+}
+
+fn exec_block(p: Prog, vm: mut Vm, head: Int) {
+  var cur = head
+  while cur >= 0 and vm.err == 0 {
+    exec_stmt(p, vm, cur)
+    cur = p.sn[cur]
+  }
+}
+
+fn exec_stmt(p: Prog, vm: mut Vm, id: Int) {
+  let k = p.sk[id]
+  if k == 0 {
+    charge(vm)
+    if vm.err != 0 { return }
+    let v = eval(p, vm, p.sb[id])
+    if vm.err != 0 { return }
+    put(vm.vars, p.sname[id], v)
+  } else if k == 1 {
+    charge(vm)
+    if vm.err != 0 { return }
+    let v = eval(p, vm, p.sb[id])
+    if vm.err != 0 { return }
+    push(vm.out, str(v))
+  } else if k == 2 {
+    while vm.err == 0 {
+      charge(vm)
+      if vm.err != 0 { return }
+      let c = eval(p, vm, p.sb[id])
+      if vm.err != 0 { return }
+      if c == 0 { return }
+      exec_block(p, vm, p.sc[id])
+    }
+  } else {
+    charge(vm)
+    if vm.err != 0 { return }
+    let c = eval(p, vm, p.sb[id])
+    if vm.err != 0 { return }
+    if c != 0 {
+      exec_block(p, vm, p.sc[id])
+    } else {
+      exec_block(p, vm, p.sd[id])
+    }
+  }
+}
+
+fn interp(src: Str) -> Str {
+  var p = Prog(toks: tokenize(src), pos: 0, ek: [], ea: [], eb: [], ec: [], en: [], sk: [], sname: [], sb: [], sc: [], sd: [], sn: [])
+  let head = parse_block(p)
+  var vm = Vm(vars: {}, steps: 0, err: 0, out: [])
+  exec_block(p, vm, head)
+  if vm.err == 1 { push(vm.out, "!undef") }
+  if vm.err == 2 { push(vm.out, "!div0") }
+  if vm.err == 3 { push(vm.out, "!steps") }
+  return join(vm.out, ",")
+}
+
+test "interp" {
+  assert interp("") == ""
+  assert interp("x=-3; print x;") == "-3"
+  assert interp("x = 1; while x < 4 { print x; x = x + 1; }") == "1,2,3"
+  assert interp("print y;") == "!undef"
+  assert interp("print 1; print 5/0;") == "1,!div0"
+  assert interp("print 7 % -3; print -7 % 3; print -7 / 2;") == "1,-1,-3"
+  assert interp("while 1 { }") == "!steps"
+  assert interp("a=2;b=3; if a<=b { print 1; } else { print 0; }") == "1"
+  assert interp("if 0 { print 1; } else { print 2; }") == "2"
+  assert interp("if 0 { print 1; }") == ""
+  assert interp("print --3; print 1<2; print 2-3-4; print 2*3%4;") == "3,1,-5,2"
+  assert interp("print (1+2)*3 == 9;") == "1"
+  assert interp("x = 0; while x < 3000 { x = x + 1; }") == "!steps"
+  assert interp("x = 0; while x < 3000 { x = x + 1; } print x;") == "!steps"
+  assert interp("print -9223372036854775808;") == "-9223372036854775808"
+  assert interp("print 1 + (0 - undefinedvar);") == "!undef"
+  assert interp("whilex = 1; print whilex;") == "1"
+  assert interp("x=0; while x<2499 { x=x+1; }") == ""
+  assert interp("x=0; while x<2500 { x=x+1; }") == "!steps"
+}

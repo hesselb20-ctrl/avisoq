@@ -1,0 +1,248 @@
+import "std/strings"
+
+struct Prog {
+  toks: [Str],
+  pos: Int,
+  vars: Map[Str, Int],
+  steps: Int,
+  out: [Str],
+  err: Str
+}
+
+fn is_digit(b: Int) -> Bool {
+  return b >= 48 and b <= 57
+}
+
+fn is_lower(b: Int) -> Bool {
+  return b >= 97 and b <= 122
+}
+
+fn tokenize(src: Str) -> [Str] {
+  var toks: [Str] = []
+  var i = 0
+  let n = len(src)
+  while i < n {
+    let b = byte_at(src, i)
+    if b <= 32 {
+      i = i + 1
+    } else if is_digit(b) {
+      var j = i
+      while j < n and is_digit(byte_at(src, j)) { j = j + 1 }
+      push(toks, substr(src, i, j))
+      i = j
+    } else if is_lower(b) {
+      var j = i
+      while j < n and is_lower(byte_at(src, j)) { j = j + 1 }
+      push(toks, substr(src, i, j))
+      i = j
+    } else {
+      var two = ""
+      if i + 1 < n { two = substr(src, i, i + 2) }
+      if two == "<=" or two == ">=" or two == "==" or two == "!=" {
+        push(toks, two)
+        i = i + 2
+      } else {
+        push(toks, chr(b))
+        i = i + 1
+      }
+    }
+  }
+  return toks
+}
+
+fn peek(p: Prog) -> Str {
+  if p.pos < len(p.toks) { return p.toks[p.pos] }
+  return ""
+}
+
+fn advance(p: mut Prog) {
+  p.pos = p.pos + 1
+}
+
+fn fail(p: mut Prog, name: Str) {
+  if p.err == "" { p.err = name }
+}
+
+fn step(p: mut Prog) {
+  p.steps = p.steps + 1
+  if p.steps > 5000 { fail(p, "!steps") }
+}
+
+fn calc_op(p: mut Prog, op: Str, a: Int, b: Int) -> Int {
+  if p.err != "" { return 0 }
+  if op == "+" { return a + b }
+  if op == "-" { return a - b }
+  if op == "*" { return a * b }
+  if b == 0 {
+    fail(p, "!div0")
+    return 0
+  }
+  if op == "/" { return a / b }
+  return a % b
+}
+
+fn compare_op(op: Str, a: Int, b: Int) -> Int {
+  var ok = false
+  if op == "<" {
+    ok = a < b
+  } else if op == "<=" {
+    ok = a <= b
+  } else if op == ">" {
+    ok = a > b
+  } else if op == ">=" {
+    ok = a >= b
+  } else if op == "==" {
+    ok = a == b
+  } else {
+    ok = a != b
+  }
+  if ok { return 1 }
+  return 0
+}
+
+fn parse_expr(p: mut Prog) -> Int {
+  let a = parse_sum(p)
+  let op = peek(p)
+  if op == "<" or op == "<=" or op == ">" or op == ">=" or op == "==" or op == "!=" {
+    advance(p)
+    let b = parse_sum(p)
+    if p.err != "" { return 0 }
+    return compare_op(op, a, b)
+  }
+  return a
+}
+
+fn parse_sum(p: mut Prog) -> Int {
+  var v = parse_term(p)
+  while peek(p) == "+" or peek(p) == "-" {
+    let op = peek(p)
+    advance(p)
+    let r = parse_term(p)
+    v = calc_op(p, op, v, r)
+  }
+  return v
+}
+
+fn parse_term(p: mut Prog) -> Int {
+  var v = parse_unary(p)
+  while peek(p) == "*" or peek(p) == "/" or peek(p) == "%" {
+    let op = peek(p)
+    advance(p)
+    let r = parse_unary(p)
+    v = calc_op(p, op, v, r)
+  }
+  return v
+}
+
+fn parse_unary(p: mut Prog) -> Int {
+  if peek(p) == "-" {
+    advance(p)
+    let v = parse_unary(p)
+    if p.err != "" { return 0 }
+    return 0 - v
+  }
+  return parse_primary(p)
+}
+
+fn parse_primary(p: mut Prog) -> Int {
+  let t = peek(p)
+  advance(p)
+  if t == "(" {
+    let v = parse_expr(p)
+    advance(p)
+    return v
+  }
+  if len(t) == 0 { return 0 }
+  if is_digit(byte_at(t, 0)) {
+    return unwrap_or(parse_int(t), 0)
+  }
+  if p.err != "" { return 0 }
+  if has(p.vars, t) { return get(p.vars, t) }
+  fail(p, "!undef")
+  return 0
+}
+
+fn skip_block(p: mut Prog) {
+  var depth = 0
+  var done = false
+  while not done {
+    let t = peek(p)
+    advance(p)
+    if t == "{" { depth = depth + 1 }
+    if t == "}" { depth = depth - 1 }
+    if depth == 0 { done = true }
+  }
+}
+
+fn exec_block(p: mut Prog) {
+  advance(p)
+  while p.err == "" and peek(p) != "}" {
+    exec_stmt(p)
+  }
+  advance(p)
+}
+
+fn exec_stmt(p: mut Prog) {
+  let t = peek(p)
+  if t == "print" {
+    advance(p)
+    step(p)
+    let v = parse_expr(p)
+    advance(p)
+    if p.err == "" { push(p.out, str(v)) }
+  } else if t == "while" {
+    advance(p)
+    let cond_pos = p.pos
+    var going = true
+    while going and p.err == "" {
+      step(p)
+      let c = parse_expr(p)
+      if p.err != "" {
+        going = false
+      } else if c != 0 {
+        exec_block(p)
+        p.pos = cond_pos
+      } else {
+        skip_block(p)
+        going = false
+      }
+    }
+  } else if t == "if" {
+    advance(p)
+    step(p)
+    let c = parse_expr(p)
+    if p.err == "" {
+      if c != 0 {
+        exec_block(p)
+        if p.err == "" and peek(p) == "else" {
+          advance(p)
+          skip_block(p)
+        }
+      } else {
+        skip_block(p)
+        if peek(p) == "else" {
+          advance(p)
+          exec_block(p)
+        }
+      }
+    }
+  } else {
+    advance(p)
+    advance(p)
+    step(p)
+    let v = parse_expr(p)
+    advance(p)
+    if p.err == "" { put(p.vars, t, v) }
+  }
+}
+
+fn interp(src: Str) -> Str {
+  var vars: Map[Str, Int] = {}
+  var out: [Str] = []
+  var p = Prog(toks: tokenize(src), pos: 0, vars: vars, steps: 0, out: out, err: "")
+  while p.err == "" and p.pos < len(p.toks) {
+    exec_stmt(p)
+  }
+  if p.err != "" { push(p.out, p.err) }
+  return join(p.out, ",")
+}

@@ -1,14 +1,21 @@
 // String helpers. Positions and lengths are in bytes.
 import "std/core"
 
+// True when needle occurs in s starting at byte position at.
+fn matches_at(s: Str, at: Int, needle: Str) -> Bool {
+  if at < 0 or at + len(needle) > len(s) { return false }
+  for j in 0..len(needle) {
+    if byte_at(s, at + j) != byte_at(needle, j) { return false }
+  }
+  return true
+}
+
 fn starts_with(s: Str, prefix: Str) -> Bool {
-  if len(prefix) > len(s) { return false }
-  return substr(s, 0, len(prefix)) == prefix
+  return matches_at(s, 0, prefix)
 }
 
 fn ends_with(s: Str, suffix: Str) -> Bool {
-  if len(suffix) > len(s) { return false }
-  return substr(s, len(s) - len(suffix), len(s)) == suffix
+  return matches_at(s, len(s) - len(suffix), suffix)
 }
 
 // Position of the first occurrence of needle, or -1.
@@ -17,7 +24,7 @@ fn index_of(s: Str, needle: Str) -> Int
 {
   let n = len(needle)
   for i in 0..len(s) - n + 1 {
-    if substr(s, i, i + n) == needle { return i }
+    if matches_at(s, i, needle) { return i }
   }
   return -1
 }
@@ -34,7 +41,7 @@ fn split(s: Str, separator: Str) -> [Str]
   var count = 1
   var i = 0
   while i + n <= len(s) {
-    if substr(s, i, i + n) == separator {
+    if matches_at(s, i, separator) {
       count = count + 1
       i = i + n
     } else {
@@ -46,7 +53,7 @@ fn split(s: Str, separator: Str) -> [Str]
   var k = 0
   i = 0
   while i + n <= len(s) {
-    if substr(s, i, i + n) == separator {
+    if matches_at(s, i, separator) {
       parts[k] = substr(s, start, i)
       k = k + 1
       i = i + n
@@ -60,12 +67,17 @@ fn split(s: Str, separator: Str) -> [Str]
 }
 
 fn join(parts: [Str], separator: Str) -> Str {
-  var out = ""
-  for i in 0..len(parts) {
-    if i > 0 { out = out + separator }
-    out = out + parts[i]
-  }
-  return out
+  if len(parts) == 0 { return "" }
+  return join_range(parts, separator, 0, len(parts))
+}
+
+// Joins parts[low..high) by halves, so the total copying stays close to the size of the result.
+private fn join_range(parts: [Str], separator: Str, low: Int, high: Int) -> Str
+  requires low >= 0 and low < high and high <= len(parts)
+{
+  if high - low == 1 { return parts[low] }
+  let middle = low + (high - low) / 2
+  return join_range(parts, separator, low, middle) + separator + join_range(parts, separator, middle, high)
 }
 
 fn replace(s: Str, from: Str, to: Str) -> Str
@@ -77,9 +89,14 @@ fn replace(s: Str, from: Str, to: Str) -> Str
 fn repeat(s: Str, times: Int) -> Str
   requires times >= 0
 {
+  // Doubling: the copying adds up to about twice the size of the result.
   var out = ""
-  for i in 0..times {
-    out = out + s
+  var piece = s
+  var left = times
+  while left > 0 {
+    if left % 2 == 1 { out = out + piece }
+    left = left / 2
+    if left > 0 { piece = piece + piece }
   }
   return out
 }

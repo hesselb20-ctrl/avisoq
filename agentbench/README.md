@@ -192,6 +192,32 @@ import (done), and a warning in the guide about overflow in the middle of an exp
 return values, and a way to propagate errors without checking a flag at every level. Those
 explain most of the extra code and time, and they are design work, not fixes.
 
+### Rerun on version 0.7
+
+Version 0.7 added what the agents had asked for: constants (a top-level `let`), tuples with
+`let (a, b) = ...`, the `?` operator for passing an `Err` or `None` up, assignment to the
+fields of a `var` struct, and structs as `mut` parameters. The two Avisoq agents were run again
+with fresh agents and the same instructions. Solutions are in `results-expert/model-a-v07` and
+`model-b-v07`.
+
+| Avisoq, run A / run B | Version 0.6 | Version 0.7 | Python (for scale) | Rust (for scale) |
+|---|---:|---:|---:|---:|
+| Correct out of 10 | 9 / 10 | 10 / 10 | 10 / 10 | 10 / 10 |
+| Time the agent took | 220 s / 584 s | 213 s / 391 s | 117 s / 165 s | 116 s / 212 s |
+| Tokens used (thousands) | 135 / 226 | 137 / 183 | 112 / 135 | 111 / 143 |
+| Non-blank lines | 1154 / 1040 | 1194 / 1040 | 562 / 669 | 1015 / 1186 |
+
+- **Correctness is level now:** 20 of 20, the same as Python and Rust. One run per model, so
+  this does not show the earlier failure could not happen again.
+- **The agents used the new state features and not the rest.** Both used `mut` struct
+  parameters in 5 of 10 solutions, and both named them as the most useful addition. One used
+  a tuple once. Neither used `?` or constants.
+- **The code did not get shorter**, and Avisoq is still the slowest of the three for an agent:
+  about 1.8 times Python's time in run A and 2.4 times in run B.
+- Neither agent reported a compiler bug. Remaining friction they named: the no-shadowing rule
+  across sibling branches, no bit operations, no `for` loop that counts down, no conditional
+  expression.
+
 ## Running it yourself
 
 ```

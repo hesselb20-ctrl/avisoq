@@ -1,0 +1,14 @@
+// String work that used to take seconds: repeat and join copy about twice their result,
+// and byte_at reads in place.
+import "std/strings"
+
+fn main() uses io {
+  let big = repeat("ab,cd,", 50000)
+  var commas = 0
+  for i in 0..len(big) {
+    if byte_at(big, i) == 44 { commas = commas + 1 }
+  }
+  let parts = split(big, ",")
+  print(len(big), commas, len(parts), len(join(parts, "+")), index_of(big, "d,a"))
+  print(starts_with(big, "ab,"), ends_with(big, "cd,"), join(["a"], "-"), repeat("xy", 0) == "", repeat("xy", 3))
+}

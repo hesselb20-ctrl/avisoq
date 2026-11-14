@@ -1,0 +1,147 @@
+// Node kinds: 0 char (a = byte, -1 for any), 1 seq(a, b), 2 alt(a, b), 3 star(a), 4 plus(a), 5 quest(a), 6 empty
+struct Re { pat: Str, pos: Int, kind: [Int], na: [Int], nb: [Int] }
+
+fn new_node(r: mut Re, k: Int, a: Int, b: Int) -> Int {
+  push(r.kind, k)
+  push(r.na, a)
+  push(r.nb, b)
+  return len(r.kind) - 1
+}
+
+fn parse_atom(r: mut Re) -> Int {
+  let b = byte_at(r.pat, r.pos)
+  r.pos = r.pos + 1
+  if b == 40 {
+    let inner = parse_alt(r)
+    r.pos = r.pos + 1
+    return inner
+  }
+  if b == 46 { return new_node(r, 0, -1, 0) }
+  return new_node(r, 0, b, 0)
+}
+
+fn parse_factor(r: mut Re) -> Int {
+  var node = parse_atom(r)
+  while r.pos < len(r.pat) {
+    let c = byte_at(r.pat, r.pos)
+    if c == 42 {
+      node = new_node(r, 3, node, 0)
+    } else if c == 43 {
+      node = new_node(r, 4, node, 0)
+    } else if c == 63 {
+      node = new_node(r, 5, node, 0)
+    } else {
+      break
+    }
+    r.pos = r.pos + 1
+  }
+  return node
+}
+
+fn parse_seq(r: mut Re) -> Int {
+  var node = new_node(r, 6, 0, 0)
+  while r.pos < len(r.pat) {
+    let c = byte_at(r.pat, r.pos)
+    if c == 124 or c == 41 { break }
+    let f = parse_factor(r)
+    node = new_node(r, 1, node, f)
+  }
+  return node
+}
+
+fn parse_alt(r: mut Re) -> Int {
+  var node = parse_seq(r)
+  while r.pos < len(r.pat) and byte_at(r.pat, r.pos) == 124 {
+    r.pos = r.pos + 1
+    let other = parse_seq(r)
+    node = new_node(r, 2, node, other)
+  }
+  return node
+}
+
+fn union_sets(a: [Bool], b: [Bool]) -> [Bool] {
+  return [i in 0..len(a): a[i] or b[i]]
+}
+
+// All end positions reachable by matching node from any start in S.
+fn run(r: Re, text: Str, node: Int, s: [Bool]) -> [Bool] {
+  let k = r.kind[node]
+  let m = len(text)
+  if k == 0 {
+    var out = array(m + 1, false)
+    for i in 0..m {
+      if s[i] and (r.na[node] < 0 or byte_at(text, i) == r.na[node]) { out[i + 1] = true }
+    }
+    return out
+  }
+  if k == 6 { return copy(s) }
+  if k == 1 {
+    let mid = run(r, text, r.na[node], s)
+    return run(r, text, r.nb[node], mid)
+  }
+  if k == 2 {
+    let x = run(r, text, r.na[node], s)
+    let y = run(r, text, r.nb[node], s)
+    return union_sets(x, y)
+  }
+  if k == 5 {
+    let x = run(r, text, r.na[node], s)
+    return union_sets(x, s)
+  }
+  // star (3) and plus (4)
+  var res = copy(s)
+  var frontier = copy(s)
+  if k == 4 {
+    let first = run(r, text, r.na[node], s)
+    res = copy(first)
+    frontier = copy(first)
+  }
+  var go = true
+  while go {
+    let nxt = run(r, text, r.na[node], frontier)
+    var fresh = array(m + 1, false)
+    go = false
+    for i in 0..m + 1 {
+      if nxt[i] and not res[i] {
+        fresh[i] = true
+        res[i] = true
+        go = true
+      }
+    }
+    frontier = fresh
+  }
+  return res
+}
+
+fn regex_match(pattern: Str, text: Str) -> Bool {
+  var r = Re(pat: pattern, pos: 0, kind: [], na: [], nb: [])
+  let root = parse_alt(r)
+  var start = array(len(text) + 1, false)
+  start[0] = true
+  let ends = run(r, text, root, start)
+  return ends[len(text)]
+}
+
+test "regex_match" {
+  assert regex_match("", "")
+  assert not regex_match("", "a")
+  assert regex_match("a|", "")
+  assert regex_match("a|", "a")
+  assert not regex_match("a|", "aa")
+  assert regex_match("()", "")
+  assert regex_match("a*", "")
+  assert regex_match("a*", "aaaa")
+  assert not regex_match("a+", "")
+  assert regex_match("a+b?", "aaab")
+  assert regex_match(".*", "hello")
+  assert regex_match("(ab)*c", "ababc")
+  assert not regex_match("(ab)*c", "abac")
+  assert regex_match("(a*)*b", "aaaab")
+  assert not regex_match("(a*)*b", "aaaa")
+  assert regex_match("(a|b)+c.", "abbacz")
+  assert regex_match("(a?)*", "aaa")
+  assert regex_match("a?a?a?aaa", "aaa")
+  assert not regex_match("a.c", "ac")
+  assert regex_match("(a*)*(b*)*c", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")  == false
+  assert regex_match("(x+x+)+y", "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxy")
+}

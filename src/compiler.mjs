@@ -219,6 +219,20 @@ export async function instantiate(wasm, meta, { allow = [], write = (s) => proce
     lastOk = 1;
     return newStr(Buffer.from(res.body, 'base64'));
   };
+  // A view of a string's bytes, valid only until the next allocation (which may move the memory).
+  const strView = (ptr) => new Uint8Array(memory.buffer, ptr + 4, new DataView(memory.buffer).getUint32(ptr, true));
+  // A new string made of byte ranges [from, to) of memory, given as pairs.
+  const strOfRanges = (ranges) => {
+    let n = 0;
+    for (const [a, b] of ranges) n += b - a;
+    const ptr = instance.exports.__alloc(4 + n);
+    const mem = new Uint8Array(memory.buffer);
+    new DataView(memory.buffer).setUint32(ptr, n, true);
+    let at = ptr + 4;
+    for (const [a, b] of ranges) { mem.copyWithin(at, a, b); at += b - a; }
+    return ptr;
+  };
+  const strLen = (ptr) => new DataView(memory.buffer).getUint32(ptr, true);
   const strBytes = (ptr) => {
     const len = new DataView(memory.buffer).getUint32(ptr, true);
     return new Uint8Array(memory.buffer, ptr + 4, len).slice();
@@ -255,18 +269,16 @@ export async function instantiate(wasm, meta, { allow = [], write = (s) => proce
     env: { fail },
     // Pure string helpers: no capability needed.
     rt: {
-      str_concat: (a, b) => {
-        const x = strBytes(a), y = strBytes(b);
-        const out = new Uint8Array(x.length + y.length);
-        out.set(x); out.set(y, x.length);
-        return newStr(out);
-      },
+      str_concat: (a, b) => strOfRanges([[a + 4, a + 4 + strLen(a)], [b + 4, b + 4 + strLen(b)]]),
       str_eq: (a, b) => {
-        const x = strBytes(a), y = strBytes(b);
-        return x.length === y.length && x.every((v, i) => v === y[i]) ? 1 : 0;
+        if (a === b) return 1;
+        const x = strView(a), y = strView(b);
+        if (x.length !== y.length) return 0;
+        for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return 0;
+        return 1;
       },
       str_cmp: (a, b) => {
-        const x = strBytes(a), y = strBytes(b);
+        const x = strView(a), y = strView(b);
         for (let i = 0; i < Math.min(x.length, y.length); i++) if (x[i] !== y[i]) return x[i] < y[i] ? -1 : 1;
         return Math.sign(x.length - y.length);
       },
@@ -274,9 +286,8 @@ export async function instantiate(wasm, meta, { allow = [], write = (s) => proce
       str_from_f64: (v) => newStr(enc.encode(fmtFloat(v))),
       str_from_bool: (v) => newStr(enc.encode(v ? 'true' : 'false')),
       substr: (s, start, end, site) => {
-        const x = strBytes(s);
-        if (start < 0n || end < start || end > BigInt(x.length)) fail(FAIL.BOUNDS, site);
-        return newStr(x.subarray(Number(start), Number(end)));
+        if (start < 0n || end < start || end > BigInt(strLen(s))) fail(FAIL.BOUNDS, site);
+        return strOfRanges([[s + 4 + Number(start), s + 4 + Number(end)]]);
       },
       str_from_byte: (b, site) => {
         if (b < 0n || b > 255n) fail(FAIL.BOUNDS, site);
@@ -291,7 +302,7 @@ export async function instantiate(wasm, meta, { allow = [], write = (s) => proce
   };
   // Maps live in the host and are addressed by handle. Keys keep insertion order.
   const maps = [];
-  const rawKey = (ptr) => { let s = ''; for (const b of strBytes(ptr)) s += String.fromCharCode(b); return s; };
+  const rawKey = (ptr) => Buffer.from(memory.buffer, ptr + 4, strLen(ptr)).latin1Slice();
   const mkey = { i: (k) => k, s: rawKey };
   imports.rt.last_ok = () => lastOk;
   imports.rt.map_new = () => maps.push(new Map()) - 1;

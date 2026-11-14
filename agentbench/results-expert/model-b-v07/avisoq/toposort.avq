@@ -1,0 +1,25 @@
+fn toposort(n: Int, edges: [Int]) -> [Int] {
+  var indeg = array(n, 0)
+  for k in 0..len(edges) / 2 {
+    indeg[edges[2 * k + 1]] = indeg[edges[2 * k + 1]] + 1
+  }
+  var taken = array(n, false)
+  var order: [Int] = []
+  for t in 0..n {
+    var pick = -1
+    for i in 0..n {
+      if pick == -1 and not taken[i] and indeg[i] == 0 {
+        pick = i
+      }
+    }
+    if pick == -1 { return [-1] }
+    taken[pick] = true
+    push(order, pick)
+    for k in 0..len(edges) / 2 {
+      if edges[2 * k] == pick {
+        indeg[edges[2 * k + 1]] = indeg[edges[2 * k + 1]] - 1
+      }
+    }
+  }
+  return order
+}

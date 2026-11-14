@@ -1,0 +1,47 @@
+import "std/strings"
+
+fn op_prec(b: Int) -> Int {
+  if b == 94 { return 3 }
+  if b == 42 or b == 47 { return 2 }
+  return 1
+}
+
+fn to_infix(postfix: Str) -> Str {
+  let toks = split(postfix, " ")
+  var texts: [Str] = []
+  var precs: [Int] = []
+  for i in 0..len(toks) {
+    let t = toks[i]
+    if len(t) == 0 { continue }
+    let b = byte_at(t, 0)
+    let isop = b == 43 or b == 45 or b == 42 or b == 47 or b == 94
+    if not isop {
+      push(texts, t)
+      push(precs, 4)
+    } else {
+      let p = op_prec(b)
+      let rt = pop(texts)
+      let rp = pop(precs)
+      let lt = pop(texts)
+      let lp = pop(precs)
+      var left = lt
+      var right = rt
+      if lp < p or (lp == p and b == 94) { left = "(" + lt + ")" }
+      if rp < p or (rp == p and (b == 45 or b == 47)) { right = "(" + rt + ")" }
+      push(texts, left + chr(b) + right)
+      push(precs, p)
+    }
+  }
+  return texts[0]
+}
+
+test "to_infix" {
+  assert to_infix("a b + c *") == "(a+b)*c"
+  assert to_infix("a b c - -") == "a-(b-c)"
+  assert to_infix("a b - c -") == "a-b-c"
+  assert to_infix("a b ^ c ^") == "(a^b)^c"
+  assert to_infix("a b c ^ ^") == "a^b^c"
+  assert to_infix("a") == "a"
+  assert to_infix("a b * c d * +") == "a*b+c*d"
+  assert to_infix("a b + c d + /") == "(a+b)/(c+d)"
+}

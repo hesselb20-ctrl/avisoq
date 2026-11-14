@@ -1,0 +1,169 @@
+import "std/strings"
+import "std/arrays"
+
+struct JP {
+  src: Str,
+  pos: Int,
+  bad: Bool
+}
+
+fn cur(p: JP) -> Int {
+  if p.pos < len(p.src) { return byte_at(p.src, p.pos) }
+  return -1
+}
+
+fn is_dig(b: Int) -> Bool {
+  return b >= 48 and b <= 57
+}
+
+fn word_at(p: JP, w: Str) -> Bool {
+  let e = p.pos + len(w)
+  if e > len(p.src) { return false }
+  return substr(p.src, p.pos, e) == w
+}
+
+fn skip_ws(p: mut JP) {
+  while p.pos < len(p.src) and byte_at(p.src, p.pos) == 32 {
+    p.pos = p.pos + 1
+  }
+}
+
+fn parse_str(p: mut JP) -> Str {
+  if cur(p) != 39 {
+    p.bad = true
+    return ""
+  }
+  p.pos = p.pos + 1
+  let start = p.pos
+  while p.pos < len(p.src) and byte_at(p.src, p.pos) != 39 {
+    p.pos = p.pos + 1
+  }
+  if p.pos >= len(p.src) {
+    p.bad = true
+    return ""
+  }
+  let text = substr(p.src, start, p.pos)
+  p.pos = p.pos + 1
+  return text
+}
+
+fn parse_num(p: mut JP) -> Str {
+  let start = p.pos
+  if cur(p) == 45 { p.pos = p.pos + 1 }
+  let first = cur(p)
+  if first == 48 {
+    p.pos = p.pos + 1
+  } else if first >= 49 and first <= 57 {
+    while is_dig(cur(p)) { p.pos = p.pos + 1 }
+  } else {
+    p.bad = true
+    return ""
+  }
+  let text = substr(p.src, start, p.pos)
+  if text == "-0" { return "0" }
+  return text
+}
+
+fn parse_array(p: mut JP) -> Str {
+  p.pos = p.pos + 1
+  skip_ws(p)
+  if cur(p) == 93 {
+    p.pos = p.pos + 1
+    return "[]"
+  }
+  var items: [Str] = []
+  var more = true
+  while more {
+    let item = parse_value(p)
+    if p.bad { return "" }
+    push(items, item)
+    if cur(p) == 44 {
+      p.pos = p.pos + 1
+    } else if cur(p) == 93 {
+      p.pos = p.pos + 1
+      more = false
+    } else {
+      p.bad = true
+      return ""
+    }
+  }
+  return "[" + join(items, ",") + "]"
+}
+
+fn parse_object(p: mut JP) -> Str {
+  p.pos = p.pos + 1
+  skip_ws(p)
+  if cur(p) == 125 {
+    p.pos = p.pos + 1
+    return "{}"
+  }
+  var m: Map[Str, Str] = {}
+  var more = true
+  while more {
+    skip_ws(p)
+    let key = parse_str(p)
+    if p.bad { return "" }
+    skip_ws(p)
+    if cur(p) != 58 {
+      p.bad = true
+      return ""
+    }
+    p.pos = p.pos + 1
+    let val = parse_value(p)
+    if p.bad { return "" }
+    put(m, key, val)
+    if cur(p) == 44 {
+      p.pos = p.pos + 1
+    } else if cur(p) == 125 {
+      p.pos = p.pos + 1
+      more = false
+    } else {
+      p.bad = true
+      return ""
+    }
+  }
+  var parts: [Str] = []
+  let ks = sorted(keys(m))
+  for i in 0..len(ks) {
+    push(parts, "'" + ks[i] + "':" + get(m, ks[i]))
+  }
+  return "{" + join(parts, ",") + "}"
+}
+
+fn parse_value(p: mut JP) -> Str {
+  skip_ws(p)
+  if p.bad { return "" }
+  let c = cur(p)
+  var out = ""
+  if c == 123 {
+    out = parse_object(p)
+  } else if c == 91 {
+    out = parse_array(p)
+  } else if c == 39 {
+    out = "'" + parse_str(p) + "'"
+  } else if c == 45 or is_dig(c) {
+    out = parse_num(p)
+  } else if word_at(p, "true") {
+    p.pos = p.pos + 4
+    out = "true"
+  } else if word_at(p, "false") {
+    p.pos = p.pos + 5
+    out = "false"
+  } else if word_at(p, "null") {
+    p.pos = p.pos + 4
+    out = "null"
+  } else {
+    p.bad = true
+    return ""
+  }
+  if p.bad { return "" }
+  skip_ws(p)
+  return out
+}
+
+fn json_canon(s: Str) -> Str {
+  var p = JP(src: s, pos: 0, bad: false)
+  let out = parse_value(p)
+  if p.bad or p.pos != len(s) { return "error" }
+  return out
+}
