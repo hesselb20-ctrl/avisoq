@@ -137,6 +137,61 @@ rules against reading other files not technically enforced. Thirteen tasks that 
 solves cannot rank languages. A benchmark that could would need tasks hard enough that some
 runs fail: programs of several hundred lines, changes to existing code, or weaker models.
 
+## Expert benchmark (14 November 2026, Avisoq 0.6)
+
+The harder round still ended 13 of 13 everywhere, so this one was built to be hard enough
+that some runs fail.
+
+- **10 tasks** (`tasks-expert.mjs`): an interpreter for a small language, a strict JSON-like
+  parser with canonical output, a regular-expression matcher with a time limit, a spreadsheet
+  with cycle detection, a topological sort, exact fraction arithmetic, long division on
+  50-digit numbers, a time-range merger, a SAT solver, and postfix to infix with minimal
+  parentheses.
+- **373 hidden tests**, part hand-written and part generated from the reference
+  implementation with a fixed seed.
+- Same protocol as the harder round: compiler available, hidden tests never shown, graded once.
+
+| Run | Language | Correct | Rejected before running | Stopped with an error | Silently wrong |
+|---|---|---:|---:|---:|---:|
+| A | Avisoq | 9 | 0 | 1 | 0 |
+| A | Python | 10 | 0 | 0 | 0 |
+| A | Rust | 10 | 0 | 0 | 0 |
+| B | Avisoq | 10 | 0 | 0 | 0 |
+| B | Python | 10 | 0 | 0 | 0 |
+| B | Rust | 10 | 0 | 0 | 0 |
+
+| Cost, run A / run B | Avisoq | Python | Rust |
+|---|---:|---:|---:|
+| Time the agent took | 220 s / 584 s | 117 s / 165 s | 116 s / 212 s |
+| Tokens used (thousands) | 135 / 226 | 112 / 135 | 111 / 143 |
+| Non-blank lines for all 10 solutions | 1154 / 1040 | 562 / 669 | 1015 / 1186 |
+
+The solutions are in `results-expert/`.
+
+**Result: the only failure was in Avisoq.** In run A the interpreter task read number
+literals with `v * 10 + digit_byte - 48`. For the literal 9223372036854775807 the sum
+overflows before the `- 48` brings it back, and Avisoq stops the program. The same expression
+cannot overflow in Python and wraps around to the right answer in an optimised Rust build.
+The failure was loud, not a wrong answer, and no language produced a silently wrong result.
+Still, on this benchmark Avisoq scored 19 of 20 against 20 of 20 for Python and for Rust,
+and its runs took longer.
+
+**The benchmark found two compiler bugs.** The run B agent reported that a growable array
+lost elements when a call that grew it was nested inside the arguments of another call taking
+the same array. It was real: the WebAssembly backend read the array's address before
+evaluating the other arguments, and gave a different answer from the native backend with no
+error. Checking the neighbouring cases turned up the same mistake in the native backend for
+`xs[i] = f(xs)`. Both are fixed, with regression tests on both backends, and the agent's
+repro is kept as `results-expert/compiler-bug-repro.avq`. The agent had worked around the bug,
+so its score did not depend on it; all Avisoq solutions were regraded after the fix with the
+same result.
+
+**What the agents asked for this time:** an "unknown function" error that names the module to
+import (done), and a warning in the guide about overflow in the middle of an expression
+(done). Not done: mutable state other than `mut` parameters, constants, tuples or multiple
+return values, and a way to propagate errors without checking a flag at every level. Those
+explain most of the extra code and time, and they are design work, not fixes.
+
 ## Running it yourself
 
 ```
@@ -146,6 +201,6 @@ node agentbench/run.mjs grade 1      # grades, and writes feedback for a repair 
 node agentbench/run.mjs report
 ```
 
-Add `--set hard --work work-hard/<name>` to any of these for the harder task set.
+Add `--set hard --work work-hard/<name>` to any of these for the harder task set, or `--set expert --work work-expert/<name>` for the expert set.
 
 Rust is compiled with `rustc -O`, an ordinary optimised build.

@@ -36,7 +36,9 @@ differ from the languages you know. Print this guide any time with `avisoq guide
 13. **A variable cannot have the name of any function**, including standard library functions
     of modules you import (`lines`, `map`, `min`, `sort` ...). The error names the module.
 14. **Arrays are not compared with `==`.** Use `equal(a, b)` from `std/arrays`.
-15. **Comments are `//` only.**
+15. **Overflow is checked at every step, not just at the end.** `v * 10 + b - 48` can stop the
+    program where `v * 10 + (b - 48)` does not. To read digits into an Int, use `parse_int`.
+16. **Comments are `//` only.**
 
 ## A complete example
 

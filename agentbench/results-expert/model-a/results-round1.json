@@ -1,0 +1,38 @@
+{
+  "avisoq": {
+    "interp": "loud",
+    "json_canon": "pass",
+    "regex_match": "pass",
+    "sheet": "pass",
+    "toposort": "pass",
+    "frac_calc": "pass",
+    "big_divmod": "pass",
+    "schedule": "pass",
+    "sat": "pass",
+    "to_infix": "pass"
+  },
+  "python": {
+    "interp": "pass",
+    "json_canon": "pass",
+    "regex_match": "pass",
+    "sheet": "pass",
+    "toposort": "pass",
+    "frac_calc": "pass",
+    "big_divmod": "pass",
+    "schedule": "pass",
+    "sat": "pass",
+    "to_infix": "pass"
+  },
+  "rust": {
+    "interp": "pass",
+    "json_canon": "pass",
+    "regex_match": "pass",
+    "sheet": "pass",
+    "toposort": "pass",
+    "frac_calc": "pass",
+    "big_divmod": "pass",
+    "schedule": "pass",
+    "sat": "pass",
+    "to_infix": "pass"
+  }
+}

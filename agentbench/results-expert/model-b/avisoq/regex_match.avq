@@ -1,0 +1,147 @@
+// The pattern is parsed into a table of nodes (4 integers each: kind, first child, second child, letter).
+// Matching works on sets of text positions: ends_of gives every position the text can reach
+// after the node matches starting from any position in the given set.
+// Kinds: 0 letter, 1 any character, 2 sequence, 3 alternative, 4 star, 5 plus, 6 optional, 7 empty.
+
+fn peek_c(p: Str, st: [Int]) -> Int {
+  if st[0] < len(p) { return byte_at(p, st[0]) }
+  return -1
+}
+
+fn mk_node(nodes: mut [Int], kind: Int, a: Int, b: Int, letter: Int) -> Int {
+  let id = len(nodes) / 4
+  push(nodes, kind)
+  push(nodes, a)
+  push(nodes, b)
+  push(nodes, letter)
+  return id
+}
+
+fn parse_postfix(p: Str, st: mut [Int], nodes: mut [Int], atom0: Int) -> Int {
+  var atom = atom0
+  while peek_c(p, st) == 42 or peek_c(p, st) == 43 or peek_c(p, st) == 63 {
+    let op = peek_c(p, st)
+    st[0] = st[0] + 1
+    if op == 42 {
+      atom = mk_node(nodes, 4, atom, 0, 0)
+    } else if op == 43 {
+      atom = mk_node(nodes, 5, atom, 0, 0)
+    } else {
+      atom = mk_node(nodes, 6, atom, 0, 0)
+    }
+  }
+  return atom
+}
+
+fn parse_atom(p: Str, st: mut [Int], nodes: mut [Int]) -> Int {
+  let c = peek_c(p, st)
+  st[0] = st[0] + 1
+  if c == 40 {
+    let inner = parse_alt(p, st, nodes)
+    st[0] = st[0] + 1
+    return inner
+  }
+  if c == 46 {
+    return mk_node(nodes, 1, 0, 0, 0)
+  }
+  return mk_node(nodes, 0, 0, 0, c)
+}
+
+fn parse_seq(p: Str, st: mut [Int], nodes: mut [Int]) -> Int {
+  var acc = -1
+  while st[0] < len(p) and peek_c(p, st) != 124 and peek_c(p, st) != 41 {
+    let base_atom = parse_atom(p, st, nodes)
+    let atom = parse_postfix(p, st, nodes, base_atom)
+    if acc < 0 {
+      acc = atom
+    } else {
+      acc = mk_node(nodes, 2, acc, atom, 0)
+    }
+  }
+  if acc < 0 {
+    return mk_node(nodes, 7, 0, 0, 0)
+  }
+  return acc
+}
+
+fn parse_alt(p: Str, st: mut [Int], nodes: mut [Int]) -> Int {
+  var left = parse_seq(p, st, nodes)
+  while peek_c(p, st) == 124 {
+    st[0] = st[0] + 1
+    let right = parse_seq(p, st, nodes)
+    left = mk_node(nodes, 3, left, right, 0)
+  }
+  return left
+}
+
+// All positions reachable from the positions in start by repeating node a zero or more times.
+fn closure(nodes: [Int], a: Int, text: Str, start: [Bool]) -> [Bool] {
+  var reach = copy(start)
+  var changed = true
+  while changed {
+    changed = false
+    let more = ends_of(nodes, a, text, reach)
+    for i in 0..len(reach) {
+      if more[i] and not reach[i] {
+        reach[i] = true
+        changed = true
+      }
+    }
+  }
+  return reach
+}
+
+fn ends_of(nodes: [Int], id: Int, text: Str, cur: [Bool]) -> [Bool] {
+  let n = len(text)
+  let base = id * 4
+  let kind = nodes[base]
+  var out: [Bool] = array(n + 1, false)
+  if kind == 0 {
+    for i in 0..n {
+      if cur[i] and byte_at(text, i) == nodes[base + 3] {
+        out[i + 1] = true
+      }
+    }
+  } else if kind == 1 {
+    for i in 0..n {
+      if cur[i] {
+        out[i + 1] = true
+      }
+    }
+  } else if kind == 2 {
+    let middle = ends_of(nodes, nodes[base + 1], text, cur)
+    out = ends_of(nodes, nodes[base + 2], text, middle)
+  } else if kind == 3 {
+    let left_ends = ends_of(nodes, nodes[base + 1], text, cur)
+    let right_ends = ends_of(nodes, nodes[base + 2], text, cur)
+    for i in 0..n + 1 {
+      out[i] = left_ends[i] or right_ends[i]
+    }
+  } else if kind == 4 {
+    out = closure(nodes, nodes[base + 1], text, cur)
+  } else if kind == 5 {
+    let once = ends_of(nodes, nodes[base + 1], text, cur)
+    out = closure(nodes, nodes[base + 1], text, once)
+  } else if kind == 6 {
+    let some = ends_of(nodes, nodes[base + 1], text, cur)
+    for i in 0..n + 1 {
+      out[i] = cur[i] or some[i]
+    }
+  } else {
+    for i in 0..n + 1 {
+      out[i] = cur[i]
+    }
+  }
+  return out
+}
+
+fn regex_match(pattern: Str, text: Str) -> Bool {
+  var nodes: [Int] = []
+  var st: [Int] = [0]
+  let root = parse_alt(pattern, st, nodes)
+  let n = len(text)
+  var start: [Bool] = array(n + 1, false)
+  start[0] = true
+  let finish = ends_of(nodes, root, text, start)
+  return finish[n]
+}

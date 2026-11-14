@@ -1,0 +1,150 @@
+// AST nodes stored flat, 4 ints each: kind, a, b, ch
+// kinds: 0 empty, 1 literal, 2 any, 3 seq(a,b), 4 alt(a,b), 5 star(a), 6 plus(a), 7 opt(a)
+fn add_node(ast: mut [Int], kind: Int, a: Int, b: Int, ch: Int) -> Int {
+  let id = len(ast) / 4
+  push(ast, kind)
+  push(ast, a)
+  push(ast, b)
+  push(ast, ch)
+  return id
+}
+
+fn cur(p: Str, st: mut [Int]) -> Int {
+  if st[0] >= len(p) { return -1 }
+  return byte_at(p, st[0])
+}
+
+fn parse_atom(p: Str, st: mut [Int], ast: mut [Int]) -> Int {
+  let c = cur(p, st)
+  st[0] = st[0] + 1
+  if c == 40 {
+    let inner = parse_alt(p, st, ast)
+    st[0] = st[0] + 1
+    return inner
+  }
+  if c == 46 { return add_node(ast, 2, 0, 0, 0) }
+  return add_node(ast, 1, 0, 0, c)
+}
+
+fn parse_seq(p: Str, st: mut [Int], ast: mut [Int]) -> Int {
+  var acc = -1
+  var c = cur(p, st)
+  while c != -1 and c != 124 and c != 41 {
+    var node = parse_atom(p, st, ast)
+    var q = cur(p, st)
+    while q == 42 or q == 43 or q == 63 {
+      st[0] = st[0] + 1
+      var kind = 7
+      if q == 42 { kind = 5 }
+      if q == 43 { kind = 6 }
+      node = add_node(ast, kind, node, 0, 0)
+      q = cur(p, st)
+    }
+    if acc < 0 {
+      acc = node
+    } else {
+      acc = add_node(ast, 3, acc, node, 0)
+    }
+    c = cur(p, st)
+  }
+  if acc < 0 { return add_node(ast, 0, 0, 0, 0) }
+  return acc
+}
+
+fn parse_alt(p: Str, st: mut [Int], ast: mut [Int]) -> Int {
+  var acc = parse_seq(p, st, ast)
+  while cur(p, st) == 124 {
+    st[0] = st[0] + 1
+    let nxt = parse_seq(p, st, ast)
+    acc = add_node(ast, 4, acc, nxt, 0)
+  }
+  return acc
+}
+
+fn star_close(ast: [Int], node: Int, start: [Bool], text: Str) -> [Bool] {
+  var reach = copy(start)
+  var changed = true
+  while changed {
+    changed = false
+    let nxt = run(ast, node, reach, text)
+    for i in 0..len(nxt) {
+      if nxt[i] and not reach[i] {
+        reach[i] = true
+        changed = true
+      }
+    }
+  }
+  return reach
+}
+
+fn run(ast: [Int], node: Int, set: [Bool], text: Str) -> [Bool] {
+  let kind = ast[node * 4]
+  let a = ast[node * 4 + 1]
+  let b = ast[node * 4 + 2]
+  let ch = ast[node * 4 + 3]
+  let m = len(text)
+  if kind == 0 { return copy(set) }
+  if kind == 1 or kind == 2 {
+    var out = array(m + 1, false)
+    for i in 0..m {
+      if set[i] and (kind == 2 or byte_at(text, i) == ch) { out[i + 1] = true }
+    }
+    return out
+  }
+  if kind == 3 {
+    let mid = run(ast, a, set, text)
+    return run(ast, b, mid, text)
+  }
+  if kind == 4 {
+    var left = run(ast, a, set, text)
+    let right = run(ast, b, set, text)
+    for i in 0..m + 1 {
+      if right[i] { left[i] = true }
+    }
+    return left
+  }
+  if kind == 5 { return star_close(ast, a, set, text) }
+  if kind == 6 {
+    let first = run(ast, a, set, text)
+    return star_close(ast, a, first, text)
+  }
+  var res = run(ast, a, set, text)
+  for i in 0..m + 1 {
+    if set[i] { res[i] = true }
+  }
+  return res
+}
+
+fn regex_match(pattern: Str, text: Str) -> Bool {
+  var ast: [Int] = []
+  var st = [0]
+  let root = parse_alt(pattern, st, ast)
+  var start = array(len(text) + 1, false)
+  start[0] = true
+  let fin = run(ast, root, start, text)
+  return fin[len(text)]
+}
+
+test "basic" {
+  assert regex_match("", "")
+  assert not regex_match("", "a")
+  assert regex_match("a|", "")
+  assert regex_match("a|", "a")
+  assert not regex_match("a|", "b")
+  assert regex_match("()", "")
+  assert regex_match("a*", "")
+  assert regex_match("a*", "aaa")
+  assert not regex_match("a+", "")
+  assert regex_match("a.c", "abc")
+  assert not regex_match("a.c", "ac")
+  assert regex_match("(ab)+c?", "ababc")
+  assert regex_match("(a|b)*c", "abbac")
+  assert regex_match("(a*)*b", "aaab")
+  assert regex_match("(a*)*", "")
+  assert not regex_match("(a*)*b", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaac")
+  assert regex_match(".*", "hello")
+  assert regex_match("(|a)+", "aaa")
+  assert not regex_match("ab", "abc")
+  assert regex_match("(a|ab)(c|bcd)(d*)", "abcd")
+  assert regex_match("(()|a)+b", "b")
+}

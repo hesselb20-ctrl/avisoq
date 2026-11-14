@@ -1,0 +1,41 @@
+import "std/arrays"
+
+fn sat(n: Int, clauses: [Int]) -> [Int] {
+  var count = 1
+  for i in 0..n { count = count * 2 }
+  for mask in 0..count {
+    var vals = array(n + 1, 0)
+    for v in 1..n + 1 {
+      var p = 1
+      for k in 0..n - v { p = p * 2 }
+      vals[v] = (mask / p) % 2
+    }
+    var ok = true
+    var clause_ok = false
+    for i in 0..len(clauses) {
+      let lit = clauses[i]
+      if lit == 0 {
+        if not clause_ok { ok = false }
+        clause_ok = false
+      } else if lit > 0 {
+        if vals[lit] == 1 { clause_ok = true }
+      } else {
+        if vals[-lit] == 0 { clause_ok = true }
+      }
+    }
+    if ok {
+      var answer: [Int] = []
+      for v in 1..n + 1 { push(answer, vals[v]) }
+      return answer
+    }
+  }
+  return [-1]
+}
+
+test "basic" {
+  assert equal(sat(2, []), [0, 0])
+  assert equal(sat(2, [1, 0]), [1, 0])
+  assert equal(sat(1, [0]), [-1])
+  assert equal(sat(2, [1, 0, -1, 0]), [-1])
+  assert equal(sat(3, [-1, 2, 0, 3, 0]), [0, 0, 1])
+}

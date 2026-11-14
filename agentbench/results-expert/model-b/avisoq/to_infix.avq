@@ -1,0 +1,40 @@
+import "std/strings"
+
+// Precedence: ^ is 3, * and / are 2, + and - are 1. A plain operand has precedence 4 and is never
+// parenthesised. Each stack entry keeps its text and the precedence of its top operator.
+
+fn prec_of(op: Str) -> Int {
+  if op == "^" { return 3 }
+  if op == "*" or op == "/" { return 2 }
+  return 1
+}
+
+fn to_infix(postfix: Str) -> Str {
+  let tokens = split(postfix, " ")
+  var texts: [Str] = []
+  var precs: [Int] = []
+  for i in 0..len(tokens) {
+    let tok = tokens[i]
+    if tok == "+" or tok == "-" or tok == "*" or tok == "/" or tok == "^" {
+      let right_text = pop(texts)
+      let right_prec = pop(precs)
+      let left_text = pop(texts)
+      let left_prec = pop(precs)
+      let p = prec_of(tok)
+      var left = left_text
+      if left_prec < p or (left_prec == p and tok == "^") {
+        left = "(" + left_text + ")"
+      }
+      var right = right_text
+      if right_prec < p or (right_prec == p and (tok == "-" or tok == "/")) {
+        right = "(" + right_text + ")"
+      }
+      push(texts, left + tok + right)
+      push(precs, p)
+    } else {
+      push(texts, tok)
+      push(precs, 4)
+    }
+  }
+  return texts[len(texts) - 1]
+}

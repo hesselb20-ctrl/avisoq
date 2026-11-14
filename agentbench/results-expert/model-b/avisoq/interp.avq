@@ -1,0 +1,253 @@
+import "std/strings"
+
+fn b2i(b: Bool) -> Int {
+  if b { return 1 }
+  return 0
+}
+
+fn tokenize(src: Str) -> [Str] {
+  var toks: [Str] = []
+  let n = len(src)
+  var i = 0
+  while i < n {
+    let c = byte_at(src, i)
+    if c == 32 or c == 9 or c == 10 or c == 13 {
+      i = i + 1
+    } else if c >= 48 and c <= 57 {
+      var j = i
+      while j < n and byte_at(src, j) >= 48 and byte_at(src, j) <= 57 {
+        j = j + 1
+      }
+      push(toks, substr(src, i, j))
+      i = j
+    } else if c >= 97 and c <= 122 {
+      var k = i
+      while k < n and byte_at(src, k) >= 97 and byte_at(src, k) <= 122 {
+        k = k + 1
+      }
+      push(toks, substr(src, i, k))
+      i = k
+    } else {
+      var width = 1
+      if i + 1 < n {
+        let pair = substr(src, i, i + 2)
+        if pair == "<=" or pair == ">=" or pair == "==" or pair == "!=" {
+          width = 2
+        }
+      }
+      push(toks, substr(src, i, i + width))
+      i = i + width
+    }
+  }
+  return toks
+}
+
+// st[0] = position of the next token, st[1] = error code (0 none, 1 undef, 2 div0, 3 steps),
+// st[2] = steps taken so far.
+
+fn peek_tok(toks: [Str], st: [Int]) -> Str {
+  if st[0] < len(toks) { return toks[st[0]] }
+  return ""
+}
+
+fn skip_tok(st: mut [Int]) {
+  st[0] = st[0] + 1
+}
+
+fn set_err(st: mut [Int], code: Int) {
+  if st[1] == 0 { st[1] = code }
+}
+
+fn step_count(st: mut [Int]) {
+  st[2] = st[2] + 1
+  if st[2] > 5000 {
+    set_err(st, 3)
+  }
+}
+
+fn expr_primary(toks: [Str], st: mut [Int], vars: mut Map[Str, Int]) -> Int {
+  let t = peek_tok(toks, st)
+  if len(t) == 0 { return 0 }
+  if t == "(" {
+    skip_tok(st)
+    let inner = expr_cmp(toks, st, vars)
+    skip_tok(st)
+    return inner
+  }
+  skip_tok(st)
+  if byte_at(t, 0) >= 48 and byte_at(t, 0) <= 57 {
+    return unwrap_or(parse_int(t), 0)
+  }
+  if has(vars, t) { return get(vars, t) }
+  set_err(st, 1)
+  return 0
+}
+
+fn expr_unary(toks: [Str], st: mut [Int], vars: mut Map[Str, Int]) -> Int {
+  if peek_tok(toks, st) == "-" {
+    skip_tok(st)
+    let negated = expr_unary(toks, st, vars)
+    return 0 - negated
+  }
+  return expr_primary(toks, st, vars)
+}
+
+fn expr_term(toks: [Str], st: mut [Int], vars: mut Map[Str, Int]) -> Int {
+  var acc = expr_unary(toks, st, vars)
+  var op = peek_tok(toks, st)
+  while st[1] == 0 and (op == "*" or op == "/" or op == "%") {
+    skip_tok(st)
+    let rhs = expr_unary(toks, st, vars)
+    if st[1] != 0 { return 0 }
+    if op == "*" {
+      acc = acc * rhs
+    } else if op == "/" {
+      if rhs == 0 {
+        set_err(st, 2)
+        return 0
+      }
+      acc = acc / rhs
+    } else {
+      if rhs == 0 {
+        set_err(st, 2)
+        return 0
+      }
+      acc = acc % rhs
+    }
+    op = peek_tok(toks, st)
+  }
+  return acc
+}
+
+fn expr_sum(toks: [Str], st: mut [Int], vars: mut Map[Str, Int]) -> Int {
+  var acc = expr_term(toks, st, vars)
+  var op = peek_tok(toks, st)
+  while st[1] == 0 and (op == "+" or op == "-") {
+    skip_tok(st)
+    let rhs = expr_term(toks, st, vars)
+    if st[1] != 0 { return 0 }
+    if op == "+" {
+      acc = acc + rhs
+    } else {
+      acc = acc - rhs
+    }
+    op = peek_tok(toks, st)
+  }
+  return acc
+}
+
+fn expr_cmp(toks: [Str], st: mut [Int], vars: mut Map[Str, Int]) -> Int {
+  let left = expr_sum(toks, st, vars)
+  if st[1] != 0 { return 0 }
+  let op = peek_tok(toks, st)
+  if op == "<" or op == "<=" or op == ">" or op == ">=" or op == "==" or op == "!=" {
+    skip_tok(st)
+    let right = expr_sum(toks, st, vars)
+    if st[1] != 0 { return 0 }
+    if op == "<" { return b2i(left < right) }
+    if op == "<=" { return b2i(left <= right) }
+    if op == ">" { return b2i(left > right) }
+    if op == ">=" { return b2i(left >= right) }
+    if op == "==" { return b2i(left == right) }
+    return b2i(left != right)
+  }
+  return left
+}
+
+fn skip_block(toks: [Str], st: mut [Int]) {
+  // st[0] is just after an opening brace; moves past the matching closing brace.
+  var depth = 1
+  while depth > 0 {
+    let t = toks[st[0]]
+    if t == "{" { depth = depth + 1 }
+    if t == "}" { depth = depth - 1 }
+    st[0] = st[0] + 1
+  }
+}
+
+fn exec_stmts(toks: [Str], st: mut [Int], vars: mut Map[Str, Int], outs: mut [Str]) {
+  while st[1] == 0 and st[0] < len(toks) and peek_tok(toks, st) != "}" {
+    exec_stmt(toks, st, vars, outs)
+  }
+}
+
+fn exec_while(toks: [Str], st: mut [Int], vars: mut Map[Str, Int], outs: mut [Str]) {
+  let start = st[0]
+  while st[1] == 0 {
+    st[0] = start
+    step_count(st)
+    if st[1] != 0 { return }
+    skip_tok(st)
+    let loop_cond = expr_cmp(toks, st, vars)
+    if st[1] != 0 { return }
+    skip_tok(st)
+    if loop_cond == 0 {
+      skip_block(toks, st)
+      return
+    }
+    exec_stmts(toks, st, vars, outs)
+    if st[1] != 0 { return }
+    skip_tok(st)
+  }
+}
+
+fn exec_stmt(toks: [Str], st: mut [Int], vars: mut Map[Str, Int], outs: mut [Str]) {
+  let head = peek_tok(toks, st)
+  if head == "while" {
+    exec_while(toks, st, vars, outs)
+    return
+  }
+  step_count(st)
+  if st[1] != 0 { return }
+  if head == "print" {
+    skip_tok(st)
+    let shown = expr_cmp(toks, st, vars)
+    if st[1] != 0 { return }
+    skip_tok(st)
+    push(outs, str(shown))
+  } else if head == "if" {
+    skip_tok(st)
+    let cond = expr_cmp(toks, st, vars)
+    if st[1] != 0 { return }
+    skip_tok(st)
+    if cond != 0 {
+      exec_stmts(toks, st, vars, outs)
+      if st[1] != 0 { return }
+      skip_tok(st)
+      if peek_tok(toks, st) == "else" {
+        skip_tok(st)
+        skip_tok(st)
+        skip_block(toks, st)
+      }
+    } else {
+      skip_block(toks, st)
+      if peek_tok(toks, st) == "else" {
+        skip_tok(st)
+        skip_tok(st)
+        exec_stmts(toks, st, vars, outs)
+        if st[1] != 0 { return }
+        skip_tok(st)
+      }
+    }
+  } else {
+    let target = head
+    skip_tok(st)
+    skip_tok(st)
+    let assigned = expr_cmp(toks, st, vars)
+    if st[1] != 0 { return }
+    skip_tok(st)
+    put(vars, target, assigned)
+  }
+}
+
+fn interp(src: Str) -> Str {
+  let toks = tokenize(src)
+  var st: [Int] = [0, 0, 0]
+  var vars: Map[Str, Int] = {}
+  var outs: [Str] = []
+  exec_stmts(toks, st, vars, outs)
+  if st[1] == 1 { push(outs, "!undef") }
+  if st[1] == 2 { push(outs, "!div0") }
+  if st[1] == 3 { push(outs, "!steps") }
+  return join(outs, ",")
+}

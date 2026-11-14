@@ -1,0 +1,22 @@
+fn add_one(xs: mut [Int], v: Int) -> Int {
+  push(xs, v)
+  return v
+}
+
+fn take_two(xs: mut [Int], a: Int, b: Int) -> Int {
+  push(xs, a + b)
+  return a
+}
+
+fn nested_arg(xs: mut [Int]) -> Int {
+  return take_two(xs, add_one(xs, 1), add_one(xs, 2))
+}
+
+fn main() uses io {
+  var xs: [Int] = []
+  let r = take_two(xs, add_one(xs, 10), 0)
+  print("direct nested", len(xs), r)
+  var ys: [Int] = []
+  let r2 = nested_arg(ys)
+  print("in function", len(ys), r2)
+}

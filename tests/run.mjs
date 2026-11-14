@@ -659,5 +659,14 @@ await prints('arrays are compared with equal', `import "std/arrays"\n${main('let
   report('comparing arrays with == points at equal', !a.ok && a.diagnostics.some((d) => (d.hint ?? '').includes('equal(a, b)')), JSON.stringify(a.diagnostics));
 }
 
+// ---- an array that grows while a call, a store or an index that uses it is being evaluated ----
+{
+  const helpers = 'fn add_one(xs: mut [Int], v: Int) -> Int {\n  push(xs, v)\n  return v\n}\nfn take_two(xs: mut [Int], a: Int, b: Int) -> Int {\n  push(xs, a + b)\n  return a\n}\nfn grow_to(xs: mut [Int], n: Int) -> Int {\n  while len(xs) < n { push(xs, 0) }\n  return 1\n}\nfn nested(xs: mut [Int]) -> Int {\n  return take_two(xs, add_one(xs, 1), add_one(xs, 2))\n}\n';
+  await prints('a nested call that grows an argument array is not lost', helpers + main('var xs: [Int] = []\nlet r = take_two(xs, add_one(xs, 10), 0)\nprint(len(xs), r, xs[0], xs[1])\nvar ys: [Int] = []\nprint(nested(ys), len(ys), ys[2])'), '2 10 10 10\n1 3 3\n');
+  await prints('a stored value that grows the array lands in the grown array', helpers + main('var b = [1, 2]\nb[0] = grow_to(b, 500) + 40\nprint(len(b), b[0])\nvar c = [7]\nprint(c[grow_to(c, 300) - 1], len(c))\nvar a: [Int] = []\npush(a, add_one(a, 5))\nprint(len(a), a[0], a[1])'), '500 41\n7 300\n2 5 5\n');
+  const c = compile(main('var xs = [3, 1]\nsort(xs)'), { backend: BACKEND });
+  report('an unknown standard library function names its module', !c.ok && c.diagnostics.some((d) => (d.hint ?? '').includes('import "std/arrays"')), JSON.stringify(c.diagnostics));
+}
+
 console.log(`[${BACKEND}] ${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

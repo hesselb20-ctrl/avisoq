@@ -318,7 +318,7 @@ export function cgen(program, opts = {}) {
         case 'Binary': return binary(e);
         case 'Index': {
           const a = tmp(), i = tmp();
-          return `({ varr* ${a} = ${expr(e.base)}; int64_t ${i} = ${expr(e.index)}; `
+          return `({ int64_t ${i} = ${expr(e.index)}; varr* ${a} = ${expr(e.base)}; `
             + `if (VUNLIKELY((uint64_t)${i} >= (uint64_t)${a}->len)) avisoq_fail(${site(FAIL.BOUNDS, e)}); `
             + `VDATA(${ctype(e.ty)}, ${a})[${i}]; })`;
         }
@@ -581,10 +581,11 @@ export function cgen(program, opts = {}) {
           if (s.target.kind === 'Name') {
             line(`${v(s.target.sym)} = ${expr(s.value)};`);
           } else {
-            const a = tmp(), i = tmp(), t = s.target;
-            line(`{ varr* ${a} = ${expr(t.base)}; int64_t ${i} = ${expr(t.index)}; `
+            // index, then value, then the array: a value that grows the array must not leave a stale address
+            const a = tmp(), i = tmp(), val = tmp(), t = s.target;
+            line(`{ int64_t ${i} = ${expr(t.index)}; ${ctype(t.ty)} ${val} = ${expr(s.value)}; varr* ${a} = ${expr(t.base)}; `
               + `if (VUNLIKELY((uint64_t)${i} >= (uint64_t)${a}->len)) avisoq_fail(${site(FAIL.BOUNDS, t)}); `
-              + `VDATA(${ctype(t.ty)}, ${a})[${i}] = ${expr(s.value)}; }`);
+              + `VDATA(${ctype(t.ty)}, ${a})[${i}] = ${val}; }`);
           }
           break;
         case 'If':

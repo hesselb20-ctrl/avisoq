@@ -2,7 +2,7 @@
 import { Module, I32, I64, F64, uleb, sleb, f64bytes } from './wasm.mjs';
 
 import { FAIL } from './fail.mjs';
-import { containerTest, elemOf, isArr, isMap, mapParts } from './types.mjs';
+import { containerTest, elemOf, isArr, isMap, mapParts, walk } from './types.mjs';
 
 export { FAIL };
 const MAX_ARRAY_LEN = 1n << 27n;
@@ -278,10 +278,12 @@ export function codegen(program, opts = {}) {
     }
 
     // Stack: [] -> [address of element]; leaves nothing else. Performs the bounds check.
+    // The index is evaluated before the array is read: an index (or a stored value) that calls a
+    // function which grows the array would otherwise leave a stale address behind.
     function elemAddr(e) {
-      expr(e.base);
       expr(e.index);
-      lset(t1); lset(p1);
+      expr(e.base);
+      lset(p1); lset(t1);
       lget(t1); lget(p1); emit(I32_LOAD, 2, 0, I64_EXTEND_U, I64_GE_U, IF, VOID);
       fail(FAIL.BOUNDS, e);
       emit(END);
@@ -293,8 +295,12 @@ export function codegen(program, opts = {}) {
     const loadElem = (t) => emit(LOAD[elemClass(t)], elemShift(t), 8);
     const storeElem = (t) => emit(STORE[elemClass(t)], elemShift(t), 8);
 
+    const storeTemps = new Map();
+    const storeTemp = (ty) => { if (!storeTemps.has(ty)) storeTemps.set(ty, addLocal(ty)); return storeTemps.get(ty); };
+    const storeIndex = addLocal(I64);
     function expr(e) {
       switch (e.kind) {
+        case 'Held': lget(storeIndex); break;
         case 'IntLit': emit(...i64c(e.value)); break;
         case 'FloatLit': emit(F64_CONST, ...f64bytes(e.value)); break;
         case 'BoolLit': emit(...i32c(e.value ? 1 : 0)); break;
@@ -439,9 +445,19 @@ export function codegen(program, opts = {}) {
       }
     }
 
+    const hasCall = (n) => { let found = false; walk(n, (x) => { if (x.kind === 'Call') found = true; }); return found; };
     function callExpr(e) {
       if (e.fn) {
-        e.args.forEach(expr);
+        // A growable array is passed by its current address and handed back after the call. If
+        // another argument can itself grow that array (a nested call), the address must be read
+        // after every other argument has been evaluated, or the nested growth is lost.
+        const grows = e.fn.params.map((p) => p.grows);
+        if (grows.some(Boolean) && e.args.some((a, i) => !grows[i] && hasCall(a))) {
+          const held = e.args.map((a, i) => { if (grows[i]) return null; const t = addLocal(wt(e.fn.params[i].ty)); expr(a); lset(t); return t; });
+          e.args.forEach((a, i) => { if (grows[i]) expr(a); else lget(held[i]); });
+        } else {
+          e.args.forEach(expr);
+        }
         call(e.fn.wasm.index);
         for (let i = e.fn.params.length - 1; i >= 0; i--) if (e.fn.params[i].grows) lset(e.args[i].sym.idx);
         return;
@@ -555,7 +571,13 @@ export function codegen(program, opts = {}) {
         case 'Let': expr(s.init); lset(s.sym.idx); break;
         case 'Assign':
           if (s.target.kind === 'Name') { expr(s.value); lset(s.target.sym.idx); }
-          else { elemAddr(s.target); expr(s.value); storeElem(s.target.ty); }
+          else {
+            const held = storeTemp(wt(s.target.ty));
+            expr(s.target.index); lset(storeIndex);
+            expr(s.value); lset(held);
+            elemAddr({ ...s.target, index: { kind: 'Held' } });
+            lget(held); storeElem(s.target.ty);
+          }
           break;
         case 'If':
           expr(s.cond); emit(IF, VOID);

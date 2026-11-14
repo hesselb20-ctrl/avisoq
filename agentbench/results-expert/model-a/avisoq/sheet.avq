@@ -1,0 +1,125 @@
+import "std/strings"
+import "std/arrays"
+
+// status: 0 not started, 1 in progress, 2 done, 3 cycle
+fn is_cell_start(b: Int) -> Bool {
+  return b >= 65 and b <= 90
+}
+
+fn peek_char(f: Str, st: mut [Int]) -> Int {
+  if st[0] >= len(f) { return -1 }
+  return byte_at(f, st[0])
+}
+
+fn p_atom(f: Str, st: mut [Int], forms: Map[Str, Str], vals: mut Map[Str, Int], status: mut Map[Str, Int]) -> Int {
+  let c = peek_char(f, st)
+  if c == 40 {
+    st[0] = st[0] + 1
+    let v = p_expr(f, st, forms, vals, status)
+    st[0] = st[0] + 1
+    return v
+  }
+  if is_cell_start(c) {
+    let name = substr(f, st[0], st[0] + 2)
+    st[0] = st[0] + 2
+    let v = eval_cell(name, forms, vals, status)
+    let ns = get_or(status, name, 0)
+    if ns == 3 or ns == 1 { st[1] = 1 }
+    return v
+  }
+  var value = 0
+  while st[0] < len(f) and byte_at(f, st[0]) >= 48 and byte_at(f, st[0]) <= 57 {
+    value = value * 10 + byte_at(f, st[0]) - 48
+    st[0] = st[0] + 1
+  }
+  return value
+}
+
+fn p_unary(f: Str, st: mut [Int], forms: Map[Str, Str], vals: mut Map[Str, Int], status: mut Map[Str, Int]) -> Int {
+  if peek_char(f, st) == 45 {
+    st[0] = st[0] + 1
+    return -p_unary(f, st, forms, vals, status)
+  }
+  return p_atom(f, st, forms, vals, status)
+}
+
+fn p_term(f: Str, st: mut [Int], forms: Map[Str, Str], vals: mut Map[Str, Int], status: mut Map[Str, Int]) -> Int {
+  var acc = p_unary(f, st, forms, vals, status)
+  while peek_char(f, st) == 42 {
+    st[0] = st[0] + 1
+    acc = acc * p_unary(f, st, forms, vals, status)
+  }
+  return acc
+}
+
+fn p_expr(f: Str, st: mut [Int], forms: Map[Str, Str], vals: mut Map[Str, Int], status: mut Map[Str, Int]) -> Int {
+  var acc = p_term(f, st, forms, vals, status)
+  while peek_char(f, st) == 43 or peek_char(f, st) == 45 {
+    let op = peek_char(f, st)
+    st[0] = st[0] + 1
+    let r = p_term(f, st, forms, vals, status)
+    if op == 43 {
+      acc = acc + r
+    } else {
+      acc = acc - r
+    }
+  }
+  return acc
+}
+
+fn eval_cell(name: Str, forms: Map[Str, Str], vals: mut Map[Str, Int], status: mut Map[Str, Int]) -> Int {
+  if not has(forms, name) { return 0 }
+  let state = get_or(status, name, 0)
+  if state == 2 { return get(vals, name) }
+  if state == 3 { return 0 }
+  if state == 1 {
+    return 0
+  }
+  put(status, name, 1)
+  var st = [0, 0]
+  let v = p_expr(get(forms, name), st, forms, vals, status)
+  if st[1] == 1 {
+    put(status, name, 3)
+    return 0
+  }
+  put(vals, name, v)
+  put(status, name, 2)
+  return v
+}
+
+fn sheet(cells: Str) -> Str {
+  if len(cells) == 0 { return "" }
+  var forms: Map[Str, Str] = {}
+  let items = split(cells, ";")
+  for i in 0..len(items) {
+    let it = items[i]
+    if len(it) >= 3 {
+      put(forms, substr(it, 0, 2), substr(it, 3, len(it)))
+    }
+  }
+  var vals: Map[Str, Int] = {}
+  var status: Map[Str, Int] = {}
+  var names = keys(forms)
+  sort(names)
+  var parts: [Str] = []
+  for i in 0..len(names) {
+    let v = eval_cell(names[i], forms, vals, status)
+    if get_or(status, names[i], 0) == 3 {
+      push(parts, names[i] + "=#CYCLE")
+    } else {
+      push(parts, names[i] + "=" + str(v))
+    }
+  }
+  return join(parts, ",")
+}
+
+test "basic" {
+  assert sheet("") == ""
+  assert sheet("A1=1;B1=A1+2") == "A1=1,B1=3"
+  assert sheet("A1=B1;B1=A1") == "A1=#CYCLE,B1=#CYCLE"
+  assert sheet("A1=A1") == "A1=#CYCLE"
+  assert sheet("A1=B1+1;B1=A1;C1=A1*0;D1=2") == "A1=#CYCLE,B1=#CYCLE,C1=#CYCLE,D1=2"
+  assert sheet("A1=1;A1=5;B2=Z9+-A1") == "A1=5,B2=-5"
+  assert sheet("A1=2+3*4-1;B1=(2+3)*-4;C1=--2") == "A1=13,B1=-20,C1=2"
+  assert sheet("A1=B1;B1=1;C1=A1+B1") == "A1=1,B1=1,C1=2"
+}

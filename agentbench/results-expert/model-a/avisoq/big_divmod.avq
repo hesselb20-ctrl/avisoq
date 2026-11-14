@@ -1,0 +1,98 @@
+// little-endian digit arrays of fixed length 60
+fn digits_of(s: Str, start: Int) -> [Int] {
+  var d = array(60, 0)
+  let n = len(s) - start
+  for i in 0..n {
+    d[i] = byte_at(s, len(s) - 1 - i) - 48
+  }
+  return d
+}
+
+fn ge_big(a: [Int], b: [Int]) -> Bool {
+  var i = 59
+  while i >= 0 {
+    if a[i] != b[i] { return a[i] > b[i] }
+    i = i - 1
+  }
+  return true
+}
+
+fn sub_big(a: mut [Int], b: [Int]) {
+  var borrow = 0
+  for i in 0..60 {
+    var v = a[i] - b[i] - borrow
+    if v < 0 {
+      v = v + 10
+      borrow = 1
+    } else {
+      borrow = 0
+    }
+    a[i] = v
+  }
+}
+
+fn shift_in(a: mut [Int], d: Int) {
+  var i = 59
+  while i >= 1 {
+    a[i] = a[i - 1]
+    i = i - 1
+  }
+  a[0] = d
+}
+
+fn to_text(a: [Int]) -> Str {
+  var top = 59
+  while top > 0 and a[top] == 0 { top = top - 1 }
+  var s = ""
+  var i = top
+  while i >= 0 {
+    s = s + str(a[i])
+    i = i - 1
+  }
+  return s
+}
+
+fn big_divmod(a: Str, b: Str) -> Str {
+  var a_start = 0
+  var a_neg = false
+  if byte_at(a, 0) == 45 {
+    a_start = 1
+    a_neg = true
+  }
+  var b_start = 0
+  var b_neg = false
+  if byte_at(b, 0) == 45 {
+    b_start = 1
+    b_neg = true
+  }
+  let divisor = digits_of(b, b_start)
+  var rem = array(60, 0)
+  var quot = array(60, 0)
+  let n = len(a)
+  for i in a_start..n {
+    shift_in(rem, byte_at(a, i) - 48)
+    var q = 0
+    while ge_big(rem, divisor) {
+      sub_big(rem, divisor)
+      q = q + 1
+    }
+    quot[n - 1 - i] = q
+  }
+  var qs = to_text(quot)
+  var rs = to_text(rem)
+  if a_neg != b_neg and qs != "0" { qs = "-" + qs }
+  if a_neg and rs != "0" { rs = "-" + rs }
+  return qs + " " + rs
+}
+
+test "basic" {
+  assert big_divmod("-7", "2") == "-3 -1"
+  assert big_divmod("7", "-2") == "-3 1"
+  assert big_divmod("-7", "-2") == "3 -1"
+  assert big_divmod("0", "5") == "0 0"
+  assert big_divmod("3", "5") == "0 3"
+  assert big_divmod("-3", "5") == "0 -3"
+  assert big_divmod("100000000000000000000000000000000000000000000000000", "3") == "33333333333333333333333333333333333333333333333333 1"
+  assert big_divmod("-99999999999999999999999999999999999999999999999999", "99999999999999999999999999999999999999999999999999") == "-1 0"
+  assert big_divmod("123456789012345678901234567890", "-987654321") == "-124999998873437499901 574845669"
+}

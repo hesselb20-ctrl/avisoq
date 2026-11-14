@@ -1,0 +1,40 @@
+// Tries assignments in counting order (variable 1 is the most significant bit, 0 before 1),
+// so the first one that satisfies every clause is the required one.
+
+fn satisfies(bits: [Int], clauses: [Int]) -> Bool {
+  var clause_ok = false
+  for i in 0..len(clauses) {
+    let lit = clauses[i]
+    if lit == 0 {
+      if clause_ok == false { return false }
+      clause_ok = false
+    } else {
+      var v = lit
+      if v < 0 { v = 0 - v }
+      let value = bits[v - 1]
+      if (lit > 0 and value == 1) or (lit < 0 and value == 0) {
+        clause_ok = true
+      }
+    }
+  }
+  return true
+}
+
+fn sat(n: Int, clauses: [Int]) -> [Int] {
+  var total = 1
+  for i in 0..n {
+    total = total * 2
+  }
+  var bits: [Int] = array(n, 0)
+  for mask in 0..total {
+    var rest = mask
+    for i in 0..n {
+      bits[n - 1 - i] = rest % 2
+      rest = rest / 2
+    }
+    if satisfies(bits, clauses) {
+      return bits
+    }
+  }
+  return [-1]
+}

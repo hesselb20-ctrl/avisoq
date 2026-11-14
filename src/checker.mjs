@@ -1,5 +1,17 @@
 // Avisoq checker: types, generics, effects, contracts, mutability and sharing.
 // Annotates the AST for the backends and instantiates generic declarations on demand.
+import { readdirSync, readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+// Which standard library module each function lives in, for the hint on an unknown function.
+const STD_HOME = new Map();
+try {
+  const dir = join(dirname(fileURLToPath(import.meta.url)), '..', 'std');
+  for (const f of readdirSync(dir)) {
+    if (!f.endsWith('.avq') || f === 'core.avq') continue;
+    for (const m of readFileSync(join(dir, f), 'utf8').matchAll(/^fn ([a-z_0-9]+)/gm)) STD_HOME.set(m[1], `std/${f.slice(0, -4)}`);
+  }
+} catch { /* the hint is optional */ }
 import { elemOf, isArr, isMap, mangle, mapParts, showType, substType, typeArgs, typeHead, unify, walk } from './types.mjs';
 
 export const EFFECTS = new Set(['io', 'time', 'fs', 'net']);
@@ -911,7 +923,8 @@ export function check(program, diags) {
         lookup(e.name) ? `'${e.name}' is a variable, not a function`
           : td && td.kind === 'Struct' ? `'${e.name}' is a struct; build it with named fields: ${e.name}(${td.fields.map((x) => `${x.name}: ...`).join(', ')})`
             : v ? `'${e.name}' is an enum variant; build it with named fields: ${e.name}(${v.decl.variants[v.index].fields.map((x) => `${x.name}: ...`).join(', ')})`
-              : `built-ins are: ${[...BUILTINS].join(', ')}`);
+              : STD_HOME.has(e.name) ? `'${e.name}' is in ${STD_HOME.get(e.name)}; add: import "${STD_HOME.get(e.name)}"`
+                : `built-ins are: ${[...BUILTINS].join(', ')}`);
       e.args.forEach((a) => expr(a));
       return '?';
     }

@@ -1,0 +1,123 @@
+import "std/strings"
+
+// Cell index: letter * 9 + (digit - 1), so 0 to 233 in name order.
+// state: 0 not visited, 1 being worked out, 2 done.
+// Parser state st: st[0] = position in the formula, st[1] = 1 when a cyclic value was needed.
+
+fn ref_value(d: Int, forms: [Str], state: mut [Int], vals: mut [Int], cyc: mut [Bool], st: mut [Int]) -> Int {
+  if forms[d] == "" { return 0 }
+  if state[d] == 0 {
+    eval_cell(d, forms, state, vals, cyc)
+  }
+  if state[d] == 1 {
+    st[1] = 1
+    return 0
+  }
+  if cyc[d] {
+    st[1] = 1
+    return 0
+  }
+  return vals[d]
+}
+
+fn expr_primary(f: Str, forms: [Str], state: mut [Int], vals: mut [Int], cyc: mut [Bool], st: mut [Int]) -> Int {
+  let c = byte_at(f, st[0])
+  if c == 40 {
+    st[0] = st[0] + 1
+    let inner = expr_sum(f, forms, state, vals, cyc, st)
+    st[0] = st[0] + 1
+    return inner
+  }
+  if c >= 65 and c <= 90 {
+    let d = byte_at(f, st[0] + 1)
+    let k = (c - 65) * 9 + (d - 49)
+    st[0] = st[0] + 2
+    return ref_value(k, forms, state, vals, cyc, st)
+  }
+  let start = st[0]
+  while st[0] < len(f) and byte_at(f, st[0]) >= 48 and byte_at(f, st[0]) <= 57 {
+    st[0] = st[0] + 1
+  }
+  return unwrap_or(parse_int(substr(f, start, st[0])), 0)
+}
+
+fn expr_unary(f: Str, forms: [Str], state: mut [Int], vals: mut [Int], cyc: mut [Bool], st: mut [Int]) -> Int {
+  if byte_at(f, st[0]) == 45 {
+    st[0] = st[0] + 1
+    let negated = expr_unary(f, forms, state, vals, cyc, st)
+    if st[1] != 0 { return 0 }
+    return 0 - negated
+  }
+  return expr_primary(f, forms, state, vals, cyc, st)
+}
+
+fn expr_term(f: Str, forms: [Str], state: mut [Int], vals: mut [Int], cyc: mut [Bool], st: mut [Int]) -> Int {
+  var acc = expr_unary(f, forms, state, vals, cyc, st)
+  while st[0] < len(f) and byte_at(f, st[0]) == 42 {
+    st[0] = st[0] + 1
+    let rhs = expr_unary(f, forms, state, vals, cyc, st)
+    if st[1] == 0 {
+      acc = acc * rhs
+    }
+  }
+  return acc
+}
+
+fn expr_sum(f: Str, forms: [Str], state: mut [Int], vals: mut [Int], cyc: mut [Bool], st: mut [Int]) -> Int {
+  var acc = expr_term(f, forms, state, vals, cyc, st)
+  while st[0] < len(f) and (byte_at(f, st[0]) == 43 or byte_at(f, st[0]) == 45) {
+    let op = byte_at(f, st[0])
+    st[0] = st[0] + 1
+    let rhs = expr_term(f, forms, state, vals, cyc, st)
+    if st[1] == 0 {
+      if op == 43 {
+        acc = acc + rhs
+      } else {
+        acc = acc - rhs
+      }
+    }
+  }
+  return acc
+}
+
+fn eval_cell(c: Int, forms: [Str], state: mut [Int], vals: mut [Int], cyc: mut [Bool]) {
+  state[c] = 1
+  var st: [Int] = [0, 0]
+  let v = expr_sum(forms[c], forms, state, vals, cyc, st)
+  if st[1] == 1 {
+    cyc[c] = true
+  } else {
+    vals[c] = v
+  }
+  state[c] = 2
+}
+
+fn sheet(cells: Str) -> Str {
+  var forms: [Str] = array(234, "")
+  let parts = split(cells, ";")
+  for i in 0..len(parts) {
+    let seg = parts[i]
+    if len(seg) >= 4 {
+      let k = (byte_at(seg, 0) - 65) * 9 + (byte_at(seg, 1) - 49)
+      forms[k] = substr(seg, 3, len(seg))
+    }
+  }
+  var state: [Int] = array(234, 0)
+  var vals: [Int] = array(234, 0)
+  var cyc: [Bool] = array(234, false)
+  var outs: [Str] = []
+  for k in 0..234 {
+    if forms[k] != "" {
+      if state[k] == 0 {
+        eval_cell(k, forms, state, vals, cyc)
+      }
+      let label = chr(65 + k / 9) + str(k % 9 + 1)
+      if cyc[k] {
+        push(outs, label + "=#CYCLE")
+      } else {
+        push(outs, label + "=" + str(vals[k]))
+      }
+    }
+  }
+  return join(outs, ",")
+}

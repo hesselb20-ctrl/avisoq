@@ -6,3 +6,4 @@ agentbench/work/*/round*/
 *.tgz
 node_modules/
 agentbench/work-hard/
+agentbench/work-expert/

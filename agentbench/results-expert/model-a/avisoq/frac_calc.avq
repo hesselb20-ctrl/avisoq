@@ -1,0 +1,121 @@
+struct Frac { n: Int, d: Int }
+
+fn gcd_of(a: Int, b: Int) -> Int {
+  var x = a
+  var y = b
+  if x < 0 { x = -x }
+  if y < 0 { y = -y }
+  while y != 0 {
+    let t = x % y
+    x = y
+    y = t
+  }
+  return x
+}
+
+fn make(n: Int, d: Int) -> Frac {
+  var nn = n
+  var dd = d
+  if dd < 0 {
+    nn = -nn
+    dd = -dd
+  }
+  let g = gcd_of(nn, dd)
+  if g > 1 { return Frac(n: nn / g, d: dd / g) }
+  return Frac(n: nn, d: dd)
+}
+
+fn skip_ws(s: Str, st: mut [Int]) {
+  while st[0] < len(s) and byte_at(s, st[0]) == 32 {
+    st[0] = st[0] + 1
+  }
+}
+
+fn peek(s: Str, st: mut [Int]) -> Int {
+  skip_ws(s, st)
+  if st[0] >= len(s) { return -1 }
+  return byte_at(s, st[0])
+}
+
+fn parse_atom(s: Str, st: mut [Int]) -> Frac {
+  let c = peek(s, st)
+  if c == 40 {
+    st[0] = st[0] + 1
+    let v = parse_expr(s, st)
+    skip_ws(s, st)
+    st[0] = st[0] + 1
+    return v
+  }
+  var value = 0
+  while st[0] < len(s) and byte_at(s, st[0]) >= 48 and byte_at(s, st[0]) <= 57 {
+    value = value * 10 + byte_at(s, st[0]) - 48
+    st[0] = st[0] + 1
+  }
+  return Frac(n: value, d: 1)
+}
+
+fn parse_unary(s: Str, st: mut [Int]) -> Frac {
+  if peek(s, st) == 45 {
+    st[0] = st[0] + 1
+    let v = parse_unary(s, st)
+    return Frac(n: -v.n, d: v.d)
+  }
+  return parse_atom(s, st)
+}
+
+fn parse_term(s: Str, st: mut [Int]) -> Frac {
+  var acc = parse_unary(s, st)
+  while peek(s, st) == 42 or peek(s, st) == 47 {
+    let op = byte_at(s, st[0])
+    st[0] = st[0] + 1
+    let r = parse_unary(s, st)
+    if op == 42 {
+      acc = make(acc.n * r.n, acc.d * r.d)
+    } else if r.n == 0 {
+      st[1] = 1
+      acc = Frac(n: 0, d: 1)
+    } else {
+      acc = make(acc.n * r.d, acc.d * r.n)
+    }
+  }
+  return acc
+}
+
+fn parse_expr(s: Str, st: mut [Int]) -> Frac {
+  var acc = parse_term(s, st)
+  while peek(s, st) == 43 or peek(s, st) == 45 {
+    let op = byte_at(s, st[0])
+    st[0] = st[0] + 1
+    let r = parse_term(s, st)
+    if op == 43 {
+      acc = make(acc.n * r.d + r.n * acc.d, acc.d * r.d)
+    } else {
+      acc = make(acc.n * r.d - r.n * acc.d, acc.d * r.d)
+    }
+  }
+  return acc
+}
+
+fn frac_calc(s: Str) -> Str {
+  var st = [0, 0]
+  let v = parse_expr(s, st)
+  if st[1] == 1 { return "div0" }
+  if v.d == 1 { return str(v.n) }
+  return str(v.n) + "/" + str(v.d)
+}
+
+test "basic" {
+  assert frac_calc("1/2") == "1/2"
+  assert frac_calc("1/2+1/2") == "1"
+  assert frac_calc("-1/2") == "-1/2"
+  assert frac_calc(" 1 / 0 ") == "div0"
+  assert frac_calc("2*(1/0)") == "div0"
+  assert frac_calc("0/5") == "0"
+  assert frac_calc("1/3 - 1/2") == "-1/6"
+  assert frac_calc("--3") == "3"
+  assert frac_calc("-(2/4)*-2") == "1"
+  assert frac_calc("1/(1/3)") == "3"
+  assert frac_calc("8/4/2") == "1"
+  assert frac_calc("2-3-4") == "-5"
+  assert frac_calc("1/(2-2)") == "div0"
+}

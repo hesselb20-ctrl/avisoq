@@ -1,0 +1,110 @@
+import "std/strings"
+
+// Magnitudes are arrays of decimal digits, most significant first.
+
+fn strip_zeros(xs: [Int]) -> [Int] {
+  if len(xs) == 0 { return [0] }
+  var first = 0
+  while first < len(xs) - 1 and xs[first] == 0 {
+    first = first + 1
+  }
+  var out: [Int] = []
+  for i in first..len(xs) {
+    push(out, xs[i])
+  }
+  return out
+}
+
+fn cmp_mag(x: [Int], y: [Int]) -> Int {
+  if len(x) != len(y) {
+    if len(x) < len(y) { return -1 }
+    return 1
+  }
+  for i in 0..len(x) {
+    if x[i] != y[i] {
+      if x[i] < y[i] { return -1 }
+      return 1
+    }
+  }
+  return 0
+}
+
+// x - y for x >= y (both without leading zeros).
+fn sub_mag(x: [Int], y: [Int]) -> [Int] {
+  var out: [Int] = array(len(x), 0)
+  var i = len(x) - 1
+  var j = len(y) - 1
+  var borrow = 0
+  while i >= 0 {
+    var digit = x[i] - borrow
+    if j >= 0 {
+      digit = digit - y[j]
+    }
+    if digit < 0 {
+      digit = digit + 10
+      borrow = 1
+    } else {
+      borrow = 0
+    }
+    out[i] = digit
+    i = i - 1
+    j = j - 1
+  }
+  return strip_zeros(out)
+}
+
+fn digits_of(s: Str) -> [Int] {
+  var out: [Int] = []
+  for i in 0..len(s) {
+    push(out, byte_at(s, i) - 48)
+  }
+  return out
+}
+
+fn digits_text(xs: [Int]) -> Str {
+  var out = ""
+  for i in 0..len(xs) {
+    out = out + str(xs[i])
+  }
+  return out
+}
+
+fn big_divmod(a: Str, b: Str) -> Str {
+  let a_neg = byte_at(a, 0) == 45
+  let b_neg = byte_at(b, 0) == 45
+  var a_body = a
+  if a_neg {
+    a_body = substr(a, 1, len(a))
+  }
+  var b_body = b
+  if b_neg {
+    b_body = substr(b, 1, len(b))
+  }
+  let dividend = digits_of(a_body)
+  let divisor = digits_of(b_body)
+  // Long division one digit at a time; each quotient digit is found by repeated subtraction.
+  var rem: [Int] = [0]
+  var quo: [Int] = []
+  for i in 0..len(dividend) {
+    push(rem, dividend[i])
+    rem = strip_zeros(rem)
+    var k = 0
+    while cmp_mag(rem, divisor) >= 0 {
+      rem = sub_mag(rem, divisor)
+      k = k + 1
+    }
+    push(quo, k)
+  }
+  quo = strip_zeros(quo)
+  let quo_zero = len(quo) == 1 and quo[0] == 0
+  let rem_zero = len(rem) == 1 and rem[0] == 0
+  var text = ""
+  if a_neg != b_neg and not quo_zero {
+    text = "-"
+  }
+  text = text + digits_text(quo) + " "
+  if a_neg and not rem_zero {
+    text = text + "-"
+  }
+  return text + digits_text(rem)
+}

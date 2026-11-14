@@ -6,10 +6,10 @@ A small, fast, safe programming language designed to be written and verified by 
 
 <img src=".github/assets/figure/scene.webp" width="100%" alt="Three beats: a mandelbrot benchmark computed on one thread with every check on in 112 ms against 108 ms for C++; the same loop written as a sum, spread over 8 threads and 8 lanes; and the result, 4.6 ms against 15 ms for C++ parallelised by hand with OpenMP.">
 
-Version 0.6. One front end, two backends (native machine code through GCC, and sandboxed
+Version 0.6.1. One front end, two backends (native machine code through GCC, and sandboxed
 WebAssembly), a standard library written in Avisoq, a formatter, a compile-time contract prover,
 a language server, a package manager and a differential fuzzer. The test suites pass on both
-backends: 335 compiler cases each, plus 26 editor, 17 package and 10 sandbox tests.
+backends: 338 compiler cases each, plus 26 editor, 17 package and 10 sandbox tests.
 
 ```
 import "std/strings"
@@ -106,7 +106,7 @@ module itself and runs it in a sandbox. Both keep every run-time check.
 - **Adversarial memory tests.** Programs that would exhaust memory without reclamation, and
   programs that check live data survives it.
 
-<img src=".github/assets/how/scene.webp" width="100%" alt="335 test programs go through one front end, are compiled by both the native and the WebAssembly backend, and all 335 print the same on both. The fuzzer found two mismatches, both fixed.">
+<img src=".github/assets/how/scene.webp" width="100%" alt="338 test programs go through one front end, are compiled by both the native and the WebAssembly backend, and all 338 print the same on both. The fuzzer found two mismatches, both fixed.">
 
 ## Capabilities
 
@@ -145,6 +145,11 @@ friction the agents reported (no `break`, no checked arithmetic, and more) is li
 Avisoq agents again scored 13 of 13 and took about as long as the Python and Rust agents
 (109 s and 219 s, against 92 to 174 s). That is one run per model, so treat it as a direction,
 not a proof; the solutions are still about twice as long as Python's.
+
+A third, expert round (10 larger programs, 373 hidden tests) produced the first failure, and
+it was Avisoq's: 19 of 20 correct against 20 of 20 for Python and for Rust. The failure was a
+loud overflow stop, not a wrong answer. That round also exposed two compiler bugs, both fixed
+in 0.6.1. Avisoq is not yet better for agents than Python or Rust on anything measured here.
 
 <img src=".github/assets/agents/scene.webp" width="100%" alt="Two models each solved 24 of 24 tasks on the first attempt in Avisoq, Python and Rust. The Avisoq solutions were the longest: about 380 lines against 200 for Python and 330 for Rust.">
 

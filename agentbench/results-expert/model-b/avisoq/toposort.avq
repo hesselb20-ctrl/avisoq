@@ -1,0 +1,41 @@
+// Repeatedly takes the lowest-numbered task whose prerequisites are all taken.
+// Edges are kept as linked lists (head, next, target) and indegree counts include repeated pairs.
+
+fn toposort(n: Int, edges: [Int]) -> [Int] {
+  let m = len(edges) / 2
+  var head: [Int] = array(n, -1)
+  var nxt: [Int] = array(m, -1)
+  var targets: [Int] = array(m, 0)
+  var indeg: [Int] = array(n, 0)
+  for e in 0..m {
+    let from_task = edges[2 * e]
+    let to_task = edges[2 * e + 1]
+    targets[e] = to_task
+    nxt[e] = head[from_task]
+    head[from_task] = e
+    indeg[to_task] = indeg[to_task] + 1
+  }
+  var taken: [Bool] = array(n, false)
+  var order: [Int] = []
+  for round in 0..n {
+    var pick = -1
+    for t in 0..n {
+      if taken[t] == false and indeg[t] == 0 {
+        pick = t
+        break
+      }
+    }
+    if pick < 0 {
+      return [-1]
+    }
+    taken[pick] = true
+    push(order, pick)
+    var edge = head[pick]
+    while edge >= 0 {
+      let after = targets[edge]
+      indeg[after] = indeg[after] - 1
+      edge = nxt[edge]
+    }
+  }
+  return order
+}

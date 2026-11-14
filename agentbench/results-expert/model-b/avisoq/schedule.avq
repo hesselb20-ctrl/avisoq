@@ -1,0 +1,79 @@
+import "std/strings"
+import "std/arrays"
+
+// A valid entry HH:MM-HH:MM becomes one Int: start * 2048 + end, in minutes from midnight.
+// Any other entry gives -1.
+
+fn is_digit_at(e: Str, i: Int) -> Bool {
+  let c = byte_at(e, i)
+  return c >= 48 and c <= 57
+}
+
+fn range_key(e: Str) -> Int {
+  if len(e) != 11 { return -1 }
+  if byte_at(e, 2) != 58 or byte_at(e, 8) != 58 or byte_at(e, 5) != 45 { return -1 }
+  for i in 0..11 {
+    if i != 2 and i != 5 and i != 8 {
+      if not is_digit_at(e, i) { return -1 }
+    }
+  }
+  let h1 = (byte_at(e, 0) - 48) * 10 + (byte_at(e, 1) - 48)
+  let m1 = (byte_at(e, 3) - 48) * 10 + (byte_at(e, 4) - 48)
+  let h2 = (byte_at(e, 6) - 48) * 10 + (byte_at(e, 7) - 48)
+  let m2 = (byte_at(e, 9) - 48) * 10 + (byte_at(e, 10) - 48)
+  if h1 > 23 or h2 > 23 or m1 > 59 or m2 > 59 { return -1 }
+  let start_min = h1 * 60 + m1
+  let end_min = h2 * 60 + m2
+  if end_min <= start_min { return -1 }
+  return start_min * 2048 + end_min
+}
+
+fn pad2(v: Int) -> Str {
+  if v < 10 { return "0" + str(v) }
+  return str(v)
+}
+
+fn clock(minutes: Int) -> Str {
+  return pad2(minutes / 60) + ":" + pad2(minutes % 60)
+}
+
+fn schedule(s: Str) -> Str {
+  if len(s) == 0 { return ";total=0;invalid=0" }
+  let parts = split(s, ",")
+  var packed: [Int] = []
+  var invalid = 0
+  for i in 0..len(parts) {
+    let key = range_key(parts[i])
+    if key < 0 {
+      invalid = invalid + 1
+    } else {
+      push(packed, key)
+    }
+  }
+  sort(packed)
+  var starts: [Int] = []
+  var ends: [Int] = []
+  for i in 0..len(packed) {
+    let from_min = packed[i] / 2048
+    let to_min = packed[i] % 2048
+    if len(starts) == 0 {
+      push(starts, from_min)
+      push(ends, to_min)
+    } else {
+      let last = len(starts) - 1
+      if from_min > ends[last] {
+        push(starts, from_min)
+        push(ends, to_min)
+      } else if to_min > ends[last] {
+        ends[last] = to_min
+      }
+    }
+  }
+  var shown: [Str] = []
+  var total = 0
+  for i in 0..len(starts) {
+    push(shown, clock(starts[i]) + "-" + clock(ends[i]))
+    total = total + ends[i] - starts[i]
+  }
+  return join(shown, ",") + ";total=" + str(total) + ";invalid=" + str(invalid)
+}
