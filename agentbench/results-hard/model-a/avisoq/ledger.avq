@@ -1,0 +1,85 @@
+import "std/strings"
+import "std/arrays"
+
+fn led_num(s: Str) -> Int {
+  var i = 0
+  var neg = false
+  if len(s) > 0 and byte_at(s, 0) == 45 {
+    neg = true
+    i = 1
+  }
+  var v = 0
+  while i < len(s) {
+    v = v * 10 - (byte_at(s, i) - 48)
+    i = i + 1
+  }
+  if neg { return v }
+  return -v
+}
+
+// returns true if accepted
+fn apply_op(op: Str, acc: mut Map[Str, Int]) -> Bool {
+  let w = split(trim(op), " ")
+  let cmd = w[0]
+  if cmd == "open" and len(w) == 2 {
+    if has(acc, w[1]) { return false }
+    put(acc, w[1], 0)
+    return true
+  }
+  if (cmd == "deposit" or cmd == "withdraw") and len(w) == 3 {
+    if not has(acc, w[1]) { return false }
+    let amt = led_num(w[2])
+    if amt <= 0 { return false }
+    let bal = get(acc, w[1])
+    if cmd == "deposit" {
+      put(acc, w[1], bal + amt)
+      return true
+    }
+    if bal < amt { return false }
+    put(acc, w[1], bal - amt)
+    return true
+  }
+  if cmd == "transfer" and len(w) == 4 {
+    if not has(acc, w[1]) or not has(acc, w[2]) { return false }
+    if w[1] == w[2] { return false }
+    let amt = led_num(w[3])
+    if amt <= 0 { return false }
+    let bal = get(acc, w[1])
+    if bal < amt { return false }
+    put(acc, w[1], bal - amt)
+    put(acc, w[2], get(acc, w[2]) + amt)
+    return true
+  }
+  if cmd == "close" and len(w) == 2 {
+    if not has(acc, w[1]) { return false }
+    if get(acc, w[1]) != 0 { return false }
+    remove(acc, w[1])
+    return true
+  }
+  return false
+}
+
+fn ledger(ops: Str) -> Str {
+  var acc: Map[Str, Int] = {}
+  var rejected = 0
+  if len(ops) > 0 {
+    let list = split(ops, ";")
+    for i in 0..len(list) {
+      if not apply_op(list[i], acc) { rejected = rejected + 1 }
+    }
+  }
+  var names = keys(acc)
+  sort(names)
+  var parts: [Str] = []
+  for i in 0..len(names) {
+    push(parts, names[i] + "=" + str(get(acc, names[i])))
+  }
+  return join(parts, ",") + ";rejected=" + str(rejected)
+}
+
+test "ledger" {
+  assert ledger("") == ";rejected=0"
+  assert ledger("open a;open b;deposit a 10;transfer a b 4") == "a=6,b=4;rejected=0"
+  assert ledger("open a;open a;withdraw a 1;close a;close a") == ";rejected=3"
+  assert ledger("open a;deposit a -5;transfer a a 1") == "a=0;rejected=2"
+}

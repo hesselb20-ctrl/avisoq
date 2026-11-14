@@ -1,0 +1,43 @@
+// Relaxes the distance of node v to nd when that is shorter (-1 means unknown).
+fn relax(dist: mut [Int], v: Int, nd: Int) {
+  if dist[v] == -1 {
+    dist[v] = nd
+  } else {
+    if nd < dist[v] { dist[v] = nd }
+  }
+}
+
+// Unvisited node with a known distance that is smallest, or -1.
+fn pick(dist: [Int], visited: [Bool], n: Int) -> Int {
+  var best = -1
+  for v in 0..n {
+    if not visited[v] and dist[v] != -1 {
+      if best == -1 {
+        best = v
+      } else {
+        if dist[v] < dist[best] { best = v }
+      }
+    }
+  }
+  return best
+}
+
+fn shortest_path(n: Int, edges: [Int]) -> Int {
+  var dist: [Int] = array(n, -1)
+  var visited: [Bool] = array(n, false)
+  dist[0] = 0
+  let m = len(edges) / 3
+  var u = pick(dist, visited, n)
+  while u != -1 {
+    visited[u] = true
+    for e in 0..m {
+      let a = edges[3 * e]
+      let b = edges[3 * e + 1]
+      let w = edges[3 * e + 2]
+      if a == u { relax(dist, b, dist[u] + w) }
+      if b == u { relax(dist, a, dist[u] + w) }
+    }
+    u = pick(dist, visited, n)
+  }
+  return dist[n - 1]
+}

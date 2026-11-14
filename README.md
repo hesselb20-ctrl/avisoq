@@ -135,6 +135,14 @@ in Python and Rust. So a model can learn the language from one page, but this be
 easy to show an advantage over existing languages, and Avisoq's solutions were about twice
 as long as Python's.
 
+A harder round followed: 13 small programs (an expression evaluator, a stack-machine
+interpreter, shortest path and others), with each agent free to compile and test before
+handing in. Both models again scored 13 of 13 in all three languages. Avisoq cost more: the
+runs took two to seven times as long as Python's or Rust's. So the honest claim today is that
+agents can write Avisoq reliably, not that they write it better than other languages. The
+friction the agents reported (no `break`, no checked arithmetic, and more) is listed in
+[`agentbench/README.md`](agentbench/README.md).
+
 <img src=".github/assets/agents/scene.webp" width="100%" alt="Two models each solved 24 of 24 tasks on the first attempt in Avisoq, Python and Rust. The Avisoq solutions were the longest: about 380 lines against 200 for Python and 330 for Rust.">
 
 ## Contracts proven at compile time

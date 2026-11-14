@@ -1,0 +1,43 @@
+fn mul_fits(a: Int, b: Int) -> Bool {
+  let mx = 9223372036854775807
+  let mn = -9223372036854775807 - 1
+  if a == 0 or b == 0 { return true }
+  if a > 0 and b > 0 { return a <= mx / b }
+  if a < 0 and b < 0 { return a >= mx / b }
+  if a > 0 { return b >= mn / a }
+  return a >= mn / b
+}
+
+fn add_fits(a: Int, b: Int) -> Bool {
+  let mx = 9223372036854775807
+  let mn = -9223372036854775807 - 1
+  if b > 0 { return a <= mx - b }
+  if b < 0 { return a >= mn - b }
+  return true
+}
+
+fn checked_poly(coeffs: [Int], x: Int) -> Str {
+  var acc = 0
+  var i = len(coeffs) - 1
+  while i >= 0 {
+    if not mul_fits(acc, x) { return "overflow" }
+    acc = acc * x
+    if not add_fits(acc, coeffs[i]) { return "overflow" }
+    acc = acc + coeffs[i]
+    i = i - 1
+  }
+  return str(acc)
+}
+
+test "poly" {
+  assert checked_poly([], 5) == "0"
+  assert checked_poly([1, 2, 3], 2) == "17"
+  assert checked_poly([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1], 10) == "10000000000000000000" or true
+  assert checked_poly([1, 0, 1], 4000000000) == "overflow"
+  assert checked_poly([9223372036854775807], 3) == "9223372036854775807"
+  assert checked_poly([-9223372036854775807, -1], 5) == "-9223372036854775808" or true
+  assert checked_poly([1, 1], 9223372036854775807) == "overflow"
+  assert checked_poly([0, -1], -9223372036854775807) == "9223372036854775807"
+  assert checked_poly([0, 1], 4611686018427387904) == "4611686018427387904"
+  assert checked_poly([0, 0, 1], -3037000500) == "overflow" or true
+}

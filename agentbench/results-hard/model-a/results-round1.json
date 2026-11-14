@@ -1,0 +1,47 @@
+{
+  "avisoq": {
+    "eval_expr": "pass",
+    "stack_vm": "pass",
+    "ledger": "pass",
+    "det": "pass",
+    "life": "pass",
+    "shortest_path": "pass",
+    "checked_poly": "pass",
+    "add_days": "pass",
+    "group_csv": "pass",
+    "big_add": "pass",
+    "lru": "pass",
+    "wrap": "pass",
+    "longest_valid": "pass"
+  },
+  "python": {
+    "eval_expr": "pass",
+    "stack_vm": "pass",
+    "ledger": "pass",
+    "det": "pass",
+    "life": "pass",
+    "shortest_path": "pass",
+    "checked_poly": "pass",
+    "add_days": "pass",
+    "group_csv": "pass",
+    "big_add": "pass",
+    "lru": "pass",
+    "wrap": "pass",
+    "longest_valid": "pass"
+  },
+  "rust": {
+    "eval_expr": "pass",
+    "stack_vm": "pass",
+    "ledger": "pass",
+    "det": "pass",
+    "life": "pass",
+    "shortest_path": "pass",
+    "checked_poly": "pass",
+    "add_days": "pass",
+    "group_csv": "pass",
+    "big_add": "pass",
+    "lru": "pass",
+    "wrap": "pass",
+    "longest_valid": "pass"
+  }
+}

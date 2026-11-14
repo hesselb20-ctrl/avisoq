@@ -1,0 +1,37 @@
+fn closer_of(b: Int) -> Int {
+  if b == 40 { return 41 }
+  if b == 91 { return 93 }
+  return 125
+}
+
+fn longest_valid(s: Str) -> Int {
+  var stack = [-1]
+  var best = 0
+  for i in 0..len(s) {
+    let b = byte_at(s, i)
+    if b == 40 or b == 91 or b == 123 {
+      push(stack, i)
+    } else {
+      let top = stack[len(stack) - 1]
+      if len(stack) > 1 and closer_of(byte_at(s, top)) == b {
+        let d = pop(stack)
+        let l = i - stack[len(stack) - 1]
+        if l > best { best = l }
+      } else {
+        stack = [i]
+      }
+    }
+  }
+  return best
+}
+
+test "lv" {
+  assert longest_valid("") == 0
+  assert longest_valid("()") == 2
+  assert longest_valid(")()())") == 4
+  assert longest_valid("([)]") == 0
+  assert longest_valid("{[()]}()") == 8
+  assert longest_valid("(()") == 2
+  assert longest_valid("([]") == 2
+  assert longest_valid("]") == 0
+}

@@ -1,0 +1,102 @@
+// Dijkstra with a binary heap over (dist, node) pairs stored in two arrays.
+fn heap_push(hd: mut [Int], hn: mut [Int], d: Int, v: Int) {
+  push(hd, d)
+  push(hn, v)
+  var i = len(hd) - 1
+  while i > 0 {
+    let p = (i - 1) / 2
+    if hd[p] > hd[i] {
+      let td = hd[p]
+      let tn = hn[p]
+      hd[p] = hd[i]
+      hn[p] = hn[i]
+      hd[i] = td
+      hn[i] = tn
+      i = p
+    } else {
+      return
+    }
+  }
+}
+
+// removes the top; caller reads it beforehand
+fn heap_pop(hd: mut [Int], hn: mut [Int]) {
+  let last = len(hd) - 1
+  hd[0] = hd[last]
+  hn[0] = hn[last]
+  let a = pop(hd)
+  let b = pop(hn)
+  let n = len(hd)
+  var i = 0
+  while 2 * i + 1 < n {
+    var c = 2 * i + 1
+    if c + 1 < n and hd[c + 1] < hd[c] { c = c + 1 }
+    if hd[c] < hd[i] {
+      let td = hd[c]
+      let tn = hn[c]
+      hd[c] = hd[i]
+      hn[c] = hn[i]
+      hd[i] = td
+      hn[i] = tn
+      i = c
+    } else {
+      return
+    }
+  }
+}
+
+fn shortest_path(n: Int, edges: [Int]) -> Int {
+  if n == 1 { return 0 }
+  let m = len(edges) / 3
+  var start = array(n + 1, 0)
+  for e in 0..m {
+    start[edges[3 * e] + 1] = start[edges[3 * e] + 1] + 1
+    start[edges[3 * e + 1] + 1] = start[edges[3 * e + 1] + 1] + 1
+  }
+  for i in 0..n {
+    start[i + 1] = start[i + 1] + start[i]
+  }
+  var fill = array(n, 0)
+  var to = array(2 * m, 0)
+  var wt = array(2 * m, 0)
+  for e in 0..m {
+    let a = edges[3 * e]
+    let b = edges[3 * e + 1]
+    let l = edges[3 * e + 2]
+    to[start[a] + fill[a]] = b
+    wt[start[a] + fill[a]] = l
+    fill[a] = fill[a] + 1
+    to[start[b] + fill[b]] = a
+    wt[start[b] + fill[b]] = l
+    fill[b] = fill[b] + 1
+  }
+  var dist = array(n, -1)
+  var hd: [Int] = []
+  var hn: [Int] = []
+  dist[0] = 0
+  heap_push(hd, hn, 0, 0)
+  while len(hd) > 0 {
+    let d = hd[0]
+    let u = hn[0]
+    heap_pop(hd, hn)
+    if d == dist[u] {
+      for k in start[u]..start[u + 1] {
+        let v = to[k]
+        let nd = d + wt[k]
+        if dist[v] < 0 or nd < dist[v] {
+          dist[v] = nd
+          heap_push(hd, hn, nd, v)
+        }
+      }
+    }
+  }
+  return dist[n - 1]
+}
+
+test "sp" {
+  assert shortest_path(1, []) == 0
+  assert shortest_path(2, []) == -1
+  assert shortest_path(3, [0, 1, 5, 1, 2, 5, 0, 2, 20]) == 10
+  assert shortest_path(3, [0, 0, 1, 0, 1, 0, 1, 2, 0, 1, 2, 3]) == 0
+  assert shortest_path(4, [0, 1, 1, 2, 3, 1]) == -1
+}

@@ -20,10 +20,14 @@ import { homedir, tmpdir } from 'node:os';
 import { delimiter, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { findGcc } from '../src/compiler.mjs';
-import { TASKS } from './tasks.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const work = join(here, 'work');
+// --set hard uses tasks-hard.mjs; --work <folder> (relative to agentbench/) keeps runs apart.
+const flag = (name, fallback) => { const i = process.argv.indexOf(`--${name}`); return i > 0 ? process.argv[i + 1] : fallback; };
+const set = flag('set', '');
+const workName = flag('work', 'work');
+const { TASKS } = await import(set ? `./tasks-${set}.mjs` : './tasks.mjs');
+const work = join(here, workName);
 const cli = join(here, '..', 'src', 'cli.mjs');
 const LANGS = {
   avisoq: { ext: 'avq', name: 'Avisoq', types: { Int: 'Int', Bool: 'Bool', Str: 'Str', '[Int]': '[Int]' } },
@@ -57,7 +61,7 @@ const call = (lang, t, args) => `${t.id}(${args.map((a) => literal(lang, a)).joi
 function prepare() {
   for (const [lang, L] of Object.entries(LANGS)) {
     mkdirSync(join(work, lang, 'solutions'), { recursive: true });
-    let md = `# Tasks: ${L.name}\n\nWrite one file per task in \`agentbench/work/${lang}/solutions/\`, named \`<task id>.${L.ext}\`.\n`
+    let md = `# Tasks: ${L.name}\n\nWrite one file per task in \`agentbench/${workName}/${lang}/solutions/\`, named \`<task id>.${L.ext}\`.\n`
       + 'Each file must define the function with exactly the signature shown. It may define helper functions and import from the standard library. '
       + `${lang === 'avisoq' ? 'It must not define `main`. ' : lang === 'rust' ? 'It must not define `main` and must use only the standard library (no crates). ' : 'It must not print anything or run code at import time. '}`
       + 'The function is tested against hidden inputs, including edge cases, so follow the statement exactly.\n\n';
@@ -172,7 +176,7 @@ function report() {
   for (let r = 1; existsSync(join(work, `results-round${r}.json`)); r++) summary(JSON.parse(readFileSync(join(work, `results-round${r}.json`), 'utf8')), `Round ${r}`);
 }
 
-const [cmd, arg] = process.argv.slice(2);
+const [cmd, arg] = process.argv.slice(2).filter((a, i, all) => !a.startsWith('--') && !(all[i - 1] ?? '').startsWith('--'));
 if (cmd === 'prepare') prepare();
 else if (cmd === 'grade') grade(Number(arg ?? 1));
 else if (cmd === 'report') report();

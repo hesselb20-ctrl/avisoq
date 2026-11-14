@@ -1,0 +1,61 @@
+import "std/strings"
+import "std/arrays"
+
+// Applies one operation; returns false when it is rejected (and changes nothing).
+fn apply_op(accts: mut Map[Str, Int], op: Str) -> Bool {
+  let w = split(op, " ")
+  let n = len(w)
+  let cmd = w[0]
+  let last = unwrap_or(parse_int(w[n - 1]), 0)
+  if cmd == "open" and n == 2 {
+    if has(accts, w[1]) { return false }
+    put(accts, w[1], 0)
+    return true
+  }
+  if cmd == "close" and n == 2 {
+    if not has(accts, w[1]) { return false }
+    if get(accts, w[1]) != 0 { return false }
+    remove(accts, w[1])
+    return true
+  }
+  if cmd == "deposit" and n == 3 {
+    if not has(accts, w[1]) { return false }
+    if last <= 0 { return false }
+    put(accts, w[1], get(accts, w[1]) + last)
+    return true
+  }
+  if cmd == "withdraw" and n == 3 {
+    if not has(accts, w[1]) { return false }
+    if last <= 0 { return false }
+    if get(accts, w[1]) < last { return false }
+    put(accts, w[1], get(accts, w[1]) - last)
+    return true
+  }
+  if cmd == "transfer" and n == 4 {
+    if w[1] == w[2] { return false }
+    if not has(accts, w[1]) { return false }
+    if not has(accts, w[2]) { return false }
+    if last <= 0 { return false }
+    if get(accts, w[1]) < last { return false }
+    put(accts, w[1], get(accts, w[1]) - last)
+    put(accts, w[2], get(accts, w[2]) + last)
+    return true
+  }
+  return false
+}
+
+fn ledger(ops: Str) -> Str {
+  var accts: Map[Str, Int] = {}
+  var rejected = 0
+  var parts: [Str] = []
+  if len(ops) > 0 { parts = split(ops, ";") }
+  for i in 0..len(parts) {
+    if not apply_op(accts, parts[i]) { rejected = rejected + 1 }
+  }
+  let names = sorted(keys(accts))
+  var items: [Str] = []
+  for i in 0..len(names) {
+    push(items, names[i] + "=" + str(get(accts, names[i])))
+  }
+  return join(items, ",") + ";rejected=" + str(rejected)
+}

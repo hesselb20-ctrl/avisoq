@@ -5,3 +5,4 @@ bench/out/
 agentbench/work/*/round*/
 *.tgz
 node_modules/
+agentbench/work-hard/

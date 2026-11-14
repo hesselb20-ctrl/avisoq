@@ -1,0 +1,61 @@
+fn find_key(ks: [Int], k: Int) -> Int {
+  for i in 0..len(ks) {
+    if ks[i] == k { return i }
+  }
+  return -1
+}
+
+fn lru(capacity: Int, ops: [Int]) -> [Int] {
+  var ks: [Int] = []
+  var vs: [Int] = []
+  var used: [Int] = []
+  var res: [Int] = []
+  var clock = 0
+  var i = 0
+  while i < len(ops) {
+    clock = clock + 1
+    if ops[i] == 0 {
+      let p = find_key(ks, ops[i + 1])
+      if p < 0 {
+        push(res, -1)
+      } else {
+        push(res, vs[p])
+        used[p] = clock
+      }
+      i = i + 2
+    } else {
+      let k = ops[i + 1]
+      let p = find_key(ks, k)
+      if p >= 0 {
+        vs[p] = ops[i + 2]
+        used[p] = clock
+      } else {
+        push(ks, k)
+        push(vs, ops[i + 2])
+        push(used, clock)
+        if len(ks) > capacity {
+          var old = 0
+          for j in 1..len(ks) {
+            if used[j] < used[old] { old = j }
+          }
+          ks[old] = ks[len(ks) - 1]
+          vs[old] = vs[len(vs) - 1]
+          used[old] = used[len(used) - 1]
+          let a = pop(ks)
+          let b = pop(vs)
+          let c = pop(used)
+        }
+      }
+      i = i + 3
+    }
+  }
+  return res
+}
+
+test "lru" {
+  assert len(lru(1, [])) == 0
+  let r = lru(2, [1, 1, 10, 1, 2, 20, 0, 1, 1, 3, 30, 0, 2, 0, 1, 0, 3])
+  assert r[0] == 10 and r[1] == -1 and r[2] == 10 and r[3] == 30
+  let q = lru(1, [1, 5, 5, 1, 5, 6, 0, 5])
+  assert q[0] == 6
+}

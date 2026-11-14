@@ -1,0 +1,41 @@
+import "std/strings"
+
+fn wrap(s: Str, width: Int) -> Str {
+  let words = split(s, " ")
+  var pieces: [Str] = []
+  for i in 0..len(words) {
+    let w = words[i]
+    var p = 0
+    while p < len(w) {
+      var e = p + width
+      if e > len(w) { e = len(w) }
+      push(pieces, substr(w, p, e))
+      p = e
+    }
+  }
+  var lines_out: [Str] = []
+  var cur = ""
+  var has_cur = false
+  for i in 0..len(pieces) {
+    if not has_cur {
+      cur = pieces[i]
+      has_cur = true
+    } else if len(cur) + 1 + len(pieces[i]) <= width {
+      cur = cur + " " + pieces[i]
+    } else {
+      push(lines_out, cur)
+      cur = pieces[i]
+    }
+  }
+  if has_cur { push(lines_out, cur) }
+  return join(lines_out, "|")
+}
+
+test "wrap" {
+  assert wrap("", 5) == ""
+  assert wrap("   ", 5) == ""
+  assert wrap("aaa bb c", 6) == "aaa bb|c"
+  assert wrap("  hello   world ", 5) == "hello|world"
+  assert wrap("abcdefg h", 3) == "abc|def|g h"
+  assert wrap("a b c", 1) == "a|b|c"
+}

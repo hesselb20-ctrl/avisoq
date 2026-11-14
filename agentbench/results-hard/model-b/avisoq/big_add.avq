@@ -1,0 +1,100 @@
+fn is_neg(s: Str) -> Bool {
+  if len(s) == 0 { return false }
+  return byte_at(s, 0) == 45
+}
+
+fn magnitude(s: Str) -> Str {
+  if is_neg(s) { return substr(s, 1, len(s)) }
+  return s
+}
+
+// Digits (no sign, no leading zeros) as an array, least significant first, to text.
+fn digits_to_str(ds: [Int]) -> Str {
+  var out = ""
+  for k in 0..len(ds) {
+    out = str(ds[k]) + out
+  }
+  return out
+}
+
+// Removes leading zeros, keeping at least one digit.
+fn strip_zeros(s: Str) -> Str {
+  var k = 0
+  while k < len(s) - 1 and byte_at(s, k) == 48 {
+    k = k + 1
+  }
+  return substr(s, k, len(s))
+}
+
+// Compares two magnitudes: -1, 0 or 1.
+fn cmp_mag(x: Str, y: Str) -> Int {
+  if len(x) > len(y) { return 1 }
+  if len(x) < len(y) { return -1 }
+  for i in 0..len(x) {
+    let p = byte_at(x, i)
+    let q = byte_at(y, i)
+    if p > q { return 1 }
+    if p < q { return -1 }
+  }
+  return 0
+}
+
+fn add_mag(x: Str, y: Str) -> Str {
+  var i = len(x) - 1
+  var j = len(y) - 1
+  var carry = 0
+  var ds: [Int] = []
+  while i >= 0 or j >= 0 or carry > 0 {
+    var d = carry
+    if i >= 0 { d = d + byte_at(x, i) - 48 }
+    if j >= 0 { d = d + byte_at(y, j) - 48 }
+    push(ds, d % 10)
+    carry = d / 10
+    i = i - 1
+    j = j - 1
+  }
+  return digits_to_str(ds)
+}
+
+// x - y for magnitudes with x >= y.
+fn sub_mag(x: Str, y: Str) -> Str {
+  var i = len(x) - 1
+  var j = len(y) - 1
+  var borrow = 0
+  var ds: [Int] = []
+  while i >= 0 {
+    var d = byte_at(x, i) - 48 - borrow
+    if j >= 0 { d = d - (byte_at(y, j) - 48) }
+    borrow = 0
+    if d < 0 {
+      d = d + 10
+      borrow = 1
+    }
+    push(ds, d)
+    i = i - 1
+    j = j - 1
+  }
+  return strip_zeros(digits_to_str(ds))
+}
+
+fn big_add(a: Str, b: Str) -> Str {
+  let na = is_neg(a)
+  let nb = is_neg(b)
+  let ma = magnitude(a)
+  let mb = magnitude(b)
+  if na == nb {
+    let total = add_mag(ma, mb)
+    if na { return "-" + total }
+    return total
+  }
+  let c = cmp_mag(ma, mb)
+  if c == 0 { return "0" }
+  if c > 0 {
+    let diff = sub_mag(ma, mb)
+    if na { return "-" + diff }
+    return diff
+  }
+  let diff2 = sub_mag(mb, ma)
+  if nb { return "-" + diff2 }
+  return diff2
+}

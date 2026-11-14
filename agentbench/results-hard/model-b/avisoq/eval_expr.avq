@@ -1,0 +1,101 @@
+// st[0] is the read position, st[1] is 1 once a division by zero was seen.
+
+fn peek_byte(s: Str, i: Int) -> Int {
+  if i >= len(s) { return -1 }
+  return byte_at(s, i)
+}
+
+fn skip_spaces(s: Str, st: mut [Int]) {
+  while st[0] < len(s) {
+    if byte_at(s, st[0]) != 32 { return }
+    st[0] = st[0] + 1
+  }
+}
+
+fn parse_number(s: Str, st: mut [Int]) -> Int {
+  var v = 0
+  while st[0] < len(s) {
+    let b = byte_at(s, st[0])
+    if b < 48 or b > 57 { return v }
+    v = v * 10 + (b - 48)
+    st[0] = st[0] + 1
+  }
+  return v
+}
+
+fn parse_primary(s: Str, st: mut [Int]) -> Int {
+  skip_spaces(s, st)
+  if peek_byte(s, st[0]) == 40 {
+    st[0] = st[0] + 1
+    let inner = parse_expr(s, st)
+    skip_spaces(s, st)
+    st[0] = st[0] + 1
+    return inner
+  }
+  return parse_number(s, st)
+}
+
+fn parse_unary(s: Str, st: mut [Int]) -> Int {
+  skip_spaces(s, st)
+  if peek_byte(s, st[0]) == 45 {
+    st[0] = st[0] + 1
+    let operand = parse_unary(s, st)
+    return 0 - operand
+  }
+  return parse_primary(s, st)
+}
+
+fn parse_term(s: Str, st: mut [Int]) -> Int {
+  var v = parse_unary(s, st)
+  skip_spaces(s, st)
+  var op = peek_byte(s, st[0])
+  while op == 42 or op == 47 or op == 37 {
+    st[0] = st[0] + 1
+    let r = parse_unary(s, st)
+    if op == 42 {
+      v = v * r
+    } else if op == 47 {
+      if r == 0 {
+        st[1] = 1
+        v = 0
+      } else {
+        v = v / r
+      }
+    } else {
+      if r == 0 {
+        st[1] = 1
+        v = 0
+      } else {
+        v = v % r
+      }
+    }
+    skip_spaces(s, st)
+    op = peek_byte(s, st[0])
+  }
+  return v
+}
+
+fn parse_expr(s: Str, st: mut [Int]) -> Int {
+  var v = parse_term(s, st)
+  skip_spaces(s, st)
+  var op = peek_byte(s, st[0])
+  while op == 43 or op == 45 {
+    st[0] = st[0] + 1
+    let r = parse_term(s, st)
+    if op == 43 {
+      v = v + r
+    } else {
+      v = v - r
+    }
+    skip_spaces(s, st)
+    op = peek_byte(s, st[0])
+  }
+  return v
+}
+
+fn eval_expr(s: Str) -> Str {
+  var st: [Int] = [0, 0]
+  let v = parse_expr(s, st)
+  if st[1] == 1 { return "div0" }
+  return str(v)
+}

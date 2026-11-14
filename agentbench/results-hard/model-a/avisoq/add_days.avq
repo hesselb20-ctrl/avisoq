@@ -1,0 +1,47 @@
+fn days_from_civil(y0: Int, m: Int, d: Int) -> Int {
+  var y = y0
+  if m <= 2 { y = y - 1 }
+  let era = y / 400
+  let yoe = y - era * 400
+  var mp = m - 3
+  if m <= 2 { mp = m + 9 }
+  let doy = (153 * mp + 2) / 5 + d - 1
+  let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy
+  return era * 146097 + doe - 719468
+}
+
+fn pad(v: Int, w: Int) -> Str {
+  var s = str(v)
+  while len(s) < w { s = "0" + s }
+  return s
+}
+
+fn add_days(y: Int, m: Int, d: Int, n: Int) -> Str {
+  let z = days_from_civil(y, m, d) + n + 719468
+  let era = z / 146097
+  let doe = z - era * 146097
+  let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365
+  let yy = yoe + era * 400
+  let doy = doe - (365 * yoe + yoe / 4 - yoe / 100)
+  let mp = (5 * doy + 2) / 153
+  let dd = doy - (153 * mp + 2) / 5 + 1
+  var mm = mp + 3
+  var year = yy
+  if mm > 12 {
+    mm = mm - 12
+  }
+  if mm <= 2 { year = yy + 1 }
+  return pad(year, 4) + "-" + pad(mm, 2) + "-" + pad(dd, 2)
+}
+
+test "days" {
+  assert add_days(2024, 2, 28, 1) == "2024-02-29"
+  assert add_days(2023, 2, 28, 1) == "2023-03-01"
+  assert add_days(2024, 12, 31, 1) == "2025-01-01"
+  assert add_days(2000, 3, 1, -1) == "2000-02-29"
+  assert add_days(1900, 2, 28, 1) == "1900-03-01"
+  assert add_days(1600, 1, 1, 0) == "1600-01-01"
+  assert add_days(2000, 1, 1, 366) == "2001-01-01"
+  assert add_days(2400, 12, 31, -146097) == "2000-12-31"
+  assert add_days(1600, 3, 1, -1) == "1600-02-29"
+}

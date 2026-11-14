@@ -1,0 +1,31 @@
+// True when open is the bracket that close closes.
+fn matches(open: Int, close: Int) -> Bool {
+  return (open == 40 and close == 41) or (open == 91 and close == 93) or (open == 123 and close == 125)
+}
+
+// Stack of indices: -1 at the bottom, then unmatched opening brackets and
+// unmatched closing brackets. The top is the position just before the current run.
+fn longest_valid(s: Str) -> Int {
+  var stack: [Int] = [-1]
+  var best = 0
+  for i in 0..len(s) {
+    let c = byte_at(s, i)
+    if c == 40 or c == 91 or c == 123 {
+      push(stack, i)
+    } else {
+      let top = stack[len(stack) - 1]
+      var matched = false
+      if top >= 0 {
+        if matches(byte_at(s, top), c) { matched = true }
+      }
+      if matched {
+        pop(stack)
+        let base = stack[len(stack) - 1]
+        if i - base > best { best = i - base }
+      } else {
+        push(stack, i)
+      }
+    }
+  }
+  return best
+}

@@ -1,0 +1,30 @@
+// Matrix minor without row 0 and without column col; m is n by n, row-major.
+fn minor(m: [Int], n: Int, col: Int) -> [Int] {
+  var out: [Int] = []
+  for r in 1..n {
+    for c in 0..n {
+      if c != col { push(out, m[r * n + c]) }
+    }
+  }
+  return out
+}
+
+// Cofactor expansion along the first row.
+fn det_rec(m: [Int], n: Int) -> Int {
+  if n == 1 { return m[0] }
+  var total = 0
+  for j in 0..n {
+    let sub = minor(m, n, j)
+    let term = m[j] * det_rec(sub, n - 1)
+    if j % 2 == 0 {
+      total = total + term
+    } else {
+      total = total - term
+    }
+  }
+  return total
+}
+
+fn det(xs: [Int], n: Int) -> Int {
+  return det_rec(xs, n)
+}

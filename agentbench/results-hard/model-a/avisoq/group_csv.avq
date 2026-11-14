@@ -1,0 +1,79 @@
+import "std/strings"
+import "std/arrays"
+
+fn is_letter(b: Int) -> Bool {
+  return (b >= 65 and b <= 90) or (b >= 97 and b <= 122)
+}
+
+fn valid_key(k: Str) -> Bool {
+  if len(k) == 0 { return false }
+  for i in 0..len(k) {
+    if not is_letter(byte_at(k, i)) { return false }
+  }
+  return true
+}
+
+fn valid_amount(a: Str) -> Bool {
+  var i = 0
+  if len(a) > 0 and byte_at(a, 0) == 45 { i = 1 }
+  if i >= len(a) { return false }
+  while i < len(a) {
+    let b = byte_at(a, i)
+    if b < 48 or b > 57 { return false }
+    i = i + 1
+  }
+  return true
+}
+
+fn amount_value(a: Str) -> Int {
+  var i = 0
+  var neg = false
+  if byte_at(a, 0) == 45 {
+    neg = true
+    i = 1
+  }
+  var v = 0
+  while i < len(a) {
+    v = v * 10 - (byte_at(a, i) - 48)
+    i = i + 1
+  }
+  if neg { return v }
+  return -v
+}
+
+fn group_csv(s: Str) -> Str {
+  var totals: Map[Str, Int] = {}
+  var bad = 0
+  let rows = split(s, "|")
+  for i in 0..len(rows) {
+    let row = trim(rows[i])
+    if len(row) > 0 {
+      let f = split(row, ",")
+      if len(f) != 2 {
+        bad = bad + 1
+      } else {
+        let k = trim(f[0])
+        let a = trim(f[1])
+        if valid_key(k) and valid_amount(a) {
+          put(totals, k, get_or(totals, k, 0) + amount_value(a))
+        } else {
+          bad = bad + 1
+        }
+      }
+    }
+  }
+  var ks = keys(totals)
+  sort(ks)
+  var parts: [Str] = []
+  for i in 0..len(ks) {
+    push(parts, ks[i] + "=" + str(get(totals, ks[i])))
+  }
+  return join(parts, ",") + ";bad=" + str(bad)
+}
+
+test "csv" {
+  assert group_csv("") == ";bad=0"
+  assert group_csv("a,1|b,2|a,-3") == "a=-2,b=2;bad=0"
+  assert group_csv("b,1|B,2| |x|a,1,2|c,-|d,1x") == "B=2,b=1;bad=4"
+  assert group_csv(" a , 5 ") == "a=5;bad=0"
+}

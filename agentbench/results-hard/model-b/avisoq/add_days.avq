@@ -1,0 +1,37 @@
+// Day number of a Gregorian date (day 0 is 1970-01-01); valid for years 1600 and later.
+fn days_from_civil(y0: Int, m: Int, d: Int) -> Int {
+  var y = y0
+  if m <= 2 { y = y - 1 }
+  let era = y / 400
+  let yoe = y - era * 400
+  var mp = m + 9
+  if m > 2 { mp = m - 3 }
+  let doy = (153 * mp + 2) / 5 + d - 1
+  let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy
+  return era * 146097 + doe - 719468
+}
+
+fn pad2(x: Int) -> Str {
+  if x < 10 { return "0" + str(x) }
+  return str(x)
+}
+
+// Text YYYY-MM-DD of a day number.
+fn format_date(z0: Int) -> Str {
+  let z = z0 + 719468
+  let era = z / 146097
+  let doe = z - era * 146097
+  let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365
+  let doy = doe - (365 * yoe + yoe / 4 - yoe / 100)
+  let mp = (5 * doy + 2) / 153
+  let day = doy - (153 * mp + 2) / 5 + 1
+  var month = mp + 3
+  if mp >= 10 { month = mp - 9 }
+  var year = yoe + era * 400
+  if month <= 2 { year = year + 1 }
+  return str(year) + "-" + pad2(month) + "-" + pad2(day)
+}
+
+fn add_days(y: Int, m: Int, d: Int, n: Int) -> Str {
+  return format_date(days_from_civil(y, m, d) + n)
+}

@@ -1,0 +1,68 @@
+import "std/strings"
+import "std/arrays"
+
+fn is_key(s: Str) -> Bool {
+  if len(s) == 0 { return false }
+  for i in 0..len(s) {
+    let b = byte_at(s, i)
+    if b < 65 or (b > 90 and b < 97) or b > 122 { return false }
+  }
+  return true
+}
+
+fn is_amount(s: Str) -> Bool {
+  if len(s) == 0 { return false }
+  var start = 0
+  if byte_at(s, 0) == 45 { start = 1 }
+  if start == len(s) { return false }
+  for i in start..len(s) {
+    let b = byte_at(s, i)
+    if b < 48 or b > 57 { return false }
+  }
+  return true
+}
+
+// Value of an amount that passed is_amount.
+fn amount_value(s: Str) -> Int {
+  var start = 0
+  var neg = false
+  if byte_at(s, 0) == 45 {
+    start = 1
+    neg = true
+  }
+  var v = 0
+  for i in start..len(s) {
+    v = v * 10 + (byte_at(s, i) - 48)
+  }
+  if neg { return 0 - v }
+  return v
+}
+
+fn group_csv(s: Str) -> Str {
+  let rows = split(s, "|")
+  var totals: Map[Str, Int] = {}
+  var bad = 0
+  for i in 0..len(rows) {
+    let row = trim(rows[i])
+    if len(row) > 0 {
+      let fields = split(row, ",")
+      if len(fields) != 2 {
+        bad = bad + 1
+      } else {
+        let key = trim(fields[0])
+        let amt = trim(fields[1])
+        if is_key(key) and is_amount(amt) {
+          put(totals, key, get_or(totals, key, 0) + amount_value(amt))
+        } else {
+          bad = bad + 1
+        }
+      }
+    }
+  }
+  let names = sorted(keys(totals))
+  var items: [Str] = []
+  for i in 0..len(names) {
+    push(items, names[i] + "=" + str(get(totals, names[i])))
+  }
+  return join(items, ",") + ";bad=" + str(bad)
+}
