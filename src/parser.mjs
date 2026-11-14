@@ -297,6 +297,11 @@ export function parse(src) {
       // x += e  means  x = x + e
       return { kind: 'Assign', target: expr, compound: compound[0], rhs, value: { kind: 'Binary', op: compound[0], left: structuredClone(expr), right: rhs, line: expr.line, col: expr.col }, ...at };
     }
+    if (isOp('=') && expr.kind === 'Tuple' && expr.elems.every((x) => x.kind === 'Name' || x.kind === 'Index' || x.kind === 'Field')) {
+      // (a, b) = pair: assign each part
+      next();
+      return { kind: 'AssignTuple', targets: expr.elems, value: parseExpr(), ...at };
+    }
     if (isOp('=')) {
       next();
       if (expr.kind !== 'Name' && expr.kind !== 'Index' && expr.kind !== 'Field') {

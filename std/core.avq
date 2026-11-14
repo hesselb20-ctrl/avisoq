@@ -38,3 +38,13 @@ fn value_or[T, E](r: Result[T, E], fallback: T) -> T {
     Err => { return copy(fallback) }
   }
 }
+
+// True when a and b have the same length and the same elements in the same order.
+// `a == b` on arrays of Int, Float, Bool or Str means this.
+fn equal[T: Eq](a: [T], b: [T]) -> Bool {
+  if len(a) != len(b) { return false }
+  for i in 0..len(a) {
+    if a[i] != b[i] { return false }
+  }
+  return true
+}

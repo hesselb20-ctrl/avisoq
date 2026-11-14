@@ -263,7 +263,7 @@ when the program was granted neither files nor network, no right to write any fi
 
 | Module | Contents |
 |---|---|
-| `std/core` (always available) | `Option[T]`, `Result[T, E]`, `is_some`, `unwrap_or`, `is_ok`, `value_or` |
+| `std/core` (always available) | `Option[T]`, `Result[T, E]`, `is_some`, `unwrap_or`, `is_ok`, `value_or`, tuples, `equal` (`==` on arrays of plain values) |
 | `std/strings` | `split`, `join`, `lines`, `trim`, `replace`, `repeat`, `contains`, `index_of`, `starts_with`, `ends_with`, `parse_int`, `to_upper`, `to_lower`, `count_of`, `last_index_of`, `reversed`, `matches_at`, `matches_glob`, `is_digit`, `is_letter`, `is_alnum`, `is_space`, `pad_left`, `pad_right` |
 | `std/arrays` | `map`, `filter`, `fold`, `each`, `any`, `all`, `count_if`, `find_index`, `equal`, `sort`, `sort_by` (stable), `sorted`, `reverse`, `concat`, `append`, `index_in`, `max_of`, `min_of`, `sum_of`, `includes`, `last_of`, `slice`, `range`, `swap`, `unique` |
 | `std/math` | `min`, `max`, `clamp`, `abs`, `abs_float`, `pow`, `checked_add`, `checked_sub`, `checked_mul`, `int_max`, `int_min` |

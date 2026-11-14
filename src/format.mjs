@@ -78,7 +78,7 @@ export function format(src) {
     if (out.length && lastLine && line - lastLine > 1 && out[out.length - 1] !== '' && !out[out.length - 1].endsWith('{')) out.push('');
   }
 
-  const simple = (s) => ['Let', 'LetTuple', 'Assign', 'Return', 'Assert', 'ExprStmt', 'Break', 'Continue'].includes(s.kind);
+  const simple = (s) => ['Let', 'LetTuple', 'AssignTuple', 'Assign', 'Return', 'Assert', 'ExprStmt', 'Break', 'Continue'].includes(s.kind);
   // { stmt } stays on one line when it was written that way.
   const inlineBody = (body, openLine) => body.length === 1 && simple(body[0]) && body.closeLine === openLine
     && !comments.some((c) => c.line === openLine);
@@ -86,6 +86,7 @@ export function format(src) {
     switch (s.kind) {
       case 'Let': return `${s.mutable ? 'var' : 'let'} ${s.name}${s.ty ? `: ${fmtType(s.ty)}` : ''} = ${expr(s.init)}${s.try ? '?' : ''}`;
       case 'LetTuple': return `${s.mutable ? 'var' : 'let'} (${s.names.map((x) => x.name).join(', ')}) = ${expr(s.init)}${s.try ? '?' : ''}`;
+      case 'AssignTuple': return `(${s.targets.map((x) => expr(x)).join(', ')}) = ${expr(s.value)}`;
       case 'Assign': return s.compound ? `${expr(s.target)} ${s.compound}= ${expr(s.rhs)}` : `${expr(s.target)} = ${expr(s.value)}${s.try ? '?' : ''}`;
       case 'Return': return s.value ? `return ${expr(s.value)}` : 'return';
       case 'Break': return 'break';
@@ -135,6 +136,11 @@ export function format(src) {
       case 'Let': {
         const head = `${s.mutable ? 'var' : 'let'} ${s.name}${s.ty ? `: ${fmtType(s.ty)}` : ''} = `;
         out.push(`${indent}${head}${exprAt(s.init, head, indent)}${s.try ? '?' : ''}`);
+        break;
+      }
+      case 'AssignTuple': {
+        const head = `(${s.targets.map((x) => expr(x)).join(', ')}) = `;
+        out.push(`${indent}${head}${exprAt(s.value, head, indent)}`);
         break;
       }
       case 'LetTuple': {

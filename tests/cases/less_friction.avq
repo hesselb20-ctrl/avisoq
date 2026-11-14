@@ -1,0 +1,36 @@
+// Things that used to be errors and cost a compile-and-fix round each.
+import "std/strings"
+
+fn divmod(a: Int, b: Int) -> (Int, Int) {
+  return (a / b, a % b)
+}
+
+fn main() uses io {
+  // a variable may have the name of a function or a built-in
+  let keys = split("b a", " ")
+  let lines = 3
+  var sum = 0
+  let has = true
+  var counts: Map[Str, Int] = {}
+  for key in keys { put(counts, key, lines) }
+  sum += len(keys(counts)) + len(lines("x\ny")) + sum(i in 0..4: i)
+  print(len(keys), lines, sum, has, has(counts, "a"))
+  // arrays of plain values compare with == and !=
+  print(
+    [1, 2] == [1, 2],
+    [1, 2] == [1, 3],
+    [1] != [1, 2],
+    keys == ["b", "a"],
+    [1.5] == [1.5],
+    [true] != [true],
+  )
+  let none: [Int] = []
+  assert none == [] and divmod(7, 2).first == 3
+  // (a, b) = value
+  var q = 0
+  var r = 0
+  (q, r) = divmod(17, 5)
+  var parts = [0, 0]
+  (parts[0], parts[1]) = divmod(q + r, 2)
+  print(q, r, parts == [2, 1])
+}

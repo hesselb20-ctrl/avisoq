@@ -33,9 +33,10 @@ differ from the languages you know. Print this guide any time with `avisoq guide
 12. **Integer overflow stops the program.** When a result may not fit in 64 bits, use
     `checked_add`, `checked_sub` or `checked_mul` from `std/math`; they return `Option[Int]`.
     The smallest Int is written `-9223372036854775808`.
-13. **A variable cannot have the name of any function**, including standard library functions
-    of modules you import (`lines`, `map`, `min`, `sort` ...). The error names the module.
-14. **Arrays are not compared with `==`.** Use `equal(a, b)` from `std/arrays`.
+13. **A variable may have the same name as a function** (`let lines = split(text, "\n")`,
+    `var sum = 0`, `let keys = ...`). It may not have the name of a type, a variant or a constant.
+14. **`==` and `!=` work on arrays of `Int`, `Float`, `Bool` and `Str`**, and `xs == []` asks
+    whether an array is empty. Other arrays, maps, structs and enums are compared part by part.
 15. **Overflow is checked at every step, not just at the end.** `v * 10 + b - '0'` can stop the
     program where `v * 10 + (b - '0')` does not. To read digits into an Int, use `parse_int`.
 16. **Comments are `//` only.**
@@ -144,7 +145,7 @@ fn main() uses io {
 - `Int`, `Float`, `Bool` and `Str` parameters cannot be `mut`; put them in a struct.
 
 **Tuples.** `(a, b)` builds a tuple of 2 to 4 values, its type is written `(A, B)`, and
-`let (x, y) = pair` takes it apart. The parts are also `.first`, `.second`, `.third`, `.fourth`.
+`let (x, y) = pair` takes it apart, and `(a, b) = pair` assigns to existing variables. The parts are also `.first`, `.second`, `.third`, `.fourth`.
 
 ```
 fn divmod(a: Int, b: Int) -> (Int, Int) requires b != 0 {
@@ -261,15 +262,16 @@ There is no string formatting or interpolation.
 
 ## Standard library
 
+This table is the whole library: you do not need to read its source files.
 `import "std/NAME"` at the top of the file. `Option` and `Result` are always available.
 
 | Module | Functions |
 |---|---|
 | `std/strings` | `split(s, sep) -> [Str]`, `join(parts, sep)`, `lines(s)`, `trim(s)`, `replace(s, from, to)`, `repeat(s, n)`, `contains(s, sub)`, `index_of(s, sub)` (-1 if absent), `starts_with`, `ends_with`, `parse_int(s) -> Option[Int]` (the whole Int range; `None` if it does not fit), `to_upper(s)`, `to_lower(s)`, `count_of(s, sub)`, `last_index_of(s, sub)`, `reversed(s)`, `matches_at(s, i, sub)`, `matches_glob(pattern, s)` (`*` any run, `?` any one character), `is_digit(b)`, `is_letter(b)`, `is_alnum(b)`, `is_space(b)`, `pad_left(s, width, "0")` |
-| `std/arrays` | `sort(xs)` (in place; Int, Float, Str), `sorted(xs)`, `sort_by(xs, fn(x) => key)`, `reverse(xs)`, `concat(a, b)`, `append(xs, x)`, `index_in(xs, x)`, `max_of(xs)`, `min_of(xs)`, `map(xs, f)`, `filter(xs, f)`, `fold(xs, start, f)`, `each(xs, f)`, `any(xs, f)`, `all(xs, f)`, `count_if(xs, f)`, `find_index(xs, f)`, `equal(a, b)`, `sum_of(xs, 0)`, `includes(xs, x)`, `last_of(xs)`, `slice(xs, start, end)`, `range(start, end)`, `swap(xs, i, j)`, `unique(xs)` |
+| `std/arrays` | `sort(xs)` (in place; Int, Float, Str), `sorted(xs)`, `sort_by(xs, fn(x) => key)`, `reverse(xs)`, `concat(a, b)`, `append(xs, x)`, `index_in(xs, x)`, `max_of(xs)`, `min_of(xs)`, `map(xs, f)`, `filter(xs, f)`, `fold(xs, start, f)`, `each(xs, f)`, `any(xs, f)`, `all(xs, f)`, `count_if(xs, f)`, `find_index(xs, f)`, `sum_of(xs, 0)`, `includes(xs, x)`, `last_of(xs)`, `slice(xs, start, end)`, `range(start, end)`, `swap(xs, i, j)`, `unique(xs)` |
 | `std/math` | `min(a, b)`, `max(a, b)`, `clamp(x, lo, hi)`, `abs(i)`, `abs_float(f)`, `pow(base, exp)`, `checked_add(a, b)`, `checked_sub(a, b)`, `checked_mul(a, b)` (each `-> Option[Int]`, `None` on overflow), `int_max()`, `int_min()` |
 | `std/bigint` | Integers of any size, as the struct `BigInt`. `big("123456789012345678901234567890")`, `big_parse(s) -> Option[BigInt]`, `big_from_int(n)`, `big_str(a)`, `big_to_int(a) -> Option[Int]`, `big_add(a, b)`, `big_sub`, `big_mul`, `big_div` (rounds toward zero), `big_rem` (sign of a), `big_pow(a, n)`, `big_neg`, `big_abs`, `big_cmp(a, b)` (-1, 0, 1), `big_eq`, `big_is_zero`. Use this whenever a number may not fit in 64 bits. |
-| always | `enum Option[T] { Some(value: T), None }`, `enum Result[T, E] { Ok(value: T), Err(error: E) }`, `unwrap_or(o, d)`, `is_some(o)`, `value_or(r, d)`, `is_ok(r)` |
+| always | `equal(a, b)` (what `==` on arrays means), tuples, `enum Option[T] { Some(value: T), None }`, `enum Result[T, E] { Ok(value: T), Err(error: E) }`, `unwrap_or(o, d)`, `is_some(o)`, `value_or(r, d)`, `is_ok(r)` |
 
 You may define a function with the same name as a standard library function: yours is used.
 Do not reuse the name of a built-in.
@@ -317,6 +319,11 @@ match parse_int(text) {
 ```
 
 ## Checking your work
+
+The fastest loop: put `test "name" { assert ... }` blocks at the bottom of the file you are
+writing and run `avisoq test file.avq`. You do not need a `main`, a second file or a copy.
+A test can compare whole results: `assert f(3) == [1, 2, 3]`, `assert g("a") == "A"`.
+
 
 ```
 avisoq check file.avq --json     // every error with code, line, column and a hint

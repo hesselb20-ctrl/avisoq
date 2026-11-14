@@ -41,6 +41,13 @@ export function desugar(program) {
         out.push(...block(rest));
         break;
       }
+      if (s.kind === 'AssignTuple') {
+        const t = fresh('tup');
+        exprs(s.value);
+        out.push({ kind: 'Let', mutable: false, name: t, ty: null, init: s.value, stmtLine: s.line, ...at });
+        s.targets.forEach((target, k) => out.push({ kind: 'Assign', target, value: { kind: 'Field', base: { kind: 'Name', name: t, ...at }, name: TUPLE_FIELDS[k], ...at }, ...at }));
+        continue;
+      }
       if (s.kind === 'ForIn') {
         exprs(s.iter);
         let items = s.iter;

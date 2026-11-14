@@ -593,7 +593,6 @@ rejects('empty array literal', main('let a = []'), 'E0207');
 rejects('bad main signature', 'fn main(x: Int) { }', 'E0401');
 rejects('result outside ensures', 'fn f() -> Int requires result > 0 { return 1 }\nfn main() { }', 'E0101');
 rejects('mixed array literal', main('let a = [1, 2.0]'), 'E0201');
-rejects('array equality', main('print([1] == [1])'), 'E0201');
 rejects('semicolon', main('let x = 1;'), 'E0001');
 rejects('chained comparison', main('print(1 < 2 < 3)'), 'E0001');
 rejects('missing brace', 'fn main() {', 'E0001');
@@ -652,8 +651,6 @@ await prints('parse_int covers the whole Int range', `import "std/strings"\nfn s
 await prints('arrays are compared with equal', `import "std/arrays"\n${main('let e: [Int] = []\nprint(equal([1, 2, 3], [1, 2, 3]), equal([1, 2], [1, 2, 3]), equal([1, 2], [2, 1]), equal(e, e), equal(["a"], ["a"]))')}`, 'true false false true true\n');
 {
   const c = compile(`import "std/strings"\n${main('let lines = 3\nprint(lines)')}`, { backend: BACKEND });
-  const a = compile(main('print([1] == [1])'), { backend: BACKEND });
-  report('comparing arrays with == points at equal', !a.ok && a.diagnostics.some((d) => (d.hint ?? '').includes('equal(a, b)')), JSON.stringify(a.diagnostics));
 }
 
 // ---- an array that grows while a call, a store or an index that uses it is being evaluated ----

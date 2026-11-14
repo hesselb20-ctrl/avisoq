@@ -303,8 +303,9 @@ export function check(program, diags) {
       if (lookup(name)) {
         err('E0103', `'${name}' is already defined in this scope or an enclosing one`, node,
           'Avisoq does not allow shadowing; choose a new name');
-      } else if ((taken(name) || BUILTINS.has(name)) && !acrossStd(name)) {
-        err('E0103', `'${name}' is already the name of a function, type or variant${definedIn(name)}`, node, 'names cannot be reused in Avisoq; choose a different variable name');
+      } else if (typeDecls.has(name) || variants.has(name) || consts.has(name)) {
+        // (a function name is fine: f(x) is always a call and f alone is always the variable)
+        err('E0103', `'${name}' is already the name of a type, variant or constant`, node, 'choose a different variable name');
       }
       scopes[scopes.length - 1].set(name, sym);
       if (!sym.isParam) locals.push(sym);
@@ -533,6 +534,13 @@ export function check(program, diags) {
             want(e.right, 'Bool', `right side of '${e.op}'`);
             return 'Bool';
           }
+          // xs == [] and xs != [] ask whether the array is empty
+          const emptyLit = (x) => x.kind === 'ArrayLit' && x.elems.length === 0;
+          if ((e.op === '==' || e.op === '!=') && emptyLit(e.left) !== emptyLit(e.right)) {
+            const other = emptyLit(e.left) ? e.right : e.left, at = { line: e.line, col: e.col, file: e.file };
+            e.left = { kind: 'Call', name: 'len', args: [other], ...at };
+            e.right = { kind: 'IntLit', value: 0n, raw: '0', ...at };
+          }
           const l = expr(e.left), r = expr(e.right);
           const isCmp = ['==', '!=', '<', '<=', '>', '>='].includes(e.op);
           if (l === '?' || r === '?') return isCmp ? 'Bool' : '?';
@@ -544,11 +552,19 @@ export function check(program, diags) {
                 : strMix ? 'convert the other side with str(x) before joining strings' : undefined);
             return isCmp ? 'Bool' : '?';
           }
+          if ((e.op === '==' || e.op === '!=') && l === r && isArr(l) && BASE_TYPES.has(elemOf(l))) {
+            // xs == ys on arrays of plain values compares length and elements
+            const call = { kind: 'Call', name: fnTemplates.has('std__equal') ? 'std__equal' : 'equal', args: [e.left, e.right], line: e.line, col: e.col, file: e.file };
+            const negate = e.op === '!=';
+            for (const k of Object.keys(e)) delete e[k];
+            Object.assign(e, negate ? { kind: 'Unary', op: 'not', operand: call, line: call.line, col: call.col, file: call.file } : call);
+            return expr(e, hint);
+          }
           if (e.op === '==' || e.op === '!=') {
             if (!BASE_TYPES.has(l)) {
               err('E0201', `'${e.op}' is not defined for ${l}`, e,
                 enums.has(l) ? 'use match to look inside an enum value'
-                  : isArr(l) ? 'arrays are compared with equal(a, b) from std/arrays'
+                  : isArr(l) ? '== works on arrays of Int, Float, Bool and Str; compare other arrays element by element'
                     : 'only Int, Float, Bool and Str can be compared for equality; compare fields or elements instead');
             }
             if (l === 'Str') program.usesStrings = true;
