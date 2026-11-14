@@ -291,6 +291,23 @@ export async function instantiate(wasm, meta, { allow = [], write = (s) => proce
     // Pure string helpers: no capability needed.
     rt: {
       str_concat: (a, b) => strOfRanges([[a + 4, a + 4 + strLen(a)], [b + 4, b + 4 + strLen(b)]]),
+      // x = x + b for a string that is being built. In place when x owns its buffer and there is
+      // room; otherwise the string moves to a buffer twice the size. Returns [string, capacity].
+      str_append: (a, b, cap, shared) => {
+        const la = strLen(a), lb = strLen(b), n = la + lb;
+        if (!shared && n <= cap) {
+          new Uint8Array(memory.buffer).copyWithin(a + 4 + la, b + 4, b + 4 + lb);
+          new DataView(memory.buffer).setUint32(a, n, true);
+          return [a, cap];
+        }
+        const room = n < 24 ? 48 : n * 2;
+        const ptr = instance.exports.__alloc(4 + room);
+        const mem = new Uint8Array(memory.buffer);
+        mem.copyWithin(ptr + 4, a + 4, a + 4 + la);
+        mem.copyWithin(ptr + 4 + la, b + 4, b + 4 + lb);
+        new DataView(memory.buffer).setUint32(ptr, n, true);
+        return [ptr, room];
+      },
       str_eq: (a, b) => {
         if (a === b) return 1;
         const x = strView(a), y = strView(b);

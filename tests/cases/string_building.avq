@@ -1,0 +1,67 @@
+// A var Str grows in place when it is appended to, but every other holder of an earlier value
+// must keep seeing that earlier value. Bit operations are checked here as well.
+import "std/strings"
+
+fn build(n: Int) -> Str {
+  var out = ""
+  for i in 0..n { out = out + chr('a' + i % 26) }
+  return out
+}
+
+fn tail(s: Str) -> Str {
+  return s + "|"
+}
+
+fn main() uses io {
+  var s = "ab"
+  let before = s
+  s = s + "cd"
+  let middle = s
+  s += "ef"
+  s = s + "g" + str(len(s)) + "h"
+  var kept: [Str] = []
+  for i in 0..5 {
+    s += str(i)
+    push(kept, s)
+  }
+  print(before, middle, s, join(kept, " "))
+  var t = "x"
+  t = t + t
+  t = t + t + "y"
+  t = "<" + t + ">"
+  t += tail(t)
+  print(t, len(t), t[1], t == "<xxxxy><xxxxy>|", t < "=")
+  var big = build(100000)
+  let snapshot = big
+  big += "!"
+  print(
+    len(big),
+    len(snapshot),
+    big[99999],
+    big[100000],
+    snapshot[len(snapshot) - 1],
+    len(build(0)),
+  )
+  var lines: [Str] = []
+  var cur = ""
+  for b in "one two  three" {
+    if b == ' ' {
+      push(lines, cur)
+      cur = ""
+    } else {
+      cur += chr(b)
+    }
+  }
+  push(lines, cur)
+  print(join(lines, ","), len(lines))
+  print(
+    bit_and(12, 10),
+    bit_or(12, 10),
+    bit_xor(12, 10),
+    shift_left(1, 62),
+    shift_right(-16, 2),
+    shift_left(3, 0),
+    bit_and(-1, 255),
+    shift_left(1, 63),
+  )
+}

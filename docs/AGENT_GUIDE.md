@@ -89,6 +89,7 @@ count += 1                                // also -= *= /= %=, on variables, ele
 let size = if n > 10 then "big" else "small"   // a conditional expression (not for arrays or maps)
 ```
 
+- Building a string with `out += piece` in a loop is cheap: a `var` string grows in place.
 - A character literal is an `Int`: `'a'` is 97, `'\n'` is 10, `' '` is 32. Never write the number.
 - `std/strings` has `is_digit(b)`, `is_letter(b)`, `is_lower(b)`, `is_upper(b)`, `is_space(b)`,
   `pad_left(s, width, "0")` and `pad_right(s, width, " ")` (the fill is a one-character Str).
@@ -250,7 +251,9 @@ Functions can be passed as arguments, by name or as a lambda `fn(x) => x * 2`
 | `sqrt(f)` | Square root of a `Float` |
 | `substr(s, start, end)` | Bytes from `start` up to but not including `end` |
 | `byte_at(s, i)` or `s[i]` | Byte value 0 to 255 at position `i`. Compare with character literals: `s[i] == 'a'` |
-| `chr(b)` | One-byte string from a byte value: `chr(97)` is `"a"` |
+| `chr(b)` | One-byte string from a byte value: `chr('a')` is `"a"` |
+| `bit_and(a, b)`, `bit_or(a, b)`, `bit_xor(a, b)` | Bitwise operations on `Int` |
+| `shift_left(a, n)`, `shift_right(a, n)` | Shifts; `n` must be 0 to 63. `shift_left(1, k)` is 2 to the power k; bit k of x is `bit_and(shift_right(x, k), 1)` |
 | `put(m, k, v)`, `get(m, k)`, `get_or(m, k, d)`, `has(m, k)`, `remove(m, k)`, `keys(m)` | Maps. `get` fails on a missing key; `keys` is in insertion order. |
 
 There is no string indexing (`s[i]` is an error): use `byte_at` and `substr`. Strings are

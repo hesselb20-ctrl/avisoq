@@ -17,7 +17,8 @@ import { elemOf, isArr, isMap, mangle, mapParts, showType, substType, typeArgs, 
 export const EFFECTS = new Set(['io', 'time', 'fs', 'net']);
 const BUILTIN_EFFECTS = { print: 'io', now_ms: 'time', read_file: 'fs', write_file: 'fs', file_exists: 'fs', http_get: 'net', http_post: 'net' };
 const BUILTINS = new Set(['print', 'len', 'array', 'float', 'int', 'sqrt', 'now_ms', 'str', 'substr', 'byte_at',
-  'put', 'get', 'get_or', 'has', 'keys', 'remove', 'copy', 'push', 'pop', 'chr', 'read_file', 'write_file', 'file_exists', 'http_get', 'http_post']);
+  'put', 'get', 'get_or', 'has', 'keys', 'remove', 'copy', 'push', 'pop', 'chr', 'read_file', 'write_file', 'file_exists', 'http_get', 'http_post',
+  'bit_and', 'bit_or', 'bit_xor', 'shift_left', 'shift_right']);
 const BASE_TYPES = new Set(['Int', 'Float', 'Bool', 'Str']);
 const RESERVED_TYPES = new Set([...BASE_TYPES, 'Unit', 'Map', 'Fn']);
 // Constraints a type parameter can carry: fn max[T: Ord](a: T, b: T) -> T
@@ -739,6 +740,9 @@ export function check(program, diags) {
         case 'float': if (argc(e, 1)) want(e.args[0], 'Int', 'argument of float'); return 'Float';
         case 'int': if (argc(e, 1)) want(e.args[0], 'Float', 'argument of int'); return 'Int';
         case 'sqrt': if (argc(e, 1)) want(e.args[0], 'Float', 'argument of sqrt'); return 'Float';
+        case 'bit_and': case 'bit_or': case 'bit_xor': case 'shift_left': case 'shift_right':
+          if (argc(e, 2)) { want(e.args[0], 'Int', `first argument of ${e.name}`); want(e.args[1], 'Int', `second argument of ${e.name}`); }
+          return 'Int';
         case 'now_ms': argc(e, 0); return 'Float';
         case 'str': {
           program.usesStrings = true;

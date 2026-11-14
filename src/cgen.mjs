@@ -294,6 +294,10 @@ export function cgen(program, opts = {}) {
       return sites.length - 1;
     };
     const part = (e) => ({ c: expr(e), ty: e.ty, simple: isSimple(e) });
+    // Reading a string that is being built without keeping it (its length, a byte, a comparison)
+    // does not stop it from growing in place.
+    const quiet = (e) => (e.kind === 'Name' && e.sym && e.sym.builder ? { c: `v_${e.sym.name}`, ty: e.ty, simple: true } : part(e));
+    const mentions = (e, sym) => (e.kind === 'Name' && e.sym === sym) || children(e).some((c) => mentions(c, sym));
     const v = (sym) => (sym.isResult ? '_res' : sym.byRef ? `(*v_${sym.name})` : `v_${sym.name}`);
     // Where a growable array variable lives, for push and for passing it on.
     const slotOf = (sym) => (sym.byRef ? `v_${sym.name}` : `&v_${sym.name}`);
@@ -308,7 +312,7 @@ export function cgen(program, opts = {}) {
         }
         case 'BoolLit': return e.value ? 'true' : 'false';
         case 'StrLit': return intern(e.value);
-        case 'Name': return v(e.sym);
+        case 'Name': return e.sym.builder ? `(sh_${e.sym.name} = true, v_${e.sym.name})` : v(e.sym);
         case 'Unary': {
           const x = expr(e.operand);
           if (e.op === 'not') return `(!${x})`;
@@ -375,12 +379,12 @@ export function cgen(program, opts = {}) {
           if (g.stats.floatOps === 0 || g.stats.intDiv > 0) throw new Unsupported();
           const nb = tmp();
           return `({ ${range} __int128 ${acc} = 0; int64_t ${nb} = ${n} / 8 + (${n} % 8 != 0); ${chunkDecl(ch, nb)}\n`
-            + `#pragma omp parallel for reduction(+:${acc}) schedule(dynamic, ${ch}) ${parallelIf(e, n)}\n`
+            + `VPAR_IN;\n#pragma omp parallel for reduction(+:${acc}) schedule(dynamic, ${ch}) ${parallelIf(e, n)}\n`
             + `for (int64_t ${k} = 0; ${k} < ${nb}; ${k}++) {\n`
             + `  const vi _ix = (vi)((vu)VI(${s} + ${k} * 8) + (vu)VLANES);\n`
             + `  const vi _m = (vi)((VI(${k} * 8) + VLANES) < VI(${n}));\n`
             + `${g.lines.join('\n')}\n`
-            + `  ${acc} += vhsum(${res} & _m);\n}\n`
+            + `  ${acc} += vhsum(${res} & _m);\n}\nVPAR_OUT;\n`
             + `if (VUNLIKELY(${acc} != (__int128)(int64_t)${acc})) avisoq_fail(${site(FAIL.OVERFLOW, e)}); (int64_t)${acc}; })`;
         } catch (err) {
           if (!(err instanceof Unsupported)) throw err;
@@ -392,8 +396,8 @@ export function cgen(program, opts = {}) {
       }
       // The total is accumulated in 128 bits: the result is the same for every schedule.
       return `({ ${range} __int128 ${acc} = 0; ${chunkDecl(ch, n)}\n`
-        + `#pragma omp parallel for reduction(+:${acc}) schedule(dynamic, ${ch}) ${parallelIf(e, n)}\n`
-        + `${head} ${inRegion(e, `${acc} += (int64_t)(${body});`)} }\n`
+        + `VPAR_IN;\n#pragma omp parallel for reduction(+:${acc}) schedule(dynamic, ${ch}) ${parallelIf(e, n)}\n`
+        + `${head} ${inRegion(e, `${acc} += (int64_t)(${body});`)} }\nVPAR_OUT;\n`
         + `if (VUNLIKELY(${acc} != (__int128)(int64_t)${acc})) avisoq_fail(${site(FAIL.OVERFLOW, e)}); (int64_t)${acc}; })`;
     }
 
@@ -413,13 +417,13 @@ export function cgen(program, opts = {}) {
           const nb = tmp(), r = tmp(), j = tmp();
           return `({ ${range} varr* ${a} = avisoq_arr_alloc(${n}, sizeof(${T}), ${site(FAIL.ARRSIZE, e)}, false); `
             + `${T}* ${d} = VDATA(${T}, ${a}); int64_t ${nb} = ${n} / 8 + (${n} % 8 != 0); ${chunkDecl(ch, nb)}\n`
-            + `#pragma omp parallel for schedule(dynamic, ${ch}) ${parallelIf(e, n)}\n`
+            + `VPAR_IN;\n#pragma omp parallel for schedule(dynamic, ${ch}) ${parallelIf(e, n)}\n`
             + `for (int64_t ${k} = 0; ${k} < ${nb}; ${k}++) {\n`
             + `  const vi _ix = (vi)((vu)VI(${s} + ${k} * 8) + (vu)VLANES);\n`
             + `  const vi _m = (vi)((VI(${k} * 8) + VLANES) < VI(${n}));\n`
             + `${g.lines.join('\n')}\n`
             + `  const ${et === 'Int' ? 'vi' : 'vd'} ${r} = ${res};\n`
-            + `  if (${k} * 8 + 8 <= ${n}) memcpy(${d} + ${k} * 8, &${r}, 64); else for (int64_t ${j} = ${k} * 8; ${j} < ${n}; ${j}++) ${d}[${j}] = ${r}[${j} - ${k} * 8];\n}\n`
+            + `  if (${k} * 8 + 8 <= ${n}) memcpy(${d} + ${k} * 8, &${r}, 64); else for (int64_t ${j} = ${k} * 8; ${j} < ${n}; ${j}++) ${d}[${j}] = ${r}[${j} - ${k} * 8];\n}\nVPAR_OUT;\n`
             + `${a}; })`;
         } catch (err) {
           if (!(err instanceof Unsupported)) throw err;
@@ -428,8 +432,8 @@ export function cgen(program, opts = {}) {
       const body = expr(e.body);
       return `({ ${range} varr* ${a} = avisoq_arr_alloc(${n}, sizeof(${T}), ${site(FAIL.ARRSIZE, e)}, false); `
         + `${T}* ${d} = VDATA(${T}, ${a}); ${chunkDecl(ch, n)}\n`
-        + `#pragma omp parallel for schedule(dynamic, ${ch}) ${parallelIf(e, n)}\n`
-        + `for (int64_t ${k} = 0; ${k} < ${n}; ${k}++) { const int64_t ${i} = ${s} + ${k}; ${inRegion(e, `${d}[${k}] = ${body};`)} }\n`
+        + `VPAR_IN;\n#pragma omp parallel for schedule(dynamic, ${ch}) ${parallelIf(e, n)}\n`
+        + `for (int64_t ${k} = 0; ${k} < ${n}; ${k}++) { const int64_t ${i} = ${s} + ${k}; ${inRegion(e, `${d}[${k}] = ${body};`)} }\nVPAR_OUT;\n`
         + `${a}; })`;
     }
 
@@ -456,7 +460,7 @@ export function cgen(program, opts = {}) {
       if (op === 'and') return `(${expr(e.left)} && ${expr(e.right)})`;
       if (op === 'or') return `(${expr(e.left)} || ${expr(e.right)})`;
       const t = e.left.ty;
-      const parts = [part(e.left), part(e.right)];
+      const parts = t === 'Str' && op !== '+' ? [quiet(e.left), quiet(e.right)] : [part(e.left), part(e.right)];
       if (t === 'Str') {
         if (['<', '<=', '>', '>='].includes(op)) return seq(parts, ([a, b]) => `(vstr_cmp(${a}, ${b}) ${op} 0)`);
         return seq(parts, ([a, b]) => (op === '+' ? `vstr_concat(${a}, ${b})` : `${op === '!=' ? '!' : ''}vstr_eq(${a}, ${b})`));
@@ -498,7 +502,7 @@ export function cgen(program, opts = {}) {
           const writes = `(${[...names.map((x, k) => `${fn[e.args[k].ty]}(${x})`), 'vp_end()'].join(', ')})`;
           return decls.length ? `({ ${decls.join(' ')} ${writes}; })` : writes;
         }
-        case 'len': return `(${expr(e.args[0])})->len`;
+        case 'len': return `(${quiet(e.args[0]).c})->len`;
         case 'array': {
           const init = e.args[1], et = ctype(init.ty);
           const zero = (init.kind === 'IntLit' && init.value === 0n) || (init.kind === 'BoolLit' && !init.value)
@@ -513,6 +517,12 @@ export function cgen(program, opts = {}) {
         case 'float': return `((double)${expr(e.args[0])})`;
         case 'int': return `vf2i(${expr(e.args[0])})`;
         case 'sqrt': return `sqrt(${expr(e.args[0])})`;
+        case 'bit_and': case 'bit_or': case 'bit_xor':
+          return seq(e.args.map(part), ([a, b]) => `((int64_t)((uint64_t)${a} ${{ bit_and: '&', bit_or: '|', bit_xor: '^' }[e.name]} (uint64_t)${b}))`);
+        case 'shift_left': case 'shift_right': {
+          const s = site(FAIL.OVERFLOW, e);
+          return seq(e.args.map(part), ([a, b]) => `${e.name === 'shift_left' ? 'vshl' : 'vshr'}(${a}, ${b}, ${s})`);
+        }
         case 'now_ms': return 'avisoq_now_ms()';
         case 'str': return `${{ Int: 'vstr_from_i64', Float: 'vstr_from_f64', Bool: 'vstr_from_bool' }[e.args[0].ty]}(${expr(e.args[0])})`;
         case 'substr': {
@@ -522,7 +532,7 @@ export function cgen(program, opts = {}) {
         case 'chr': return `vstr_from_byte(${expr(e.args[0])}, ${site(FAIL.BOUNDS, e)})`;
         case 'byte_at': {
           const s = site(FAIL.BOUNDS, e);
-          return seq(e.args.map(part), (xs) => `vstr_byte_at(${xs.join(', ')}, ${s})`);
+          return seq([quiet(e.args[0]), part(e.args[1])], (xs) => `vstr_byte_at(${xs.join(', ')}, ${s})`);
         }
         case 'put': case 'get': case 'get_or': case 'has': case 'keys': case 'remove': return mapCall(e);
         case 'push': {
@@ -577,9 +587,26 @@ export function cgen(program, opts = {}) {
 
     function stmt(s) {
       switch (s.kind) {
-        case 'Let': line(`${ctype(s.sym.ty)} ${v(s.sym)} = ${expr(s.init)};`); break;
+        case 'Let':
+          line(`${ctype(s.sym.ty)} ${v(s.sym)} = ${expr(s.init)};`);
+          if (s.mutable && s.sym.ty === 'Str' && !s.sym.byRef && !s.sym.isResult) {
+            // capacity of the buffer it owns, and whether anything else may hold that buffer
+            s.sym.builder = true;
+            line(`int64_t cap_${s.sym.name} = 0; bool sh_${s.sym.name} = true;`);
+          }
+          break;
         case 'Assign':
-          if (s.target.kind === 'Name') {
+          if (s.target.kind === 'Name' && s.target.sym.builder) {
+            // x = x + a + b: append in place when x owns its buffer and has room
+            const sym = s.target.sym, n = sym.name, added = [];
+            let left = s.value;
+            while (left.kind === 'Binary' && left.op === '+' && left.ty === 'Str') { added.unshift(left.right); left = left.left; }
+            if (added.length && left.kind === 'Name' && left.sym === sym && added.every((a) => !mentions(a, sym))) {
+              for (const a of added) line(`v_${n} = vstr_append(v_${n}, &cap_${n}, &sh_${n}, ${expr(a)});`);
+            } else {
+              line(`v_${n} = ${expr(s.value)}; cap_${n} = 0; sh_${n} = true;`);
+            }
+          } else if (s.target.kind === 'Name') {
             line(`${v(s.target.sym)} = ${expr(s.value)};`);
           } else {
             // index, then value, then the array: a value that grows the array must not leave a stale address

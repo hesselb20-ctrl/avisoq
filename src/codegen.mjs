@@ -45,6 +45,7 @@ export function codegen(program, opts = {}) {
   if (program.usesStrings) {
     // String operations are pure helpers supplied by the host; they need no capability.
     imp.str_concat = m.addImport('rt', 'str_concat', [I32, I32], [I32]);
+    imp.str_append = m.addImport('rt', 'str_append', [I32, I32, I32, I32], [I32, I32]);
     imp.str_eq = m.addImport('rt', 'str_eq', [I32, I32], [I32]);
     imp.str_cmp = m.addImport('rt', 'str_cmp', [I32, I32], [I32]);
     imp.str_from_i64 = m.addImport('rt', 'str_from_i64', [I64], [I32]);
@@ -298,6 +299,8 @@ export function codegen(program, opts = {}) {
     const storeTemps = new Map();
     const storeTemp = (ty) => { if (!storeTemps.has(ty)) storeTemps.set(ty, addLocal(ty)); return storeTemps.get(ty); };
     const storeIndex = addLocal(I64);
+    // Reads a string that is being built without keeping it: its length or one of its bytes.
+    const quiet = (e) => { if (e.kind === 'Name' && e.sym.wb) lget(e.sym.idx); else expr(e); };
     function expr(e) {
       switch (e.kind) {
         case 'Held': lget(storeIndex); break;
@@ -306,7 +309,11 @@ export function codegen(program, opts = {}) {
         case 'FloatLit': emit(F64_CONST, ...f64bytes(e.value)); break;
         case 'BoolLit': emit(...i32c(e.value ? 1 : 0)); break;
         case 'StrLit': emit(...i32c(intern(e.value))); break;
-        case 'Name': lget(e.sym.idx); break;
+        case 'Name':
+          // a string that is being built: anything that keeps its value stops it growing in place
+          if (e.sym.wb) { emit(...i32c(1)); lset(e.sym.wb.shared); }
+          lget(e.sym.idx);
+          break;
         case 'Unary':
           if (e.op === 'not') { expr(e.operand); emit(I32_EQZ); }
           else if (e.ty === 'Float') { expr(e.operand); emit(F64_NEG); }
@@ -473,7 +480,7 @@ export function codegen(program, opts = {}) {
           call(imp.print_end);
           break;
         case 'len':
-          expr(e.args[0]);
+          quiet(e.args[0]);
           if (isMap(e.args[0].ty)) call(imp.map_len); else emit(I32_LOAD, 2, 0, I64_EXTEND_U);
           break;
         case 'push': {
@@ -535,6 +542,17 @@ export function codegen(program, opts = {}) {
         case 'float': expr(e.args[0]); emit(F64_CONVERT_I64); break;
         case 'int': expr(e.args[0]); emit(I64_TRUNC_F64); break;
         case 'sqrt': expr(e.args[0]); emit(F64_SQRT); break;
+        case 'bit_and': case 'bit_or': case 'bit_xor':
+          expr(e.args[0]); expr(e.args[1]); emit({ bit_and: I64_AND, bit_or: I64_OR, bit_xor: I64_XOR }[e.name]);
+          break;
+        case 'shift_left': case 'shift_right':
+          // the count must be 0 to 63; bits shifted out are dropped
+          expr(e.args[0]); expr(e.args[1]); lset(t1); lset(t2);
+          lget(t1); emit(...i64c(63), I64_GT_U, IF, VOID);
+          fail(FAIL.OVERFLOW, e);
+          emit(END);
+          lget(t2); lget(t1); emit(e.name === 'shift_left' ? 0x86 : I64_SHR_S);
+          break;
         case 'now_ms': call(imp.now_ms); break;
         case 'str':
           expr(e.args[0]);
@@ -545,7 +563,7 @@ export function codegen(program, opts = {}) {
           break;
         case 'byte_at':
           // a string is its length (4 bytes) followed by its bytes
-          expr(e.args[0]); expr(e.args[1]);
+          quiet(e.args[0]); expr(e.args[1]);
           lset(t1); lset(p1);
           lget(t1); lget(p1); emit(I32_LOAD, 2, 0, I64_EXTEND_U, I64_GE_U, IF, VOID);
           fail(FAIL.BOUNDS, e);
@@ -575,9 +593,33 @@ export function codegen(program, opts = {}) {
 
     function stmt(s) {
       switch (s.kind) {
-        case 'Let': expr(s.init); lset(s.sym.idx); break;
+        case 'Let':
+          expr(s.init); lset(s.sym.idx);
+          if (s.mutable && s.sym.ty === 'Str') {
+            s.sym.wb ??= { cap: addLocal(I32), shared: addLocal(I32) };
+            emit(...i32c(0)); lset(s.sym.wb.cap);
+            emit(...i32c(1)); lset(s.sym.wb.shared);
+          }
+          break;
         case 'Assign':
-          if (s.target.kind === 'Name') { expr(s.value); lset(s.target.sym.idx); }
+          if (s.target.kind === 'Name' && s.target.sym.wb) {
+            // x = x + a + b: append in place when x owns its buffer and has room
+            const sym = s.target.sym, added = [];
+            let left = s.value;
+            while (left.kind === 'Binary' && left.op === '+' && left.ty === 'Str') { added.unshift(left.right); left = left.left; }
+            const mentions = (n) => { let found = false; walk(n, (x) => { if (x.kind === 'Name' && x.sym === sym) found = true; }); return found; };
+            if (added.length && left.kind === 'Name' && left.sym === sym && !added.some(mentions)) {
+              for (const a of added) {
+                lget(sym.idx); expr(a); lget(sym.wb.cap); lget(sym.wb.shared);
+                call(imp.str_append);
+                lset(sym.wb.cap); lset(sym.idx);
+                emit(...i32c(0)); lset(sym.wb.shared);
+              }
+            } else {
+              expr(s.value); lset(sym.idx);
+              emit(...i32c(1)); lset(sym.wb.shared);
+            }
+          } else if (s.target.kind === 'Name') { expr(s.value); lset(s.target.sym.idx); }
           else {
             const held = storeTemp(wt(s.target.ty));
             expr(s.target.index); lset(storeIndex);

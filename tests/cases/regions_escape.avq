@@ -1,0 +1,108 @@
+// Memory is handed back after a call or a loop iteration only when nothing that existed before
+// can point at what was allocated inside. Each case lets data out a different way, then churns
+// through a lot of garbage so that anything freed too early would be overwritten.
+import "std/strings"
+import "std/arrays"
+
+struct Bag { names: [Str], rows: [[Int]], index: Map[Str, Int] }
+
+fn churn(n: Int) -> Int {
+  var t = 0
+  for i in 0..n {
+    var junk: [Str] = []
+    for j in 0..20 { push(junk, "junk" + str(i * j)) }
+    t += len(junk[19])
+  }
+  return t
+}
+
+fn squares(n: Int) -> [Int] {
+  var out: [Int] = []
+  for i in 0..n { push(out, i * i) }
+  return out
+}
+
+fn add_row(grid: mut [[Int]], n: Int) -> Int {
+  var row: [Int] = []
+  for i in 0..n { push(row, n * 10 + i) }
+  push(grid, row)
+  return n
+}
+
+fn fill(xs: mut [Str], n: Int) -> Int {
+  for i in 0..n { xs[i] = "v" + str(i * 7) }
+  return n
+}
+
+fn note(b: mut Bag, name: Str) {
+  var row: [Int] = []
+  for ch in name { push(row, ch) }
+  push(b.names, name + "!")
+  push(b.rows, row)
+  put(b.index, "k-" + name, len(b.names))
+}
+
+fn local_only(n: Int) -> Int {
+  var words: [Str] = []
+  var table: Map[Str, Int] = {}
+  for i in 0..n {
+    push(words, "w" + str(i))
+    put(table, words[i], i)
+  }
+  var t = 0
+  for w in words { t += get(table, w) + len(w) }
+  return t
+}
+
+fn main() uses io {
+  // A: a function that stores through its mut parameter
+  var grid: [[Int]] = []
+  for n in 1..40 { add_row(grid, n) }
+  // B: inner-loop work kept by a variable of the outer loop, then by a variable outside both
+  var lines: [Str] = []
+  for i in 0..30 {
+    var line = ""
+    var parts: [Str] = []
+    for j in 0..i {
+      line = line + str(j % 10)
+      push(parts, str(j))
+    }
+    push(lines, line + "/" + join(parts, ""))
+  }
+  // C: element stores of strings into an outer array
+  var slots = array(50, "")
+  let filled = fill(slots, 50)
+  // D: a mut struct holding arrays and a map
+  var bag = Bag(names: [], rows: [], index: {})
+  for w in split("alpha beta gamma delta epsilon zeta eta theta", " ") { note(bag, w) }
+  // E: only local data, handed back every call
+  var local_total = 0
+  for i in 0..200 { local_total += local_only(40) }
+  // F: results of calls kept in an outer array
+  var kept: [[Int]] = []
+  for i in 0..25 { push(kept, squares(i + 1)) }
+
+  let noise = churn(4000)
+
+  var grid_sum = 0
+  for row in grid {
+    for v in row { grid_sum += v }
+  }
+  var kept_sum = 0
+  for row in kept { kept_sum += row[len(row) - 1] + len(row) }
+  var row_sum = 0
+  for row in bag.rows {
+    for v in row { row_sum += v }
+  }
+  print(len(grid), grid_sum, grid[38][38], lines[29], lines[3])
+  print(
+    filled,
+    slots[0],
+    slots[49],
+    join(bag.names, ","),
+    row_sum,
+    get(bag.index, "k-theta"),
+    len(bag.index),
+  )
+  print(local_total, kept_sum, kept[24][24], noise > 0)
+}

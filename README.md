@@ -6,7 +6,7 @@ A small, fast, safe programming language designed to be written and verified by 
 
 <img src=".github/assets/figure/scene.webp" width="100%" alt="Three beats: a mandelbrot benchmark computed on one thread with every check on in 112 ms against 108 ms for C++; the same loop written as a sum, spread over 8 threads and 8 lanes; and the result, 4.6 ms against 15 ms for C++ parallelised by hand with OpenMP.">
 
-Version 0.8. One front end, two backends (native machine code through GCC, and sandboxed
+Version 0.9. One front end, two backends (native machine code through GCC, and sandboxed
 WebAssembly), a standard library written in Avisoq, a formatter, a compile-time contract prover,
 a language server, a package manager and a differential fuzzer. The test suites pass on both
 backends: 366 compiler cases each, plus 26 editor, 17 package and 10 sandbox tests.
@@ -154,11 +154,14 @@ rerun on it, both Avisoq agents scored 10 of 10, level with Python and Rust. Ver
 shorthand (character literals, `for x in items`, `+=`, string indexing); the agents still take
 1.4 to 2.4 times as long with Avisoq as with Python.
 
-What the agents' Avisoq programs do better is run: on the same inputs they were 5 to 8 times
-faster in total than the Python programs the same agents wrote, with every safety check on.
-They were 14% to 45% slower than the agents' Rust programs. So today the measured case for
-Avisoq is: as correct as Python on these tasks, several times faster to run, and slower for
-the agent to write. It is not ahead of Rust on anything measured here.
+What the agents' Avisoq programs do better is run. On the same inputs, with every safety
+check on, they were 8 to 14 times faster in total than the Python programs the same agents
+wrote. Against the agents' Rust programs (`rustc -O`) they were 1.4 times faster in one run
+and level in the other, as of version 0.9; before its allocator and string work they were 14%
+to 45% slower. So today the measured case for Avisoq is: as correct as Python and Rust on
+these tasks, about as fast to run as Rust, much faster than Python, and slower for the agent
+to write than either. Ten tasks and two runs is a small sample; see the table and its caveats
+in [`agentbench/README.md`](agentbench/README.md).
 
 <img src=".github/assets/agents/scene.webp" width="100%" alt="Two models each solved 24 of 24 tasks on the first attempt in Avisoq, Python and Rust. The Avisoq solutions were the longest: about 380 lines against 200 for Python and 330 for Rust.">
 
@@ -249,7 +252,7 @@ when the program was granted neither files nor network, no right to write any fi
 - **Modules:** `import "std/strings"`, `import "other_file"` (relative), `import "pkg:name/module"`.
   `private fn` / `private struct` / `private enum` are usable only in their own file.
 - **Built-ins:** `print`, `len`, `array`, `copy`, `push`, `pop`, `float`, `int`, `sqrt`, `str`,
-  `substr`, `byte_at`, `chr`, `now_ms`; maps: `put`, `get`, `get_or`, `has`, `remove`, `keys`;
+  `substr`, `byte_at`, `chr`, `now_ms`, `bit_and`, `bit_or`, `bit_xor`, `shift_left`, `shift_right`; maps: `put`, `get`, `get_or`, `has`, `remove`, `keys`;
   files: `read_file`, `write_file`, `file_exists`; network: `http_get`, `http_post`.
 
 ### Standard library
@@ -323,8 +326,10 @@ on an idle machine with 8 logical cores (Zen 4, AVX-512). Ratios are relative to
 - **Generic constraints** cover the three built-in ones; you cannot declare your own.
 - **No sharing costs copies** when a value is stored while still in use; only whole local
   values move, not parts of them.
-- **Memory reclamation is conservative:** values rebuilt in an outer variable inside a long
-  loop are kept until the enclosing function returns, and `main` never reclaims.
+- **Memory reclamation is by region, not per value:** what a function or a loop iteration
+  allocates is handed back when nothing that existed before can point at it. A value rebuilt in
+  an outer variable inside a long loop keeps its old versions until the enclosing function
+  returns, and `main` itself never reclaims.
 - **Lanes** cover `sum` and numeric comprehensions over `Int`, `Float` and `Bool` code without
   array reads.
 - **Network:** GET and POST only, no headers, timeouts fixed, no streaming.
@@ -334,8 +339,7 @@ on an idle machine with 8 logical cores (Zen 4, AVX-512). Ratios are relative to
   program granted files or network can still write wherever your user account can; the
   per-folder and per-host limits are enforced by the compiled program itself.
 - **Strings on the WebAssembly backend** still call into the host for concatenation, comparison
-  and substrings. A string-and-map test that took 21 s before 0.7 now takes under 1 s there and
-  78 ms native (Python: 108 ms), but building a long string one piece at a time is still slow.
+  and substrings, so string-heavy code is several times slower there than on the native backend.
 - **Field assignment copies the struct.** `p.x = v` builds a new struct value, and
   `push(p.items, v)` takes the array out and puts it back. Fine for parser state; costly in a
   hot loop on the WebAssembly backend, where structs live on the heap.

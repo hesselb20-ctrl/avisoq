@@ -260,6 +260,46 @@ Total for all 10 tasks, best of three:
 node agentbench/speed.mjs results-expert/model-a --avisoq results-expert/model-a-v08
 ```
 
+### Version 0.9: closing the run-time gap to Rust
+
+The 0.8 timings had the agents' Avisoq programs 14% to 45% slower than their Rust programs.
+Three causes were found and fixed in the compiler and runtime; the solutions were not changed.
+
+- **Memory was rarely handed back.** A function or loop was only reclaimed if it stored nothing
+  at all, so any code that built a local array or string kept its memory until the program
+  ended. The analysis now tracks what is stored through, and reclaims whenever nothing that
+  existed before can point at the new memory.
+- **Every allocation paid for an emulated thread-local lookup.** With this toolchain
+  thread-local storage is a function call. The main thread now uses a plain global arena, and
+  the common allocation is an inlined pointer bump.
+- **Appending to a string copied the whole string.** A `var` string now grows in place, on
+  both backends, while every other holder of an earlier value still sees that earlier value.
+
+Bit operations (`bit_and`, `bit_or`, `bit_xor`, `shift_left`, `shift_right`) were added too, but
+the solutions timed here were written before that and do not use them.
+
+Same solutions as above (Avisoq 0.8 runs, Python and Rust from the first expert round), same
+inputs, total for all 10 tasks, best of three:
+
+| | Avisoq 0.8 | Avisoq 0.9 | Python | Rust | Python / Avisoq 0.9 | Rust / Avisoq 0.9 |
+|---|---:|---:|---:|---:|---:|---:|
+| Run A (Sonnet) | 29 ms | 17 ms | 239 ms | 24 ms | 14.3x | 1.43x |
+| Run B (Haiku) | 47 ms | 27 ms | 229 ms | 27 ms | 8.5x | 0.99x |
+
+Per task, run A / run B, as Rust time divided by Avisoq time (above 1 means Avisoq is faster):
+interp 1.74 / 0.94, json_canon 4.15 / 1.97, regex_match 1.01 / 0.83, sheet 2.43 / 2.21,
+toposort 3.57 / 4.32, frac_calc 1.85 / 1.66, big_divmod 0.24 / 1.49, schedule 1.07 / 0.32,
+sat 0.37 / 0.28, to_infix 5.52 / 4.54.
+
+- Avisoq is ahead of Rust on 8 of 10 tasks in run A and 6 of 10 in run B, and clearly behind on
+  `sat` in both (the Rust solutions use bit shifts where the Avisoq ones allocate an array per
+  candidate).
+- All 20 Avisoq solutions were regraded on 0.9 and still pass every hidden test, on both
+  backends for run A.
+- The caveats above still hold: each agent chose its own algorithm per language, the totals are
+  dominated by one or two tasks, and this is ten small programs. It supports "about as fast as
+  Rust on this kind of code", not "faster than Rust".
+
 ## Running it yourself
 
 ```

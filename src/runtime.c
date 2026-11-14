@@ -42,13 +42,21 @@ struct vmap;
 typedef struct vbig { struct vbig *older; int64_t pad; } vbig;
 typedef struct { char *p; char *end; int64_t chunk; vbig *big; struct vmap *maps; } vmark;
 typedef struct { vmark cur; char **chunks; int64_t nchunks; } vtls;
-static _Thread_local vtls VT = { { NULL, NULL, -1, NULL, NULL }, NULL, 0 };
+/* Thread-local storage is an emulated function call with this toolchain, so the arena of the
+   main thread is an ordinary global. Only while a parallel loop is running (VPAR counts them)
+   does every thread, the main one included, use an arena of its own. A mark and its reset are
+   always on the same side of a parallel loop, so they always see the same arena. */
+static vtls VT_MAIN = { { NULL, NULL, -1, NULL, NULL }, NULL, 0 };
+static _Thread_local vtls VT_THREAD = { { NULL, NULL, -1, NULL, NULL }, NULL, 0 };
+static int VPAR = 0;
+#define VPAR_IN __atomic_add_fetch(&VPAR, 1, __ATOMIC_SEQ_CST)
+#define VPAR_OUT __atomic_sub_fetch(&VPAR, 1, __ATOMIC_SEQ_CST)
+__attribute__((noinline)) static vtls *vt_thread(void) { return &VT_THREAD; }
+static inline vtls *vt(void) { return VUNLIKELY(__atomic_load_n(&VPAR, __ATOMIC_RELAXED) != 0) ? vt_thread() : &VT_MAIN; }
 static void vmap_release(struct vmap *m);
 static struct vmap *vmap_older(struct vmap *m);
 
-static void *avisoq_alloc(size_t n, bool zeroed) {
-  vtls *t = &VT;
-  n = (n + 15) & ~(size_t)15;
+__attribute__((noinline)) static void *avisoq_alloc_slow(vtls *t, size_t n, bool zeroed) {
   if (n > 65536) {
     vbig *big = (vbig *)(zeroed ? calloc(1, n + sizeof(vbig)) : malloc(n + sizeof(vbig)));
     if (VUNLIKELY(!big)) avisoq_fail(VSITE_OOM);
@@ -74,10 +82,20 @@ static void *avisoq_alloc(size_t n, bool zeroed) {
   return p;
 }
 
-static inline vmark avisoq_mark(void) { return VT.cur; }
+/* The common case is a pointer bump. */
+static inline void *avisoq_alloc(size_t n, bool zeroed) {
+  vtls *t = vt();
+  n = (n + 15) & ~(size_t)15;
+  if (VUNLIKELY(n > 65536 || (size_t)(t->cur.end - t->cur.p) < n)) return avisoq_alloc_slow(t, n, zeroed);
+  void *p = t->cur.p;
+  t->cur.p += n;
+  if (zeroed) memset(p, 0, n);
+  return p;
+}
 
-static void avisoq_reset(vmark m) {
-  vtls *t = &VT;
+static inline vmark avisoq_mark(void) { return vt()->cur; }
+
+__attribute__((noinline)) static void avisoq_reset_slow(vtls *t, vmark m) {
   while (t->cur.big != m.big) {
     vbig *b = t->cur.big;
     t->cur.big = b->older;
@@ -88,6 +106,13 @@ static void avisoq_reset(vmark m) {
     t->cur.maps = vmap_older(mp);
     vmap_release(mp);
   }
+  t->cur = m;
+}
+
+/* Usually nothing large and no map was created inside the region: restoring the mark is all. */
+static inline void avisoq_reset(vmark m) {
+  vtls *t = vt();
+  if (VUNLIKELY(t->cur.big != m.big || t->cur.maps != m.maps)) { avisoq_reset_slow(t, m); return; }
   t->cur = m;
 }
 
@@ -143,6 +168,15 @@ static inline int64_t vmulc(int64_t x, int64_t c, int site) {
 static inline int64_t vwadd(int64_t a, int64_t b) { return (int64_t)((uint64_t)a + (uint64_t)b); }
 static inline int64_t vwsub(int64_t a, int64_t b) { return (int64_t)((uint64_t)a - (uint64_t)b); }
 static inline int64_t vwmul(int64_t a, int64_t b) { return (int64_t)((uint64_t)a * (uint64_t)b); }
+/* Shifts: the count must be 0 to 63. Bits shifted out are dropped; a right shift keeps the sign. */
+static inline int64_t vshl(int64_t a, int64_t n, int site) {
+  if (VUNLIKELY((uint64_t)n > 63)) avisoq_fail(site);
+  return (int64_t)((uint64_t)a << n);
+}
+static inline int64_t vshr(int64_t a, int64_t n, int site) {
+  if (VUNLIKELY((uint64_t)n > 63)) avisoq_fail(site);
+  return a >> n;
+}
 static inline int64_t vdiv(int64_t a, int64_t b, int site) {
   if (VUNLIKELY(b == 0)) avisoq_fail(site);
   if (VUNLIKELY(b == -1 && a == INT64_MIN)) avisoq_fail(VSITE_DIV_OVERFLOW);
@@ -194,11 +228,32 @@ static const vstr *vstr_substr(const vstr *s, int64_t start, int64_t end, int si
   memcpy(r->data, s->data + start, (size_t)(end - start));
   return r;
 }
-/* A one-byte string. */
-static const vstr *vstr_from_byte(int64_t b, int site) {
+/* A one-byte string. There are only 256 of them, made once. */
+static vstr *VCHR[256];
+static inline const vstr *vstr_from_byte(int64_t b, int site) {
   if (VUNLIKELY((uint64_t)b > 255)) avisoq_fail(site);
-  vstr *s = vstr_new(1);
-  s->data[0] = (char)b;
+  return VCHR[b];
+}
+/* x = x + b for a variable that is built up piece by piece. When the variable owns its buffer
+   (nothing else has been given the string since it was last copied) and there is room, the
+   bytes are added in place; otherwise the string moves to a buffer twice the size. */
+static const vstr *vstr_append(const vstr *a, int64_t *cap, bool *shared, const vstr *b) {
+  int64_t n = a->len + b->len;
+  if (!*shared && n <= *cap) {
+    vstr *m = (vstr *)a;
+    memcpy(m->data + m->len, b->data, (size_t)b->len);
+    m->len = n;
+    m->data[n] = 0;
+    return a;
+  }
+  int64_t c = n < 24 ? 48 : n * 2;
+  vstr *s = vstr_new(c);
+  memcpy(s->data, a->data, (size_t)a->len);
+  memcpy(s->data + a->len, b->data, (size_t)b->len);
+  s->len = n;
+  s->data[n] = 0;
+  *cap = c;
+  *shared = false;
   return s;
 }
 static int64_t vstr_byte_at(const vstr *s, int64_t i, int site) {
@@ -226,8 +281,8 @@ static vmap *vmap_new(int64_t vsize, int strkeys) {
   vmap *m = (vmap *)avisoq_alloc(sizeof(vmap), true);
   m->vsize = vsize;
   m->strkeys = strkeys;
-  m->older = VT.cur.maps;
-  VT.cur.maps = m;
+  m->older = vt()->cur.maps;
+  vt()->cur.maps = m;
   return m;
 }
 static inline uint64_t vmap_hash(const vmap *m, uint64_t key) {
@@ -555,4 +610,10 @@ static void avisoq_init(void) {
   _setmode(_fileno(stdout), _O_BINARY);
 #endif
   setvbuf(stdout, NULL, _IOFBF, 1 << 16);
+  for (int i = 0; i < 256; i++) {
+    VCHR[i] = (vstr *)malloc(sizeof(vstr) + 2);
+    VCHR[i]->len = 1;
+    VCHR[i]->data[0] = (char)i;
+    VCHR[i]->data[1] = 0;
+  }
 }

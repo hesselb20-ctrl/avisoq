@@ -44,16 +44,18 @@ export function desugar(program) {
       if (s.kind === 'ForIn') {
         exprs(s.iter);
         let items = s.iter;
-        if (items.kind !== 'Name') {
+        // a variable, or fields and simple indexes of one, is read in place; anything else is evaluated once
+        const isPlace = (e) => e.kind === 'Name' || (e.kind === 'Field' && isPlace(e.base)) || (e.kind === 'Index' && isPlace(e.base) && (e.index.kind === 'Name' || e.index.kind === 'IntLit'));
+        if (!isPlace(items)) {
           const held = fresh('items');
           out.push({ kind: 'Let', mutable: false, name: held, ty: null, init: items, stmtLine: s.line, ...at });
           items = { kind: 'Name', name: held, ...at };
         }
         const i = s.index ? s.index.name : fresh('i');
-        const element = { kind: 'Let', mutable: false, loopView: true, name: s.name, ty: null, init: { kind: 'Index', base: { ...items }, index: { kind: 'Name', name: i, ...at }, ...at }, line: s.nameLine, col: s.nameCol, endLine: s.line, stmtLine: s.line };
+        const element = { kind: 'Let', mutable: false, loopView: true, name: s.name, ty: null, init: { kind: 'Index', base: structuredClone(items), index: { kind: 'Name', name: i, ...at }, ...at }, line: s.nameLine, col: s.nameCol, endLine: s.line, stmtLine: s.line };
         const body = block([element, ...s.body]);
         body.closeLine = s.body.closeLine;
-        out.push({ kind: 'For', name: i, start: { kind: 'IntLit', value: 0n, raw: '0', ...at }, end: { kind: 'Call', name: 'len', args: [{ ...items }], ...at }, body, line: s.index ? s.index.line : s.line, col: s.index ? s.index.col : s.col, endLine: s.endLine, stmtLine: s.stmtLine });
+        out.push({ kind: 'For', name: i, start: { kind: 'IntLit', value: 0n, raw: '0', ...at }, end: { kind: 'Call', name: 'len', args: [structuredClone(items)], ...at }, body, line: s.index ? s.index.line : s.line, col: s.index ? s.index.col : s.col, endLine: s.endLine, stmtLine: s.stmtLine });
         continue;
       }
       if (s.try) {
