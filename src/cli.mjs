@@ -15,6 +15,8 @@ commands:
   fmt     rewrite the file in the canonical layout (--check only reports)
   lsp     start the language server on stdin/stdout (no file argument)
   guide   print the language guide written for AI agents (no file argument)
+  call    call one function and print its result as JSON:  avisoq call file.avq name '[args]'
+  serve   answer function calls as JSON lines on stdin/stdout, for other languages
 
 packages (run in the project folder):
   init [name]                  create avisoq.json
@@ -72,6 +74,25 @@ if (cmd === 'lsp') {
   const { startServer } = await import('./lsp.mjs');
   startServer();
   await new Promise(() => {}); // serve until the editor closes the connection
+}
+if ((cmd === 'call' || cmd === 'serve') && file) {
+  const { load, serve, jsonSafe } = await import('./embed.mjs');
+  if (cmd === 'serve') process.exit(await serve(file, { allow: flags.allow }));
+  try {
+    const module = await load(file, { allow: flags.allow });
+    const name = pos[2];
+    if (!name || typeof module[name] !== 'function' || name.startsWith('$')) {
+      process.stderr.write(`avisoq call: ${name ? `there is no function '${name}' to call` : 'which function?'}\ncallable: ${module.$functions.map((f) => `${f.name}(${f.params.map((p) => `${p.name}: ${p.ty}`).join(', ')})${f.ret === 'Unit' ? '' : ` -> ${f.ret}`}`).join(', ')}\n`);
+      process.exit(64);
+    }
+    const result = module[name](...JSON.parse(pos[3] ?? '[]'));
+    process.stdout.write(module.$output());
+    if (result !== undefined) process.stdout.write(`${JSON.stringify(jsonSafe(result))}\n`);
+    process.exit(0);
+  } catch (e) {
+    process.stderr.write(`avisoq call: ${e.message}\n`);
+    process.exit(e.kind === 'compile' ? 65 : 70);
+  }
 }
 if (!cmd || !file || !['check', 'run', 'test', 'build', 'fmt'].includes(cmd)) {
   process.stdout.write(USAGE);

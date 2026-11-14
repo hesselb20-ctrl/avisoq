@@ -1,0 +1,15 @@
+{"name":"Ada","tags":["x","y"],"age":36,"ratio":0.25,"ok":true,"none":null}
+[1,-2,3.5,1000,0.25,0,0,12345678901234]
+"a\"b\\c\n\tAé€😀//"
+[[],{},[[[]]],{"a":{"b":[1,{"c":null}]}}]
+error: unexpected end at position 0
+error: unexpected character at position 6
+error: expected : at position 5
+error: expected , or ] at position 3
+error: bad number at position 0
+error: unfinished string at position 11
+error: unexpected text at position 0
+error: unexpected text after the value at position 4
+{"a":1,"a":2}
+Ada 7 false 3 15.5 false false false
+{"id":7,"tags":["a\"b",true,null]}

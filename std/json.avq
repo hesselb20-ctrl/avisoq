@@ -1,0 +1,382 @@
+// JSON: read it, look inside it, write it.
+//
+//   match json_parse(text) {
+//     Ok(value) => { print(unwrap_or(json_str(json_get(value, "name")), "?")) }
+//     Err(error) => { print("bad JSON:", error) }
+//   }
+//
+// Numbers are Floats (as in JSON itself); json_int gives a whole number as an Int.
+// An object keeps its members in the order they were written.
+import "std/core"
+import "std/strings"
+
+enum Json {
+  JNull,
+  JBool(value: Bool),
+  JNumber(value: Float),
+  JText(value: Str),
+  JArray(items: [Json]),
+  JObject(names: [Str], values: [Json]),
+}
+
+private struct JsonReader { src: Str, pos: Int }
+
+private fn json_skip(r: mut JsonReader) {
+  while r.pos < len(r.src) and (r.src[r.pos] == ' ' or r.src[r.pos] == '\n' or r.src[r.pos] == '\t' or r.src[r.pos] == '\r') {
+    r.pos += 1
+  }
+}
+
+private fn json_fail(r: JsonReader, what: Str) -> Str {
+  return what + " at position " + str(r.pos)
+}
+
+private fn json_hex(b: Int) -> Int {
+  if b >= '0' and b <= '9' { return b - '0' }
+  if b >= 'a' and b <= 'f' { return b - 'a' + 10 }
+  if b >= 'A' and b <= 'F' { return b - 'A' + 10 }
+  return -1
+}
+
+// The UTF-8 bytes of a code point.
+private fn json_utf8(code: Int) -> Str {
+  if code < 128 { return chr(code) }
+  if code < 2048 { return chr(192 + code / 64) + chr(128 + code % 64) }
+  if code < 65536 { return chr(224 + code / 4096) + chr(128 + code / 64 % 64) + chr(128 + code % 64) }
+  return chr(240 + code / 262144) + chr(128 + code / 4096 % 64) + chr(128 + code / 64 % 64) + chr(128 + code % 64)
+}
+
+private fn json_unit(r: mut JsonReader) -> Result[Int, Str] {
+  if r.pos + 4 > len(r.src) { return Err(error: json_fail(r, "unfinished \\u escape")) }
+  var code = 0
+  for i in r.pos..r.pos + 4 {
+    let h = json_hex(r.src[i])
+    if h < 0 { return Err(error: json_fail(r, "bad \\u escape")) }
+    code = code * 16 + h
+  }
+  r.pos += 4
+  return Ok(value: code)
+}
+
+private fn json_string(r: mut JsonReader) -> Result[Str, Str] {
+  r.pos += 1
+  var out = ""
+  while true {
+    if r.pos >= len(r.src) { return Err(error: json_fail(r, "unfinished string")) }
+    let b = r.src[r.pos]
+    r.pos += 1
+    if b == '"' { break }
+    if b < 32 { return Err(error: json_fail(r, "control character in string")) }
+    if b != '\\' {
+      out += chr(b)
+      continue
+    }
+    if r.pos >= len(r.src) { return Err(error: json_fail(r, "unfinished escape")) }
+    let e = r.src[r.pos]
+    r.pos += 1
+    if e == '"' or e == '\\' or e == '/' {
+      out += chr(e)
+    } else if e == 'n' {
+      out += "\n"
+    } else if e == 't' {
+      out += "\t"
+    } else if e == 'r' {
+      out += chr(13)
+    } else if e == 'b' {
+      out += chr(8)
+    } else if e == 'f' {
+      out += chr(12)
+    } else if e == 'u' {
+      var code = json_unit(r)?
+      // a pair of surrogates makes one character above U+FFFF
+      if code >= 55296 and code < 56320 and r.pos + 1 < len(r.src) and r.src[r.pos] == '\\' and r.src[r.pos + 1] == 'u' {
+        r.pos += 2
+        let low = json_unit(r)?
+        if low < 56320 or low > 57343 { return Err(error: json_fail(r, "bad surrogate pair")) }
+        code = 65536 + (code - 55296) * 1024 + (low - 56320)
+      }
+      out += json_utf8(code)
+    } else {
+      return Err(error: json_fail(r, "unknown escape"))
+    }
+  }
+  return Ok(value: out)
+}
+
+private fn json_number(r: mut JsonReader) -> Result[Json, Str] {
+  let start = r.pos
+  var negative = false
+  if r.src[r.pos] == '-' {
+    negative = true
+    r.pos += 1
+  }
+  let first = r.pos
+  var value = 0.0
+  while r.pos < len(r.src) and is_digit(r.src[r.pos]) {
+    value = value * 10.0 + float(r.src[r.pos] - '0')
+    r.pos += 1
+  }
+  if r.pos == first or (r.pos - first > 1 and r.src[first] == '0') {
+    r.pos = start
+    return Err(error: json_fail(r, "bad number"))
+  }
+  if r.pos < len(r.src) and r.src[r.pos] == '.' {
+    r.pos += 1
+    let digits = r.pos
+    var scale = 0.1
+    while r.pos < len(r.src) and is_digit(r.src[r.pos]) {
+      value = value + float(r.src[r.pos] - '0') * scale
+      scale = scale / 10.0
+      r.pos += 1
+    }
+    if r.pos == digits { return Err(error: json_fail(r, "bad number")) }
+  }
+  if r.pos < len(r.src) and (r.src[r.pos] == 'e' or r.src[r.pos] == 'E') {
+    r.pos += 1
+    var down = false
+    if r.pos < len(r.src) and (r.src[r.pos] == '+' or r.src[r.pos] == '-') {
+      down = r.src[r.pos] == '-'
+      r.pos += 1
+    }
+    let digits = r.pos
+    var power = 0
+    while r.pos < len(r.src) and is_digit(r.src[r.pos]) {
+      if power < 400 { power = power * 10 + (r.src[r.pos] - '0') }
+      r.pos += 1
+    }
+    if r.pos == digits { return Err(error: json_fail(r, "bad number")) }
+    for i in 0..power { value = if down then value / 10.0 else value * 10.0 }
+  }
+  return Ok(value: JNumber(value: if negative then -value else value))
+}
+
+private fn json_word(r: mut JsonReader, word: Str, value: Json) -> Result[Json, Str] {
+  if not matches_at(r.src, r.pos, word) { return Err(error: json_fail(r, "unexpected text")) }
+  r.pos += len(word)
+  return Ok(value: copy(value))
+}
+
+private fn json_value(r: mut JsonReader, depth: Int) -> Result[Json, Str] {
+  json_skip(r)
+  if r.pos >= len(r.src) { return Err(error: json_fail(r, "unexpected end")) }
+  if depth > 200 { return Err(error: json_fail(r, "nested too deeply")) }
+  let b = r.src[r.pos]
+  if b == '"' {
+    let text = json_string(r)?
+    return Ok(value: JText(value: text))
+  }
+  if b == '[' {
+    r.pos += 1
+    var items: [Json] = []
+    json_skip(r)
+    if r.pos < len(r.src) and r.src[r.pos] == ']' {
+      r.pos += 1
+      return Ok(value: JArray(items: items))
+    }
+    while true {
+      let item = json_value(r, depth + 1)?
+      push(items, item)
+      json_skip(r)
+      if r.pos < len(r.src) and r.src[r.pos] == ',' {
+        r.pos += 1
+        continue
+      }
+      if r.pos < len(r.src) and r.src[r.pos] == ']' {
+        r.pos += 1
+        break
+      }
+      return Err(error: json_fail(r, "expected , or ]"))
+    }
+    return Ok(value: JArray(items: items))
+  }
+  if b == '{' {
+    r.pos += 1
+    var names: [Str] = []
+    var values: [Json] = []
+    json_skip(r)
+    if r.pos < len(r.src) and r.src[r.pos] == '}' {
+      r.pos += 1
+      return Ok(value: JObject(names: names, values: values))
+    }
+    while true {
+      json_skip(r)
+      if r.pos >= len(r.src) or r.src[r.pos] != '"' { return Err(error: json_fail(r, "expected a member name")) }
+      let name = json_string(r)?
+      json_skip(r)
+      if r.pos >= len(r.src) or r.src[r.pos] != ':' { return Err(error: json_fail(r, "expected :")) }
+      r.pos += 1
+      let member = json_value(r, depth + 1)?
+      push(names, name)
+      push(values, member)
+      json_skip(r)
+      if r.pos < len(r.src) and r.src[r.pos] == ',' {
+        r.pos += 1
+        continue
+      }
+      if r.pos < len(r.src) and r.src[r.pos] == '}' {
+        r.pos += 1
+        break
+      }
+      return Err(error: json_fail(r, "expected , or }"))
+    }
+    return Ok(value: JObject(names: names, values: values))
+  }
+  if b == 't' { return json_word(r, "true", JBool(value: true)) }
+  if b == 'f' { return json_word(r, "false", JBool(value: false)) }
+  if b == 'n' { return json_word(r, "null", JNull) }
+  if b == '-' or is_digit(b) { return json_number(r) }
+  return Err(error: json_fail(r, "unexpected character"))
+}
+
+// Reads one JSON value. Anything after it other than white space is an error.
+fn json_parse(text: Str) -> Result[Json, Str] {
+  var r = JsonReader(src: text, pos: 0)
+  let value = json_value(r, 0)?
+  json_skip(r)
+  if r.pos != len(text) { return Err(error: json_fail(r, "unexpected text after the value")) }
+  return Ok(value: value)
+}
+
+private fn json_quote(s: Str) -> Str {
+  var out = "\""
+  for b in s {
+    if b == '"' {
+      out += "\\\""
+    } else if b == '\\' {
+      out += "\\\\"
+    } else if b == '\n' {
+      out += "\\n"
+    } else if b == '\t' {
+      out += "\\t"
+    } else if b == 13 {
+      out += "\\r"
+    } else if b < 32 {
+      out += "\\u00" + chr(if b < 16 then '0' else '1') + substr("0123456789abcdef", b % 16, b % 16 + 1)
+    } else {
+      out += chr(b)
+    }
+  }
+  return out + "\""
+}
+
+// A number as JSON writes it: whole numbers without a fraction.
+private fn json_number_text(n: Float) -> Str {
+  if n == float(int_or_zero(n)) and n > -9.0e15 and n < 9.0e15 { return str(int_or_zero(n)) }
+  return str(n)
+}
+
+private fn int_or_zero(n: Float) -> Int {
+  if n > -9.0e15 and n < 9.0e15 { return int(n) }
+  return 0
+}
+
+// The value as compact JSON text.
+fn json_text(j: Json) -> Str {
+  match j {
+    JNull => { return "null" }
+    JBool(value) => { return if value then "true" else "false" }
+    JNumber(value) => { return json_number_text(value) }
+    JText(value) => { return json_quote(value) }
+    JArray(items) => {
+      var out = "["
+      for i, item in items {
+        if i > 0 { out += "," }
+        out += json_text(item)
+      }
+      return out + "]"
+    }
+    JObject(names, values) => {
+      var out = "{"
+      for i, name in names {
+        if i > 0 { out += "," }
+        out += json_quote(name) + ":" + json_text(values[i])
+      }
+      return out + "}"
+    }
+  }
+}
+
+// ---- looking inside ----
+
+// The member of an object with this name (the last one, if it appears twice).
+fn json_get(j: Json, name: Str) -> Option[Json] {
+  match j {
+    JObject(names, values) => {
+      var i = len(names) - 1
+      while i >= 0 {
+        if names[i] == name { return Some(value: copy(values[i])) }
+        i -= 1
+      }
+      return None
+    }
+    else => { return None }
+  }
+}
+
+// The element of an array at this position.
+fn json_at(j: Json, index: Int) -> Option[Json] {
+  match j {
+    JArray(items) => {
+      if index < 0 or index >= len(items) { return None }
+      return Some(value: copy(items[index]))
+    }
+    else => { return None }
+  }
+}
+
+// How many elements an array or members an object has; 0 for anything else.
+fn json_len(j: Json) -> Int {
+  match j {
+    JArray(items) => { return len(items) }
+    JObject(names, values) => { return len(names) }
+    else => { return 0 }
+  }
+}
+
+// These take an Option so that lookups chain: json_str(json_get(value, "name")).
+fn json_str(j: Option[Json]) -> Option[Str] {
+  match j {
+    Some(value) => {
+      match value {
+        JText(text) => { return Some(value: text) }
+        else => { return None }
+      }
+    }
+    None => { return None }
+  }
+}
+
+fn json_num(j: Option[Json]) -> Option[Float] {
+  match j {
+    Some(value) => {
+      match value {
+        JNumber(number) => { return Some(value: number) }
+        else => { return None }
+      }
+    }
+    None => { return None }
+  }
+}
+
+// A number that is a whole number, as an Int.
+fn json_int(j: Option[Json]) -> Option[Int] {
+  match json_num(j) {
+    Some(value) => {
+      if value > -9.0e15 and value < 9.0e15 and value == float(int(value)) { return Some(value: int(value)) }
+      return None
+    }
+    None => { return None }
+  }
+}
+
+fn json_bool(j: Option[Json]) -> Option[Bool] {
+  match j {
+    Some(value) => {
+      match value {
+        JBool(flag) => { return Some(value: flag) }
+        else => { return None }
+      }
+    }
+    None => { return None }
+  }
+}

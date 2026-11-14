@@ -1,0 +1,67 @@
+// Functions meant to be called from another language. See examples/embed/README.md.
+import "std/strings"
+import "std/bigint"
+
+struct Summary { count: Int, total: Int, mean: Float, label: Str }
+
+// Adds up the positive scores; anything above the limit counts as the limit.
+fn score(xs: [Int], limit: Int) -> Int
+  requires limit >= 0
+{
+  var total = 0
+  for x in xs {
+    if x > 0 { total += if x > limit then limit else x }
+  }
+  return total
+}
+
+fn summarise(xs: [Int], label: Str) -> Summary {
+  var total = 0
+  for x in xs { total += x }
+  let mean = if len(xs) == 0 then 0.0 else float(total) / float(len(xs))
+  return Summary(count: len(xs), total: total, mean: mean, label: to_upper(label))
+}
+
+fn words(text: Str) -> [Str] {
+  return filter_words(split(trim(text), " "))
+}
+
+private fn filter_words(parts: [Str]) -> [Str] {
+  var out: [Str] = []
+  for p in parts {
+    if len(p) > 0 { push(out, p) }
+  }
+  return out
+}
+
+fn divmod(a: Int, b: Int) -> (Int, Int)
+  requires b != 0
+{
+  return (a / b, a % b)
+}
+
+fn parse_port(text: Str) -> Result[Int, Str] {
+  match parse_int(trim(text)) {
+    Some(value) => {
+      if value < 1 or value > 65535 { return Err(error: "port out of range: " + str(value)) }
+      return Ok(value: value)
+    }
+    None => { return Err(error: "not a number: " + text) }
+  }
+}
+
+fn factorial(n: Int) -> Str
+  requires n >= 0
+{
+  var f = big_from_int(1)
+  for i in 1..n + 1 { f = big_mul(f, big_from_int(i)) }
+  return big_str(f)
+}
+
+fn double_it(n: Int) -> Int {
+  return n * 2
+}
+
+fn greet(name: Str) uses io {
+  print("hello,", name)
+}

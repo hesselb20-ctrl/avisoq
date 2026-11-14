@@ -289,6 +289,7 @@ export function check(program, diags) {
     let inLambda = 0;
     const loopStack = []; // the loops (and sums, comprehensions) around the current code
     const moves = []; // whole values that may move into a new home if never used again
+    let returning = null; // the return statement whose value is being checked
 
     const lookup = (name) => {
       for (let i = scopes.length - 1; i >= 0; i--) {
@@ -421,7 +422,7 @@ export function check(program, diags) {
         `arrays and maps are never shared between bindings; wrap the value in copy(...), or make this the last use of '${root.name}' so it can move`);
       // A whole local value moves, without a copy, when this is the last time it is used.
       if (e.kind === 'Name' && !root.isParam && !root.view && !root.isLoop) {
-        moves.push({ sym: root, node: e, loop: loopStack[loopStack.length - 1] ?? null, report });
+        moves.push({ sym: root, node: e, loop: loopStack[loopStack.length - 1] ?? null, report, returning });
         return;
       }
       report();
@@ -487,7 +488,7 @@ export function check(program, diags) {
             err('E0232', `'${e.name}' is a function parameter; it can only be called or passed to another function`, e);
             return '?';
           }
-          if (sym) { e.sym = sym; (sym.uses ??= []).push(e); return sym.ty; }
+          if (sym) { e.sym = sym; e.inReturn = returning; (sym.uses ??= []).push(e); return sym.ty; }
           const v = variants.get(e.name);
           if (v) {
             // A variant without fields is written as a bare name.
@@ -1206,7 +1207,9 @@ export function check(program, diags) {
           } else if (!s.value) {
             err('E0201', `${label} must return a value of type ${ret}`, s);
           } else {
+            returning = s;
             want(s.value, ret, 'returned value');
+            returning = null;
             if (s.value.ty && s.value.ty !== '?' && hasContainer(s.value.ty)) {
               const root = placeRoot(s.value);
               if (root && (root.isParam || root.view)) {
@@ -1262,11 +1265,38 @@ export function check(program, diags) {
       for (const c of owner.ensures) { inContract = 'ensures'; want(c.expr, 'Bool', 'ensures clause'); }
       inContract = null;
     }
+    // Mark `a = b` (or `let a = b`) where b is given a new value later in the same block, with
+    // no read of b in between: the old value of b then belongs to a alone.
+    const mentions = (n, name) => { let found = false; walk(n, (x) => { if (x.kind === 'Name' && x.name === name) found = true; }); return found; };
+    const markRebound = (stmts) => {
+      stmts.forEach((s, i) => {
+        const given = s.kind === 'Let' ? s.init : s.kind === 'Assign' ? s.value : null;
+        if (given && given.kind === 'Name') {
+          for (let j = i + 1; j < stmts.length; j++) {
+            const t = stmts[j];
+            if (t.kind === 'Assign' && t.target.kind === 'Name' && t.target.name === given.name && !mentions(t.value, given.name)) { given.rebound = true; break; }
+            if (mentions(t, given.name)) break;
+          }
+        }
+        for (const key of ['then', 'els', 'body']) if (Array.isArray(s[key])) markRebound(s[key]);
+        if (s.kind === 'Match') for (const arm of s.arms ?? []) markRebound(arm.body);
+        if (s.tryOf) markRebound(s.tryOf.rest);
+      });
+    };
+    markRebound(owner.body);
     block(owner.body);
 
     for (const mv of moves) {
       const later = (mv.sym.uses ?? []).some((u) => u !== mv.node && (u.line > mv.node.line || (u.line === mv.node.line && u.col > mv.node.col)));
-      if (mv.sym.viewed || mv.sym.declLoop !== mv.loop || later) mv.report(); else mv.node.moved = true;
+      // a value handed on and then replaced before it is read again (a = b; b = c) has moved, even inside a loop
+      if (mv.sym.viewed) mv.report();
+      // a value given away inside a return statement is never used again on that path,
+      // unless the same return statement uses it a second time
+      else if (mv.returning) {
+        const again = (mv.sym.uses ?? []).some((u) => u !== mv.node && u.inReturn === mv.returning && (u.line > mv.node.line || (u.line === mv.node.line && u.col > mv.node.col)));
+        if (again) mv.report(); else mv.node.moved = true;
+      } else if (mv.node.rebound) mv.node.moved = true;
+      else if (mv.sym.declLoop !== mv.loop || later) mv.report(); else mv.node.moved = true;
     }
 
     if (ret !== 'Unit' && !alwaysReturns(owner.body)) {

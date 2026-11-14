@@ -29,23 +29,28 @@ private fn mag_cmp(a: [Int], b: [Int]) -> Int {
 }
 
 private fn mag_add(a: [Int], b: [Int]) -> [Int] {
-  var out: [Int] = []
+  if len(a) < len(b) { return mag_add(b, a) }
+  var out = array(len(a) + 1, 0)
   var carry = 0
-  let n = if len(a) > len(b) then len(a) else len(b)
-  for i in 0..n {
-    var t = carry
-    if i < len(a) { t += a[i] }
+  for i in 0..len(a) {
+    var t = a[i] + carry
     if i < len(b) { t += b[i] }
-    push(out, t % BIG_BASE)
-    carry = t / BIG_BASE
+    if t >= BIG_BASE {
+      t -= BIG_BASE
+      carry = 1
+    } else {
+      carry = 0
+    }
+    out[i] = t
   }
-  if carry > 0 { push(out, carry) }
+  out[len(a)] = carry
+  mag_trim(out)
   return out
 }
 
 // a - b, for a >= b
 private fn mag_sub(a: [Int], b: [Int]) -> [Int] {
-  var out: [Int] = []
+  var out = array(len(a), 0)
   var borrow = 0
   for i in 0..len(a) {
     var t = a[i] - borrow
@@ -56,7 +61,7 @@ private fn mag_sub(a: [Int], b: [Int]) -> [Int] {
     } else {
       borrow = 0
     }
-    push(out, t)
+    out[i] = t
   }
   mag_trim(out)
   return out
@@ -66,19 +71,15 @@ private fn mag_mul(a: [Int], b: [Int]) -> [Int] {
   if len(a) == 0 or len(b) == 0 { return [] }
   var out = array(len(a) + len(b), 0)
   for i in 0..len(a) {
+    let x = a[i]
+    if x == 0 { continue }
     var carry = 0
     for j in 0..len(b) {
-      let t = out[i + j] + a[i] * b[j] + carry
-      out[i + j] = t % BIG_BASE
+      let t = out[i + j] + x * b[j] + carry
       carry = t / BIG_BASE
+      out[i + j] = t - carry * BIG_BASE
     }
-    var k = i + len(b)
-    while carry > 0 {
-      let t = out[k] + carry
-      out[k] = t % BIG_BASE
-      carry = t / BIG_BASE
-      k += 1
-    }
+    out[i + len(b)] = carry
   }
   mag_trim(out)
   return out
@@ -87,53 +88,30 @@ private fn mag_mul(a: [Int], b: [Int]) -> [Int] {
 private fn mag_mul_small(a: [Int], m: Int) -> [Int]
   requires m >= 0 and m < 1000000000
 {
-  if m == 0 { return [] }
-  var out: [Int] = []
+  if m == 0 or len(a) == 0 { return [] }
+  var out = array(len(a) + 1, 0)
   var carry = 0
-  for x in a {
-    let t = x * m + carry
-    push(out, t % BIG_BASE)
+  for i in 0..len(a) {
+    let t = a[i] * m + carry
     carry = t / BIG_BASE
+    out[i] = t - carry * BIG_BASE
   }
-  if carry > 0 { push(out, carry) }
+  out[len(a)] = carry
+  mag_trim(out)
   return out
 }
 
-// Long division of magnitudes. The parts of the quotient are stored in `quotient`; the remainder
-// is returned.
-private fn mag_divmod(a: [Int], b: [Int], quotient: mut [Int]) -> [Int]
-  requires len(b) > 0
+// a divided by a single part m. The quotient goes into `quotient`; the remainder is returned.
+private fn mag_div_small(a: [Int], m: Int, quotient: mut [Int]) -> Int
+  requires m > 0 and m < 1000000000
 {
   var parts = array(len(a), 0)
-  var rest: [Int] = []
+  var rest = 0
   var i = len(a) - 1
   while i >= 0 {
-    // rest = rest * BASE + a[i]
-    var shifted = [a[i]]
-    for x in rest { push(shifted, x) }
-    mag_trim(shifted)
-    // Bounds for this part of the quotient from the leading parts of both numbers; the
-    // bisection below then needs only a few steps.
-    var low = 0
-    var high = 0
-    if len(shifted) >= len(b) {
-      let top = len(shifted) - 1
-      let leading = if len(shifted) > len(b) then shifted[top] * BIG_BASE + shifted[top - 1] else shifted[top]
-      let divisor = b[len(b) - 1]
-      low = leading / (divisor + 1)
-      high = (leading + 1) / divisor
-      if high > BIG_BASE - 1 { high = BIG_BASE - 1 }
-    }
-    while low < high {
-      let middle = low + (high - low + 1) / 2
-      if mag_cmp(mag_mul_small(b, middle), shifted) <= 0 {
-        low = middle
-      } else {
-        high = middle - 1
-      }
-    }
-    parts[i] = low
-    rest = mag_sub(shifted, mag_mul_small(b, low))
+    let cur = rest * BIG_BASE + a[i]
+    parts[i] = cur / m
+    rest = cur - parts[i] * m
     i -= 1
   }
   mag_trim(parts)
@@ -141,8 +119,96 @@ private fn mag_divmod(a: [Int], b: [Int], quotient: mut [Int]) -> [Int]
   return rest
 }
 
-private fn big_make(negative: Bool, limbs: [Int]) -> BigInt {
-  return BigInt(negative: negative and len(limbs) > 0, limbs: copy(limbs))
+// Long division of magnitudes (Knuth's algorithm D). The parts of the quotient are stored in
+// `quotient`; the remainder is returned.
+private fn mag_divmod(a: [Int], b: [Int], quotient: mut [Int]) -> [Int]
+  requires len(b) > 0
+{
+  if mag_cmp(a, b) < 0 { return copy(a) }
+  let n = len(b)
+  if n == 1 {
+    let rest = mag_div_small(a, b[0], quotient)
+    if rest == 0 { return [] }
+    return [rest]
+  }
+  // Scale both so the leading part of the divisor is at least half the base: the estimate of
+  // each quotient part is then off by at most two.
+  let scale = BIG_BASE / (b[n - 1] + 1)
+  var u = array(len(a) + 1, 0)
+  var carry = 0
+  for i in 0..len(a) {
+    let t = a[i] * scale + carry
+    carry = t / BIG_BASE
+    u[i] = t - carry * BIG_BASE
+  }
+  u[len(a)] = carry
+  var v = array(n, 0)
+  carry = 0
+  for i in 0..n {
+    let t = b[i] * scale + carry
+    carry = t / BIG_BASE
+    v[i] = t - carry * BIG_BASE
+  }
+  let top = v[n - 1]
+  let next = v[n - 2]
+  var parts = array(len(a) - n + 1, 0)
+  var j = len(a) - n
+  while j >= 0 {
+    let lead = u[j + n] * BIG_BASE + u[j + n - 1]
+    var guess = lead / top
+    var left = lead - guess * top
+    while guess >= BIG_BASE or guess * next > left * BIG_BASE + u[j + n - 2] {
+      guess -= 1
+      left += top
+      if left >= BIG_BASE { break }
+    }
+    // u[j..j+n] -= guess * v
+    var borrow = 0
+    carry = 0
+    for i in 0..n {
+      let p = guess * v[i] + carry
+      carry = p / BIG_BASE
+      var t = u[i + j] - (p - carry * BIG_BASE) - borrow
+      if t < 0 {
+        t += BIG_BASE
+        borrow = 1
+      } else {
+        borrow = 0
+      }
+      u[i + j] = t
+    }
+    let last = u[j + n] - carry - borrow
+    if last < 0 {
+      // the guess was one too large: add the divisor back
+      guess -= 1
+      var over = 0
+      for i in 0..n {
+        var t = u[i + j] + v[i] + over
+        if t >= BIG_BASE {
+          t -= BIG_BASE
+          over = 1
+        } else {
+          over = 0
+        }
+        u[i + j] = t
+      }
+      u[j + n] = last + over
+    } else {
+      u[j + n] = last
+    }
+    parts[j] = guess
+    j -= 1
+  }
+  mag_trim(parts)
+  for p in parts { push(quotient, p) }
+  // the remainder is the low n parts of u, scaled back
+  var scaled = array(n, 0)
+  for i in 0..n { scaled[i] = u[i] }
+  mag_trim(scaled)
+  var rest: [Int] = []
+  let none = mag_div_small(scaled, scale, rest)
+  assert none == 0
+  return rest
 }
 
 // ---- making and showing ----
@@ -229,19 +295,26 @@ fn big_eq(a: BigInt, b: BigInt) -> Bool {
 // ---- arithmetic ----
 
 fn big_neg(a: BigInt) -> BigInt {
-  return big_make(not a.negative, a.limbs)
+  return BigInt(negative: not a.negative and len(a.limbs) > 0, limbs: copy(a.limbs))
 }
 
 fn big_abs(a: BigInt) -> BigInt {
-  return big_make(false, a.limbs)
+  return BigInt(negative: false, limbs: copy(a.limbs))
 }
 
 fn big_add(a: BigInt, b: BigInt) -> BigInt {
-  if a.negative == b.negative { return big_make(a.negative, mag_add(a.limbs, b.limbs)) }
+  if a.negative == b.negative {
+    let total = mag_add(a.limbs, b.limbs)
+    return BigInt(negative: a.negative and len(total) > 0, limbs: total)
+  }
   let c = mag_cmp(a.limbs, b.limbs)
   if c == 0 { return big_zero() }
-  if c > 0 { return big_make(a.negative, mag_sub(a.limbs, b.limbs)) }
-  return big_make(b.negative, mag_sub(b.limbs, a.limbs))
+  if c > 0 {
+    let rest = mag_sub(a.limbs, b.limbs)
+    return BigInt(negative: a.negative, limbs: rest)
+  }
+  let other = mag_sub(b.limbs, a.limbs)
+  return BigInt(negative: b.negative, limbs: other)
 }
 
 fn big_sub(a: BigInt, b: BigInt) -> BigInt {
@@ -249,25 +322,37 @@ fn big_sub(a: BigInt, b: BigInt) -> BigInt {
 }
 
 fn big_mul(a: BigInt, b: BigInt) -> BigInt {
-  return big_make(a.negative != b.negative, mag_mul(a.limbs, b.limbs))
+  let product = mag_mul(a.limbs, b.limbs)
+  return BigInt(negative: a.negative != b.negative and len(product) > 0, limbs: product)
 }
 
-// Quotient rounded toward zero. Dividing by zero stops the program.
+// Quotient (rounded toward zero) and remainder (with the sign of a) in one go, so that
+// a == quotient * b + remainder. Dividing by zero stops the program.
+fn big_divmod(a: BigInt, b: BigInt) -> (BigInt, BigInt)
+  requires len(b.limbs) > 0
+{
+  var quotient: [Int] = []
+  let rest = mag_divmod(a.limbs, b.limbs, quotient)
+  let q = BigInt(negative: a.negative != b.negative and len(quotient) > 0, limbs: quotient)
+  let r = BigInt(negative: a.negative and len(rest) > 0, limbs: rest)
+  return (q, r)
+}
+
 fn big_div(a: BigInt, b: BigInt) -> BigInt
   requires len(b.limbs) > 0
 {
   var quotient: [Int] = []
   let rest = mag_divmod(a.limbs, b.limbs, quotient)
   assert len(rest) >= 0
-  return big_make(a.negative != b.negative, quotient)
+  return BigInt(negative: a.negative != b.negative and len(quotient) > 0, limbs: quotient)
 }
 
-// Remainder with the sign of a, so that a == big_div(a, b) * b + big_rem(a, b).
 fn big_rem(a: BigInt, b: BigInt) -> BigInt
   requires len(b.limbs) > 0
 {
   var quotient: [Int] = []
-  return big_make(a.negative, mag_divmod(a.limbs, b.limbs, quotient))
+  let rest = mag_divmod(a.limbs, b.limbs, quotient)
+  return BigInt(negative: a.negative and len(rest) > 0, limbs: rest)
 }
 
 fn big_pow(base: BigInt, exponent: Int) -> BigInt

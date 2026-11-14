@@ -6,10 +6,10 @@ A small, fast, safe programming language designed to be written and verified by 
 
 <img src=".github/assets/figure/scene.webp" width="100%" alt="Three beats: a mandelbrot benchmark computed on one thread with every check on in 112 ms against 108 ms for C++; the same loop written as a sum, spread over 8 threads and 8 lanes; and the result, 4.6 ms against 15 ms for C++ parallelised by hand with OpenMP.">
 
-Version 0.11. One front end, two backends (native machine code through GCC, and sandboxed
+Version 0.12. One front end, two backends (native machine code through GCC, and sandboxed
 WebAssembly), a standard library written in Avisoq, a formatter, a compile-time contract prover,
 a language server, a package manager and a differential fuzzer. The test suites pass on both
-backends: 369 compiler cases each, plus 26 editor, 17 package and 10 sandbox tests.
+backends: 371 compiler cases each, 21 embedding tests, plus 26 editor, 17 package and 10 sandbox tests.
 
 ```
 import "std/strings"
@@ -66,6 +66,28 @@ Add `--json` to any command for machine-readable output.
 From a clone, the tests are `npm test` (WebAssembly backend, editor, packages),
 `npm run test:native` and `npm run fuzz`.
 
+### Use it from JavaScript or Python
+
+Avisoq does not need an ecosystem of its own to be useful: its functions can be called from the
+languages you already use, so it can be the fast, checked, sandboxed part of an existing project.
+
+```js
+import { load } from 'avisoq';
+const scoring = await load('scoring.avq');
+scoring.score([3, -1, 50, 8], 10);   // 21; a failure inside throws instead of returning a wrong number
+```
+
+```python
+import avisoq                          # bindings/python/avisoq.py, no dependencies
+with avisoq.load("scoring.avq") as scoring:
+    scoring.score([3, -1, 50, 8], 10)
+```
+
+Any other language can use `avisoq serve file.avq` (one JSON request per line) or
+`avisoq call file.avq name '[args]'`. Structs, tuples, arrays and enums cross over as objects
+and arrays. See [`examples/embed`](examples/embed/README.md). Going the other way, Avisoq code
+reaches existing services through `http_get` / `http_post` and `std/json`.
+
 ### For AI agents
 
 `docs/AGENT_GUIDE.md` (also printed by `avisoq guide`) is a one-page description of the whole
@@ -109,7 +131,7 @@ module itself and runs it in a sandbox. Both keep every run-time check.
   reclaimed memory overwritten first, so a value handed back while still in use fails loudly
   instead of passing by luck.
 
-<img src=".github/assets/how/scene.webp" width="100%" alt="369 test programs go through one front end, are compiled by both the native and the WebAssembly backend, and all 369 print the same on both. The fuzzer found two mismatches, both fixed.">
+<img src=".github/assets/how/scene.webp" width="100%" alt="371 test programs go through one front end, are compiled by both the native and the WebAssembly backend, and all 371 print the same on both. The fuzzer found two mismatches, both fixed.">
 
 ## Capabilities
 
@@ -277,7 +299,8 @@ when the program was granted neither files nor network, no right to write any fi
 | `std/strings` | `split`, `join`, `lines`, `trim`, `replace`, `repeat`, `contains`, `index_of`, `starts_with`, `ends_with`, `parse_int`, `to_upper`, `to_lower`, `count_of`, `last_index_of`, `reversed`, `matches_at`, `matches_glob`, `is_digit`, `is_letter`, `is_alnum`, `is_space`, `pad_left`, `pad_right` |
 | `std/arrays` | `map`, `filter`, `fold`, `each`, `any`, `all`, `count_if`, `find_index`, `equal`, `sort`, `sort_by` (stable), `sorted`, `reverse`, `concat`, `append`, `index_in`, `max_of`, `min_of`, `sum_of`, `includes`, `last_of`, `slice`, `range`, `swap`, `unique` |
 | `std/math` | `min`, `max`, `clamp`, `abs`, `abs_float`, `pow`, `checked_add`, `checked_sub`, `checked_mul`, `int_max`, `int_min` |
-| `std/bigint` | `BigInt`: `big`, `big_parse`, `big_from_int`, `big_str`, `big_to_int`, `big_add`, `big_sub`, `big_mul`, `big_div`, `big_rem`, `big_pow`, `big_neg`, `big_abs`, `big_cmp`, `big_eq`, `big_is_zero` |
+| `std/json` | `Json`, `json_parse`, `json_text`, `json_get`, `json_at`, `json_len`, `json_str`, `json_num`, `json_int`, `json_bool` |
+| `std/bigint` | `BigInt`: `big`, `big_parse`, `big_from_int`, `big_str`, `big_to_int`, `big_add`, `big_sub`, `big_mul`, `big_div`, `big_rem`, `big_divmod`, `big_pow`, `big_neg`, `big_abs`, `big_cmp`, `big_eq`, `big_is_zero` |
 
 ## Packages
 
@@ -329,6 +352,15 @@ on an idle machine with 8 logical cores (Zen 4, AVX-512). Ratios are relative to
 
 ## Known limits
 
+- **It cannot call libraries written in other languages.** Other languages can call Avisoq, and
+  Avisoq can use web services with `http_get`, `http_post` and `std/json`, but there is no way
+  yet to call a C, Python or npm library from inside Avisoq, or to run another program.
+  Embedding goes through the WebAssembly backend, which is slower than the native one.
+- **Big integers are a library, not built in.** `std/bigint` is faster than Python at
+  factorials, parsing and printing, level on powers and multiplication, and 2 to 4 times
+  slower on long chains of additions and on dividing very large numbers.
+- **`std/json` reads numbers as Floats** and does not round them as exactly as a full JSON
+  library; whole numbers up to 2^53 are exact.
 - **Barely used.** One 260-line program and the examples; nobody but the author has written
   Avisoq yet. Expect gaps the moment someone writes something larger.
 - **Windows only, in practice.** The code is written to be portable, but Linux and macOS have

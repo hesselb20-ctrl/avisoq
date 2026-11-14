@@ -85,6 +85,7 @@ export class Module {
   }
 
   exportFunc(field, index) { this.exports.push({ field, kind: 0, index }); }
+  exportGlobal(field, index) { this.exports.push({ field, kind: 3, index }); }
 
   encode() {
     const out = [0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00];

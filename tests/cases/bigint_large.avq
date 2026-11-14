@@ -1,0 +1,37 @@
+// Division of large numbers, checked by the identity a == q * b + r with |r| < |b|.
+import "std/bigint"
+
+fn holds(a: BigInt, b: BigInt) -> Bool {
+  let (q, r) = big_divmod(a, b)
+  let back = big_add(big_mul(q, b), r)
+  let smaller = big_cmp(big_abs(r), big_abs(b)) < 0
+  let same = big_eq(q, big_div(a, b)) and big_eq(r, big_rem(a, b))
+  return big_eq(back, a) and smaller and same and (big_is_zero(r) or r.negative == a.negative)
+}
+
+fn main() uses io {
+  var f = big_from_int(1)
+  for i in 1..400 { f = big_mul(f, big_from_int(i)) }
+  let p = big_pow(big("3"), 2500)
+  let m = big_pow(big("-999999999"), 31)
+  let near = big_sub(big_pow(big("1000000000"), 40), big("1"))
+  var ok = 0
+  if holds(f, p) { ok += 1 }
+  if holds(big_mul(p, p), f) { ok += 1 }
+  if holds(big_neg(f), p) { ok += 1 }
+  if holds(m, big("999999999999999999")) { ok += 1 }
+  if holds(m, big("-1000000000000000001")) { ok += 1 }
+  if holds(near, big_pow(big("1000000000"), 20)) { ok += 1 }
+  if holds(near, big_sub(big_pow(big("1000000000"), 20), big("1"))) { ok += 1 }
+  if holds(big_mul(near, near), near) { ok += 1 }
+  if holds(big("5"), f) { ok += 1 }
+  if holds(big_add(big_mul(p, f), big("7")), p) { ok += 1 }
+  var a = big_from_int(0)
+  var b = big_from_int(1)
+  for i in 0..500 {
+    let c = big_add(a, b)
+    a = b
+    b = c
+  }
+  print(ok, len(big_str(f)), len(big_str(p)), big_str(a))
+}

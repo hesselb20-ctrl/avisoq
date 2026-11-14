@@ -735,6 +735,20 @@ export function codegen(program, opts = {}) {
   if (program.main) m.exportFunc('main', program.main.wasm.index);
   m.exportFunc('__alloc', alloc.index);
   program.tests.forEach((t, i) => m.exportFunc(`test_${i}`, t.wasm.index));
+  // For embedding (src/embed.mjs): every function of the program's own files that takes and
+  // returns plain data can be called from outside, and the heap pointer can be restored after a call.
+  const callable = [];
+  if (opts.exports) {
+    const plain = (t) => !isMap(t) && !t.startsWith('Fn[') && !t.includes('Map[') && !t.includes('Fn[');
+    const own = (f) => !/[\\/]std[\\/][a-z_]+\.avq$/.test(f.file ?? '');
+    for (const f of program.fns) {
+      if (f.generic || f === program.main || !own(f) || f.private || f.name.startsWith('__') || (f.fnParams && f.fnParams.size)) continue;
+      if (f.params.some((p) => p.mut || !plain(p.ty)) || !plain(f.ret)) continue;
+      m.exportFunc(`fn_${f.name}`, f.wasm.index);
+      callable.push({ name: f.name, params: f.params.map((p) => ({ name: p.name, ty: p.ty })), ret: f.ret, effects: [...f.effectSet] });
+    }
+    m.exportGlobal('__heap', 0);
+  }
 
   m.heapStart = (8 + m.data.length + 7) & ~7;
   m.minPages = Math.max(1, Math.ceil((m.heapStart + 1) / 65536));
@@ -744,6 +758,13 @@ export function codegen(program, opts = {}) {
     effects: program.main ? [...program.main.effectSet] : [],
     tests: program.tests.map((t) => ({ name: t.name, line: t.line })),
     hasMain: !!program.main,
+    ...(opts.exports ? {
+      exports: callable,
+      types: {
+        structs: Object.fromEntries([...program.types.structs].map(([t, s]) => [t, s.fields.map((f) => ({ name: f.name, ty: f.ty }))])),
+        enums: Object.fromEntries([...program.types.enums].map(([t, e]) => [t, e.variants.map((v) => ({ name: v.name, fields: v.fields.map((f) => ({ name: f.name, ty: f.ty })) }))])),
+      },
+    } : {}),
   };
   m.customs.push({ name: 'avisoq.meta', text: JSON.stringify(meta) });
   return { wasm: m.encode(), meta };

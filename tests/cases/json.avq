@@ -1,0 +1,39 @@
+import "std/json"
+
+fn show(text: Str) uses io {
+  match json_parse(text) {
+    Ok(value) => { print(json_text(value)) }
+    Err(error) => { print("error:", error) }
+  }
+}
+
+fn main() uses io {
+  show("  {\"name\": \"Ada\", \"tags\": [\"x\", \"y\"], \"age\": 36, \"ratio\": 0.25, \"ok\": true, \"none\": null}  ")
+  show("[1, -2, 3.5, 1e3, 2.5E-1, 0, -0.0, 12345678901234]")
+  show("\"a\\\"b\\\\c\\n\\t\\u0041\\u00e9\\u20ac\\ud83d\\ude00/\\/\"")
+  show("[[], {}, [[[]]], {\"a\": {\"b\": [1, {\"c\": null}]}}]")
+  show("")
+  show("[1, 2,]")
+  show("{\"a\" 1}")
+  show("[1 2]")
+  show("01")
+  show("\"unfinished")
+  show("tru")
+  show("[1] x")
+  show("{\"a\": 1, \"a\": 2}")
+  match json_parse("{\"user\": {\"name\": \"Ada\", \"id\": 7, \"admin\": false}, \"scores\": [3, 4.5, 8]}") {
+    Ok(doc) => {
+      let user = unwrap_or(json_get(doc, "user"), JNull)
+      let name = unwrap_or(json_str(json_get(user, "name")), "?")
+      let id = unwrap_or(json_int(json_get(user, "id")), -1)
+      let admin = unwrap_or(json_bool(json_get(user, "admin")), true)
+      let scores = unwrap_or(json_get(doc, "scores"), JNull)
+      var total = 0.0
+      for i in 0..json_len(scores) { total = total + unwrap_or(json_num(json_at(scores, i)), 0.0) }
+      print(name, id, admin, json_len(scores), total, is_some(json_get(doc, "missing")), is_some(json_at(scores, 3)), is_some(json_int(json_at(scores, 1))))
+    }
+    Err(error) => { print(error) }
+  }
+  let built = JObject(names: ["id", "tags"], values: [JNumber(value: 7.0), JArray(items: [JText(value: "a\"b"), JBool(value: true), JNull])])
+  print(json_text(built))
+}
