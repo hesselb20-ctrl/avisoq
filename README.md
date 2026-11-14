@@ -1,6 +1,10 @@
+<p align="center"><img src=".github/assets/logo.svg" width="88" alt="Avisoq logo"></p>
+
 # Avisoq
 
 A small, fast, safe programming language designed to be written and verified by AI agents.
+
+<img src=".github/assets/figure/scene.webp" width="100%" alt="Three beats: a mandelbrot benchmark computed on one thread with every check on in 112 ms against 108 ms for C++; the same loop written as a sum, spread over 8 threads and 8 lanes; and the result, 4.6 ms against 15 ms for C++ parallelised by hand with OpenMP.">
 
 Version 0.5. One front end, two backends (native machine code through GCC, and sandboxed
 WebAssembly), a standard library written in Avisoq, a formatter, a compile-time contract prover,
@@ -75,16 +79,36 @@ suite and has been used for one program of real size (`examples/loganalyzer.avq`
 but not yet by anyone other than its author. It is developed and tested on Windows only.
 Expect rough edges, and please report them.
 
-## Can a model actually write it?
+## How it works
 
-Measured, with the method and all solutions in [`agentbench/`](agentbench/README.md): given
-only the one-page guide, two Claude models each wrote 24 of 24 small tasks correctly in
-Avisoq on the first attempt, with no chance to compile or test. They scored the same 24 of 24
-in Python and Rust. So a model can learn the language from one page, but this benchmark is too
-easy to show an advantage over existing languages, and Avisoq's solutions were about twice
-as long as Python's.
+One front end parses and checks a program: types, declared effects, contracts, and the rule
+that arrays and maps are never shared. The checked program then goes to one of two backends.
+The native backend writes C and hands it to GCC; the WebAssembly backend writes the binary
+module itself and runs it in a sandbox. Both keep every run-time check.
 
-## What makes it agent-oriented
+### What the compiler does with purity
+
+1. **Threads.** `sum(i in a..b: expr)`, `[i in a..b: expr]` and library functions built on them,
+   such as `map`, run on every core. A data race cannot be written.
+2. **Lanes.** Plain numeric `sum` and comprehension bodies are evaluated 8 values per
+   instruction on the native backend, with every check gated per lane.
+3. **Memory reclamation with no collector.** Where a function or loop body stores no
+   pointer-carrying value and yields plain data, everything it allocated is provably dead when
+   it finishes and the allocator is rewound, at no run-time cost.
+
+### How it is tested
+
+- **Both backends, same suite.** Every language test runs on native and on WebAssembly and
+  must give identical output.
+- **Differential fuzzing.** `tests/fuzz.mjs` generates random valid programs and checks that the
+  two backends agree on all output and on the kind of any failure. It found two real bugs
+  (the sign of negative zero, and partial output from a failing `print`), both fixed.
+- **Adversarial memory tests.** Programs that would exhaust memory without reclamation, and
+  programs that check live data survives it.
+
+<img src=".github/assets/how/scene.webp" width="100%" alt="316 test programs go through one front end, are compiled by both the native and the WebAssembly backend, and all 316 print the same on both. The fuzzer found two mismatches, both fixed.">
+
+## Capabilities
 
 - **Contracts in the signature.** `requires`, `ensures` and loop `invariant` clauses state
   what code expects and guarantees. The compiler proves the ones it can, rejects code that can
@@ -102,15 +126,16 @@ as long as Python's.
   overloading. `avisoq fmt` gives every file the same layout.
 - **Tests in the language.** `test "name" { ... }` blocks are pure and each runs in isolation.
 
-## What the compiler does with purity
+### Can a model actually write it?
 
-1. **Threads.** `sum(i in a..b: expr)`, `[i in a..b: expr]` and library functions built on them,
-   such as `map`, run on every core. A data race cannot be written.
-2. **Lanes.** Plain numeric `sum` and comprehension bodies are evaluated 8 values per
-   instruction on the native backend, with every check gated per lane.
-3. **Memory reclamation with no collector.** Where a function or loop body stores no
-   pointer-carrying value and yields plain data, everything it allocated is provably dead when
-   it finishes and the allocator is rewound, at no run-time cost.
+Measured, with the method and all solutions in [`agentbench/`](agentbench/README.md): given
+only the one-page guide, two Claude models each wrote 24 of 24 small tasks correctly in
+Avisoq on the first attempt, with no chance to compile or test. They scored the same 24 of 24
+in Python and Rust. So a model can learn the language from one page, but this benchmark is too
+easy to show an advantage over existing languages, and Avisoq's solutions were about twice
+as long as Python's.
+
+<img src=".github/assets/agents/scene.webp" width="100%" alt="Two models each solved 24 of 24 tasks on the first attempt in Avisoq, Python and Rust. The Avisoq solutions were the longest: about 380 lines against 200 for Python and 330 for Rust.">
 
 ## Contracts proven at compile time
 
@@ -249,16 +274,6 @@ on an idle machine with 8 logical cores (Zen 4, AVX-512). Ratios are relative to
   against threads only), level on collatz.
 - A C++ programmer who writes AVX-512 intrinsics by hand would match the mandelbrot number.
   Four micro-benchmarks do not describe real programs.
-
-## How it is tested
-
-- **Both backends, same suite.** Every language test runs on native and on WebAssembly and
-  must give identical output.
-- **Differential fuzzing.** `tests/fuzz.mjs` generates random valid programs and checks that the
-  two backends agree on all output and on the kind of any failure. It found two real bugs
-  (the sign of negative zero, and partial output from a failing `print`), both fixed.
-- **Adversarial memory tests.** Programs that would exhaust memory without reclamation, and
-  programs that check live data survives it.
 
 ## Known limits
 

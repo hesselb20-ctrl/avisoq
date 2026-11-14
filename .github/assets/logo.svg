@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="Avisoq logo">
+  <title>Avisoq</title>
+  <!-- The letter A, with a proof tick as its crossbar: code that states what it promises, and a compiler that checks it. -->
+  <polyline points="60,204 128,52 196,204" fill="none" stroke="#4E79A7" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="101,150 122,171 160,125" fill="none" stroke="#6BA368" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
