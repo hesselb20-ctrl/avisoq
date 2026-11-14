@@ -1,0 +1,40 @@
+// Repeatedly take the lowest-numbered task whose prerequisites are all taken.
+fn toposort(n: Int, edges: [Int]) -> [Int] {
+  var indeg = array(n, 0)
+  var taken = array(n, false)
+  let m = len(edges) / 2
+  for k in 0..m {
+    indeg[edges[2 * k + 1]] += 1
+  }
+  var order: [Int] = []
+  for round in 0..n {
+    var pick = -1
+    var u = 0
+    while u < n and pick < 0 {
+      if not taken[u] and indeg[u] == 0 {
+        pick = u
+      }
+      u += 1
+    }
+    if pick < 0 {
+      return [-1]
+    }
+    taken[pick] = true
+    push(order, pick)
+    for k in 0..m {
+      if edges[2 * k] == pick {
+        indeg[edges[2 * k + 1]] -= 1
+      }
+    }
+  }
+  return order
+}
+
+test "toposort" {
+  assert toposort(1, []) == [0]
+  assert toposort(3, [0, 1, 1, 2]) == [0, 1, 2]
+  assert toposort(3, [2, 0]) == [1, 2, 0]
+  assert toposort(2, [0, 1, 1, 0]) == [-1]
+  assert toposort(2, [1, 1]) == [-1]
+  assert toposort(3, [0, 2, 0, 2]) == [0, 1, 2]
+}

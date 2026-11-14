@@ -1,0 +1,150 @@
+import "std/strings"
+import "std/arrays"
+
+// status per cell: 1 = being worked out, 2 = #CYCLE, 3 = value known
+struct Sheet {
+  forms: Map[Str, Str],
+  status: Map[Str, Int],
+  vals: Map[Str, Int]
+}
+
+struct FP {
+  src: Str,
+  pos: Int,
+  bad: Bool
+}
+
+fn fp_cur(f: mut FP) -> Int {
+  if f.pos < len(f.src) {
+    return f.src[f.pos]
+  }
+  return 0
+}
+
+fn sh_expr(sh: mut Sheet, f: mut FP) -> Int {
+  var v = sh_term(sh, f)
+  var going = true
+  while going {
+    let c = fp_cur(f)
+    if c == '+' {
+      f.pos += 1
+      let r1 = sh_term(sh, f)
+      v = v + r1
+    } else if c == '-' {
+      f.pos += 1
+      let r2 = sh_term(sh, f)
+      v = v - r2
+    } else {
+      going = false
+    }
+  }
+  return v
+}
+
+fn sh_term(sh: mut Sheet, f: mut FP) -> Int {
+  var v = sh_unary(sh, f)
+  while fp_cur(f) == '*' {
+    f.pos += 1
+    let r = sh_unary(sh, f)
+    v = v * r
+  }
+  return v
+}
+
+fn sh_unary(sh: mut Sheet, f: mut FP) -> Int {
+  if fp_cur(f) == '-' {
+    f.pos += 1
+    let uv = sh_unary(sh, f)
+    return 0 - uv
+  }
+  return sh_primary(sh, f)
+}
+
+fn sh_primary(sh: mut Sheet, f: mut FP) -> Int {
+  let c = fp_cur(f)
+  if c == '(' {
+    f.pos += 1
+    let pv = sh_expr(sh, f)
+    f.pos += 1
+    return pv
+  }
+  if c >= '0' and c <= '9' {
+    var n = 0
+    while fp_cur(f) >= '0' and fp_cur(f) <= '9' {
+      n = n * 10 + (fp_cur(f) - '0')
+      f.pos += 1
+    }
+    return n
+  }
+  let nm = f.src[f.pos..f.pos + 2]
+  f.pos += 2
+  return sh_ref(sh, f, nm)
+}
+
+fn sh_ref(sh: mut Sheet, f: mut FP, nm: Str) -> Int {
+  if not has(sh.forms, nm) {
+    return 0
+  }
+  if get_or(sh.status, nm, 0) == 0 {
+    sh_compute(sh, nm)
+  }
+  if get_or(sh.status, nm, 0) != 3 {
+    f.bad = true
+    return 0
+  }
+  return get(sh.vals, nm)
+}
+
+fn sh_compute(sh: mut Sheet, nm: Str) {
+  put(sh.status, nm, 1)
+  var f = FP(src: get(sh.forms, nm), pos: 0, bad: false)
+  let v = sh_expr(sh, f)
+  if f.bad {
+    put(sh.status, nm, 2)
+  } else {
+    put(sh.status, nm, 3)
+    put(sh.vals, nm, v)
+  }
+}
+
+fn sheet(cells: Str) -> Str {
+  var forms: Map[Str, Str] = {}
+  var status: Map[Str, Int] = {}
+  var vals: Map[Str, Int] = {}
+  var sh = Sheet(forms: forms, status: status, vals: vals)
+  let parts = split(cells, ";")
+  for i in 0..len(parts) {
+    let entry = parts[i]
+    if len(entry) > 0 {
+      let eq = index_of(entry, "=")
+      put(sh.forms, substr(entry, 0, eq), substr(entry, eq + 1, len(entry)))
+    }
+  }
+  var names: [Str] = keys(sh.forms)
+  sort(names)
+  var texts: [Str] = []
+  for i in 0..len(names) {
+    let nm = names[i]
+    if get_or(sh.status, nm, 0) == 0 {
+      sh_compute(sh, nm)
+    }
+    if get_or(sh.status, nm, 0) == 2 {
+      push(texts, nm + "=#CYCLE")
+    } else {
+      push(texts, nm + "=" + str(get(sh.vals, nm)))
+    }
+  }
+  return join(texts, ",")
+}
+
+test "sheet values" {
+  assert sheet("") == ""
+  assert sheet("A1=1+2*3") == "A1=7"
+  assert sheet("B2=A1;A1=5") == "A1=5,B2=5"
+  assert sheet("A1=-(2+3)*-2") == "A1=10"
+  assert sheet("C3=Z9") == "C3=0"
+  assert sheet("A1=A1") == "A1=#CYCLE"
+  assert sheet("A1=B1;B1=A1+1;C1=5") == "A1=#CYCLE,B1=#CYCLE,C1=5"
+  assert sheet("A1=1;A1=2") == "A1=2"
+  assert sheet("A1=B1*0;B1=A1") == "A1=#CYCLE,B1=#CYCLE"
+}

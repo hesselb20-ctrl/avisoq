@@ -1,0 +1,50 @@
+// Brute force over all 2^n assignments. Variable 1 is the most significant bit,
+// so counting upward visits assignments in the required order (0 before 1).
+
+fn sat_ok(mask: Int, n: Int, clauses: [Int]) -> Bool {
+  var clause_ok = false
+  for i in 0..len(clauses) {
+    let x = clauses[i]
+    if x == 0 {
+      if not clause_ok {
+        return false
+      }
+      clause_ok = false
+    } else {
+      var v = x
+      if v < 0 {
+        v = 0 - v
+      }
+      let bit = bit_and(shift_right(mask, n - v), 1)
+      if (x > 0 and bit == 1) or (x < 0 and bit == 0) {
+        clause_ok = true
+      }
+    }
+  }
+  return true
+}
+
+fn sat(n: Int, clauses: [Int]) -> [Int] {
+  let total = shift_left(1, n)
+  for mask in 0..total {
+    if sat_ok(mask, n, clauses) {
+      var res: [Int] = []
+      let last = n + 1
+      for v in 1..last {
+        push(res, bit_and(shift_right(mask, n - v), 1))
+      }
+      return res
+    }
+  }
+  return [-1]
+}
+
+test "sat" {
+  assert sat(1, []) == [0]
+  assert sat(2, [1, 0, -1, 0]) == [-1]
+  assert sat(2, [-1, 0, -2, 0]) == [0, 0]
+  assert sat(2, [1, 2, 0, -1, 0]) == [0, 1]
+  assert sat(1, [1, 0, -1, 0]) == [-1]
+  assert sat(2, [0]) == [-1]
+  assert sat(3, [-1, -2, 0, 2, 3, 0]) == [0, 0, 1]
+}

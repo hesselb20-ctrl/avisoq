@@ -327,6 +327,79 @@ The two Avisoq agents were run again, fresh, with the same instructions. Solutio
   the agents wrote different interpreters each time. A different draw could move the totals a
   lot. "About as fast as Rust, sometimes faster" is what this supports.
 
+### Version 0.11, with a second Rust run
+
+0.11 removed three things that had each cost agents a compile-and-fix round: a variable may now
+share its name with a function (`lines`, `keys`, `sum`), `==` works on arrays of plain values,
+and `(a, b) = pair` assigns to existing variables. The guide now says its library table is
+complete and describes the test loop that needs no second file.
+
+Because a single run per language says little about time, both models also did the Rust tasks
+again, fresh. All four runs scored 10 of 10. Solutions are in `results-expert/model-a-v11`
+and `model-b-v11`.
+
+| Time the agent took | Run A (Sonnet) | Run B (Haiku) |
+|---|---:|---:|
+| Rust, first run / second run | 116 s / 219 s | 212 s / 243 s |
+| Avisoq, 0.10 / 0.11 | 162 s / 188 s | 323 s / 296 s |
+| Mean, Rust / Avisoq | 168 s / 175 s | 228 s / 310 s |
+| Python, single run | 117 s | 165 s |
+
+- **Agent time is noisy.** The same model on the same Rust tasks took 116 s once and 219 s the
+  next time. Differences of tens of percent between single runs mean nothing.
+- **Against Rust, on means:** level for run A (4% slower) and 36% slower for run B. In this
+  round the run A agent was faster in Avisoq than in Rust (188 s against 219 s).
+- **Why it is not faster than Rust:** time follows the amount of text an agent produces. This
+  round the agents wrote about as much in both languages (1171 lines against 1196 in run A,
+  1424 against 1466 in run B, counting tests and scratch files), and the Avisoq agent also has
+  to read the guide first. There is no large remaining difference for a language feature to
+  remove; Python is quicker because its programs are half as long.
+- In run A every Avisoq task compiled and passed the agent's own tests on the first attempt.
+
+Run time of this round's solutions, all 10 tasks, same inputs (Python from the first round):
+
+| | Avisoq 0.11 | Rust | Python | Rust / Avisoq | Python / Avisoq |
+|---|---:|---:|---:|---:|---:|
+| Run A (Sonnet) | 10 ms | 26 ms | 237 ms | 2.6x | 23x |
+| Run B (Haiku) | 13 ms | 26 ms | 224 ms | 2.1x | 18x |
+
+Avisoq is ahead of Rust on 9 of 10 tasks in both runs and behind on `sat` in both. More than
+half of each total is still the `interp` task.
+
+## What each language does with a bug
+
+`bugs.mjs` writes the same twelve mistakes in Avisoq, Rust and Python and runs them. Avisoq is
+the native backend with all checks on, granted only what a program that prints needs. "Silent"
+means the program finished normally with a wrong result, or did what it should not have.
+
+| Bug | Avisoq | Rust `-O` | Rust debug | Python |
+|---|---|---|---|---|
+| A product grows past 64 bits (25 factorial) | stopped | **silent** | stopped | correct |
+| The absolute value of the smallest 64-bit integer | stopped | **silent** | stopped | correct |
+| A shift by 64 places | stopped | **silent** | stopped | correct |
+| A float too large for an integer is converted to one | stopped | **silent** | **silent** | correct |
+| Reading one element past the end of an array | stopped | stopped | stopped | stopped |
+| An off-by-one that reads the element before the first | stopped | stopped | stopped | **silent** |
+| Taking 10 characters from a 5-character string | stopped | stopped | stopped | **silent** |
+| An integer average of an empty list | stopped | stopped | stopped | stopped |
+| A float average of an empty list, in a function that needs a non-empty one | rejected | **silent** | **silent** | stopped |
+| A new kind of value is added and one place that handles kinds is not updated | rejected | rejected | rejected | **silent** |
+| A list is given a second name and changed through it | rejected | rejected | rejected | **silent** |
+| Code that was only asked to compute a number also writes a file | stopped | **silent** | **silent** | **silent** |
+| **Silent, out of 12** | **0** | **6** | **3** | **5** |
+
+Read this for what it is:
+
+- **The cases were chosen by the author of Avisoq** to show where the languages differ. It is a
+  list of behaviours, each one reproduced by `node agentbench/bugs.mjs`, not a sample of real
+  bugs, and "0 against 6" is not a measured defect rate.
+- Two rows depend on something only Avisoq has. The empty-average row uses a `requires`
+  contract, which a programmer has to write; in Rust and Python the same requirement is a
+  comment. The file-write row is Avisoq's capability model; Rust and Python have none.
+- Python is "correct" on the integer rows because its integers do not overflow.
+- Rust has safety properties this table does not exercise at all, such as its ownership
+  rules for memory shared between threads, and a far more mature compiler.
+
 ## Running it yourself
 
 ```

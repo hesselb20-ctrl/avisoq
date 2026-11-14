@@ -1,0 +1,168 @@
+import "std/strings"
+import "std/arrays"
+
+struct JP { s: Str, pos: Int, ok: Bool }
+
+fn jskip(p: mut JP) {
+  while p.pos < len(p.s) and p.s[p.pos] == ' ' { p.pos += 1 }
+}
+
+fn jfail(p: mut JP) -> Str {
+  p.ok = false
+  return ""
+}
+
+fn jstring(p: mut JP) -> Str {
+  // at opening quote
+  if p.pos >= len(p.s) or p.s[p.pos] != '\'' { return jfail(p) }
+  var j = p.pos + 1
+  while j < len(p.s) and p.s[j] != '\'' { j += 1 }
+  if j >= len(p.s) { return jfail(p) }
+  let body = p.s[p.pos + 1..j]
+  p.pos = j + 1
+  return body
+}
+
+fn jnumber(p: mut JP) -> Str {
+  var j = p.pos
+  var neg = false
+  if j < len(p.s) and p.s[j] == '-' {
+    neg = true
+    j += 1
+  }
+  if j >= len(p.s) { return jfail(p) }
+  let c = p.s[j]
+  if c == '0' {
+    j += 1
+  } else if c >= '1' and c <= '9' {
+    while j < len(p.s) and p.s[j] >= '0' and p.s[j] <= '9' { j += 1 }
+  } else {
+    return jfail(p)
+  }
+  let text = p.s[p.pos..j]
+  p.pos = j
+  if text == "-0" { return "0" }
+  return text
+}
+
+fn jvalue(p: mut JP) -> Str {
+  jskip(p)
+  if p.pos >= len(p.s) { return jfail(p) }
+  let c = p.s[p.pos]
+  if c == '\'' {
+    let body = jstring(p)
+    if not p.ok { return "" }
+    return "'" + body + "'"
+  }
+  if c == '-' or (c >= '0' and c <= '9') { return jnumber(p) }
+  if matches_at(p.s, p.pos, "true") {
+    p.pos += 4
+    return "true"
+  }
+  if matches_at(p.s, p.pos, "false") {
+    p.pos += 5
+    return "false"
+  }
+  if matches_at(p.s, p.pos, "null") {
+    p.pos += 4
+    return "null"
+  }
+  if c == '[' {
+    p.pos += 1
+    var parts: [Str] = []
+    jskip(p)
+    if p.pos < len(p.s) and p.s[p.pos] == ']' {
+      p.pos += 1
+      return "[]"
+    }
+    while true {
+      let v = jvalue(p)
+      if not p.ok { return "" }
+      push(parts, v)
+      jskip(p)
+      if p.pos >= len(p.s) { return jfail(p) }
+      if p.s[p.pos] == ',' {
+        p.pos += 1
+      } else if p.s[p.pos] == ']' {
+        p.pos += 1
+        break
+      } else {
+        return jfail(p)
+      }
+    }
+    return "[" + join(parts, ",") + "]"
+  }
+  if c == '{' {
+    p.pos += 1
+    var m: Map[Str, Str] = {}
+    jskip(p)
+    if p.pos < len(p.s) and p.s[p.pos] == '}' {
+      p.pos += 1
+      return "{}"
+    }
+    while true {
+      jskip(p)
+      let k = jstring(p)
+      if not p.ok { return "" }
+      jskip(p)
+      if p.pos >= len(p.s) or p.s[p.pos] != ':' { return jfail(p) }
+      p.pos += 1
+      let v = jvalue(p)
+      if not p.ok { return "" }
+      put(m, k, v)
+      jskip(p)
+      if p.pos >= len(p.s) { return jfail(p) }
+      if p.s[p.pos] == ',' {
+        p.pos += 1
+      } else if p.s[p.pos] == '}' {
+        p.pos += 1
+        break
+      } else {
+        return jfail(p)
+      }
+    }
+    var ks = keys(m)
+    sort(ks)
+    var parts: [Str] = []
+    for k in ks {
+      push(parts, "'" + k + "':" + get(m, k))
+    }
+    return "{" + join(parts, ",") + "}"
+  }
+  return jfail(p)
+}
+
+fn json_canon(s: Str) -> Str {
+  var p = JP(s: s, pos: 0, ok: true)
+  let v = jvalue(p)
+  if not p.ok { return "error" }
+  jskip(p)
+  if p.pos != len(s) { return "error" }
+  return v
+}
+
+test "json" {
+  assert json_canon("{ 'b' : 1 , 'a' : [ true , null ] }") == "{'a':[true,null],'b':1}"
+  assert json_canon("[1,]") == "error"
+  assert json_canon("") == "error"
+  assert json_canon("   ") == "error"
+  assert json_canon("-0") == "0"
+  assert json_canon("01") == "error"
+  assert json_canon("-") == "error"
+  assert json_canon("1.5") == "error"
+  assert json_canon("{'a':1,'a':2}") == "{'a':2}"
+  assert json_canon("{'a':1 'b':2}") == "error"
+  assert json_canon("[]") == "[]"
+  assert json_canon(" { } ") == "{}"
+  assert json_canon("'a b'") == "'a b'"
+  assert json_canon("'abc") == "error"
+  assert json_canon("[1] x") == "error"
+  assert json_canon("{'a' 1}") == "error"
+  assert json_canon("{1:2}") == "error"
+  assert json_canon("[1 2]") == "error"
+  assert json_canon("{'a':1,}") == "error"
+  assert json_canon("tru") == "error"
+  assert json_canon("[-12, 0, 100]") == "[-12,0,100]"
+  assert json_canon("{'b':{'z':1,'y':2},'B':[]}") == "{'B':[],'b':{'y':2,'z':1}}"
+  assert json_canon("{'a':1,'b':2,'a':3}") == "{'a':3,'b':2}"
+}

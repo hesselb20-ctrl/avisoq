@@ -1,0 +1,155 @@
+// Parse the pattern into a tree stored in parallel arrays, then match by
+// computing, for each node, the set of reachable text positions as a bit mask.
+
+struct RX {
+  pat: Str,
+  pos: Int,
+  kind: [Int],
+  ch: [Int],
+  left: [Int],
+  right: [Int]
+}
+
+fn mk(rx: mut RX, k: Int, c: Int, l: Int, r: Int) -> Int {
+  push(rx.kind, k)
+  push(rx.ch, c)
+  push(rx.left, l)
+  push(rx.right, r)
+  return len(rx.kind) - 1
+}
+
+fn parse_alt(rx: mut RX) -> Int {
+  var node = parse_seq(rx)
+  while rx.pos < len(rx.pat) and rx.pat[rx.pos] == '|' {
+    rx.pos += 1
+    let rhs = parse_seq(rx)
+    node = mk(rx, 3, 0, node, rhs)
+  }
+  return node
+}
+
+fn parse_seq(rx: mut RX) -> Int {
+  var node = -1
+  while rx.pos < len(rx.pat) and rx.pat[rx.pos] != '|' and rx.pat[rx.pos] != ')' {
+    let a = parse_postfix(rx)
+    if node < 0 {
+      node = a
+    } else {
+      node = mk(rx, 2, 0, node, a)
+    }
+  }
+  if node < 0 {
+    return mk(rx, 7, 0, 0, 0)
+  }
+  return node
+}
+
+fn parse_postfix(rx: mut RX) -> Int {
+  var a = parse_atom(rx)
+  while rx.pos < len(rx.pat) and (rx.pat[rx.pos] == '*' or rx.pat[rx.pos] == '+' or rx.pat[rx.pos] == '?') {
+    let q = rx.pat[rx.pos]
+    rx.pos += 1
+    if q == '*' {
+      a = mk(rx, 4, 0, a, 0)
+    } else if q == '+' {
+      a = mk(rx, 5, 0, a, 0)
+    } else {
+      a = mk(rx, 6, 0, a, 0)
+    }
+  }
+  return a
+}
+
+fn parse_atom(rx: mut RX) -> Int {
+  let c = rx.pat[rx.pos]
+  rx.pos += 1
+  if c == '(' {
+    let inner = parse_alt(rx)
+    rx.pos += 1
+    return inner
+  }
+  if c == '.' {
+    return mk(rx, 1, 0, 0, 0)
+  }
+  return mk(rx, 0, c, 0, 0)
+}
+
+fn has_bit(s: Int, i: Int) -> Bool {
+  return bit_and(shift_right(s, i), 1) == 1
+}
+
+// Positions reachable by consuming one character (c < 0 means any character).
+fn step_char(text: Str, s: Int, c: Int) -> Int {
+  var out = 0
+  for i in 0..len(text) {
+    if has_bit(s, i) and (c < 0 or text[i] == c) {
+      out = bit_or(out, shift_left(1, i + 1))
+    }
+  }
+  return out
+}
+
+// Positions reachable from s by zero or more repetitions of child.
+fn star(rx: RX, child: Int, text: Str, s: Int) -> Int {
+  var acc = s
+  var changed = true
+  while changed {
+    let merged = bit_or(acc, ends(rx, child, text, acc))
+    changed = merged != acc
+    acc = merged
+  }
+  return acc
+}
+
+fn ends(rx: RX, node: Int, text: Str, s: Int) -> Int {
+  let k = rx.kind[node]
+  if k == 7 {
+    return s
+  }
+  if k == 0 {
+    return step_char(text, s, rx.ch[node])
+  }
+  if k == 1 {
+    return step_char(text, s, -1)
+  }
+  if k == 2 {
+    return ends(rx, rx.right[node], text, ends(rx, rx.left[node], text, s))
+  }
+  if k == 3 {
+    return bit_or(ends(rx, rx.left[node], text, s), ends(rx, rx.right[node], text, s))
+  }
+  if k == 4 {
+    return star(rx, rx.left[node], text, s)
+  }
+  if k == 5 {
+    return star(rx, rx.left[node], text, ends(rx, rx.left[node], text, s))
+  }
+  return bit_or(s, ends(rx, rx.left[node], text, s))
+}
+
+fn regex_match(pattern: Str, text: Str) -> Bool {
+  var kinds: [Int] = []
+  var chs: [Int] = []
+  var lefts: [Int] = []
+  var rights: [Int] = []
+  var rx = RX(pat: pattern, pos: 0, kind: kinds, ch: chs, left: lefts, right: rights)
+  let root = parse_alt(rx)
+  let r = ends(rx, root, text, 1)
+  return has_bit(r, len(text))
+}
+
+test "basic matching" {
+  assert regex_match("a", "a")
+  assert not regex_match("a", "")
+  assert regex_match("a|", "")
+  assert regex_match("a|", "a")
+  assert regex_match("()", "")
+  assert regex_match("", "")
+  assert not regex_match("", "a")
+  assert regex_match("a*b+c?", "aaabb")
+  assert regex_match("(ab)*c", "ababc")
+  assert not regex_match("(ab)*c", "abac")
+  assert regex_match(".*", "hello")
+  assert regex_match("(a|b)*abb", "babbabb")
+  assert not regex_match("(a*)*b", "aaaaaaaaaaaaaaaaaaaac")
+}

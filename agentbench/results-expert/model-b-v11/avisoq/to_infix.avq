@@ -1,0 +1,66 @@
+import "std/strings"
+
+fn prec_of(o: Int) -> Int {
+  if o == '^' {
+    return 3
+  }
+  if o == '*' or o == '/' {
+    return 2
+  }
+  return 1
+}
+
+// Wrap an operand in parentheses by the rules of the sheet.
+fn wrap(text: Str, cp: Int, pp: Int, parent: Int, is_right: Bool) -> Str {
+  var need = cp < pp
+  if cp == pp {
+    if is_right and (parent == '-' or parent == '/') {
+      need = true
+    }
+    if not is_right and parent == '^' {
+      need = true
+    }
+  }
+  if need {
+    return "(" + text + ")"
+  }
+  return text
+}
+
+fn to_infix(postfix: Str) -> Str {
+  var texts: [Str] = []
+  var precs: [Int] = []
+  let toks = split(postfix, " ")
+  for i in 0..len(toks) {
+    let t = toks[i]
+    let c = t[0]
+    if c >= 'a' and c <= 'z' {
+      push(texts, t)
+      push(precs, 4)
+    } else {
+      let rt = pop(texts)
+      let rp = pop(precs)
+      let lt = pop(texts)
+      let lp = pop(precs)
+      let p = prec_of(c)
+      let joined = wrap(lt, lp, p, c, false) + t + wrap(rt, rp, p, c, true)
+      push(texts, joined)
+      push(precs, p)
+    }
+  }
+  return texts[len(texts) - 1]
+}
+
+test "to_infix" {
+  assert to_infix("a b +") == "a+b"
+  assert to_infix("a b + c *") == "(a+b)*c"
+  assert to_infix("a b c * +") == "a+b*c"
+  assert to_infix("a b - c -") == "a-b-c"
+  assert to_infix("a b c - -") == "a-(b-c)"
+  assert to_infix("a b c / /") == "a/(b/c)"
+  assert to_infix("a b / c *") == "a/b*c"
+  assert to_infix("a b c ^ ^") == "a^b^c"
+  assert to_infix("a b ^ c ^") == "(a^b)^c"
+  assert to_infix("a b + c d + *") == "(a+b)*(c+d)"
+  assert to_infix("a") == "a"
+}

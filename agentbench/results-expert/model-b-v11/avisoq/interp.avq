@@ -1,0 +1,320 @@
+struct Interp {
+  toks: [Str],
+  pos: Int,
+  vars: Map[Str, Int],
+  out: Str,
+  printed: Int,
+  steps: Int,
+  failed: Str
+}
+
+fn bool_int(b: Bool) -> Int {
+  if b {
+    return 1
+  }
+  return 0
+}
+
+fn is_digit_tok(c: Int) -> Bool {
+  return c >= '0' and c <= '9'
+}
+
+fn is_lower_b(c: Int) -> Bool {
+  return c >= 'a' and c <= 'z'
+}
+
+fn tokenize(src: Str) -> [Str] {
+  var toks: [Str] = []
+  var i = 0
+  let n = len(src)
+  while i < n {
+    let b = src[i]
+    if b == ' ' or b == '\n' or b == '\t' or b == '\r' {
+      i += 1
+    } else if is_digit_tok(b) {
+      let start1 = i
+      while i < n and is_digit_tok(src[i]) {
+        i += 1
+      }
+      push(toks, src[start1..i])
+    } else if is_lower_b(b) {
+      let start2 = i
+      while i < n and is_lower_b(src[i]) {
+        i += 1
+      }
+      push(toks, src[start2..i])
+    } else if i + 1 < n and src[i + 1] == '=' and (b == '<' or b == '>' or b == '=' or b == '!') {
+      push(toks, src[i..i + 2])
+      i += 2
+    } else {
+      push(toks, chr(b))
+      i += 1
+    }
+  }
+  return toks
+}
+
+fn fail(st: mut Interp, name: Str) {
+  if st.failed == "" {
+    st.failed = name
+  }
+}
+
+fn step(st: mut Interp) {
+  st.steps += 1
+  if st.steps > 5000 {
+    fail(st, "!steps")
+  }
+}
+
+fn peek(st: mut Interp) -> Str {
+  if st.pos < len(st.toks) {
+    return st.toks[st.pos]
+  }
+  return ""
+}
+
+fn advance(st: mut Interp) {
+  st.pos += 1
+}
+
+fn is_cmp(t: Str) -> Bool {
+  return t == "<" or t == "<=" or t == ">" or t == ">=" or t == "==" or t == "!="
+}
+
+fn compare(op: Str, a: Int, b: Int) -> Int {
+  if op == "<" {
+    return bool_int(a < b)
+  }
+  if op == "<=" {
+    return bool_int(a <= b)
+  }
+  if op == ">" {
+    return bool_int(a > b)
+  }
+  if op == ">=" {
+    return bool_int(a >= b)
+  }
+  if op == "==" {
+    return bool_int(a == b)
+  }
+  return bool_int(a != b)
+}
+
+fn parse_expr(st: mut Interp) -> Int {
+  let left = parse_sum(st)
+  let op = peek(st)
+  if is_cmp(op) {
+    advance(st)
+    let right = parse_sum(st)
+    return compare(op, left, right)
+  }
+  return left
+}
+
+fn parse_sum(st: mut Interp) -> Int {
+  var v = parse_term(st)
+  while peek(st) == "+" or peek(st) == "-" {
+    let op = peek(st)
+    advance(st)
+    let r = parse_term(st)
+    if st.failed == "" {
+      if op == "+" {
+        v = v + r
+      } else {
+        v = v - r
+      }
+    }
+  }
+  return v
+}
+
+fn parse_term(st: mut Interp) -> Int {
+  var v = parse_unary(st)
+  while peek(st) == "*" or peek(st) == "/" or peek(st) == "%" {
+    let op = peek(st)
+    advance(st)
+    let r = parse_unary(st)
+    if st.failed == "" {
+      if op == "*" {
+        v = v * r
+      } else if r == 0 {
+        fail(st, "!div0")
+        v = 0
+      } else if op == "/" {
+        v = v / r
+      } else {
+        v = v % r
+      }
+    }
+  }
+  return v
+}
+
+fn parse_unary(st: mut Interp) -> Int {
+  if peek(st) == "-" {
+    advance(st)
+    let v = parse_unary(st)
+    return 0 - v
+  }
+  return parse_primary(st)
+}
+
+fn parse_primary(st: mut Interp) -> Int {
+  let t = peek(st)
+  if t == "" {
+    return 0
+  }
+  advance(st)
+  if t == "(" {
+    let v = parse_expr(st)
+    advance(st)
+    return v
+  }
+  if is_digit_tok(t[0]) {
+    var n = 0
+    for i in 0..len(t) {
+      n = n * 10 + (t[i] - '0')
+    }
+    return n
+  }
+  if has(st.vars, t) {
+    return get(st.vars, t)
+  }
+  fail(st, "!undef")
+  return 0
+}
+
+fn skip_block(st: mut Interp) {
+  var depth = 0
+  while st.pos < len(st.toks) {
+    let t = st.toks[st.pos]
+    st.pos += 1
+    if t == "{" {
+      depth += 1
+    } else if t == "}" {
+      depth -= 1
+      if depth == 0 {
+        return
+      }
+    }
+  }
+}
+
+fn exec_block(st: mut Interp) {
+  advance(st)
+  while st.failed == "" and st.pos < len(st.toks) and peek(st) != "}" {
+    exec_stmt(st)
+  }
+  advance(st)
+}
+
+fn emit(st: mut Interp, v: Int) {
+  if st.printed > 0 {
+    st.out += ","
+  }
+  st.out += str(v)
+  st.printed += 1
+}
+
+fn exec_stmt(st: mut Interp) {
+  let t = peek(st)
+  if t == "print" {
+    advance(st)
+    step(st)
+    let pv = parse_expr(st)
+    if st.failed == "" {
+      emit(st, pv)
+    }
+    if peek(st) == ";" {
+      advance(st)
+    }
+    return
+  }
+  if t == "while" {
+    advance(st)
+    let cond_pos = st.pos
+    var going = true
+    while going and st.failed == "" {
+      st.pos = cond_pos
+      step(st)
+      let c = parse_expr(st)
+      if st.failed != "" {
+        return
+      }
+      if c != 0 {
+        exec_block(st)
+      } else {
+        skip_block(st)
+        going = false
+      }
+    }
+    return
+  }
+  if t == "if" {
+    advance(st)
+    step(st)
+    let ic = parse_expr(st)
+    if st.failed != "" {
+      return
+    }
+    if ic != 0 {
+      exec_block(st)
+      if peek(st) == "else" {
+        advance(st)
+        skip_block(st)
+      }
+    } else {
+      skip_block(st)
+      if peek(st) == "else" {
+        advance(st)
+        exec_block(st)
+      }
+    }
+    return
+  }
+  advance(st)
+  advance(st)
+  step(st)
+  let av = parse_expr(st)
+  if st.failed == "" {
+    put(st.vars, t, av)
+  }
+  if peek(st) == ";" {
+    advance(st)
+  }
+}
+
+fn interp(src: Str) -> Str {
+  var vars: Map[Str, Int] = {}
+  var st = Interp(toks: tokenize(src), pos: 0, vars: vars, out: "", printed: 0, steps: 0, failed: "")
+  while st.failed == "" and st.pos < len(st.toks) {
+    exec_stmt(st)
+  }
+  var text_out = st.out
+  if st.failed != "" {
+    if st.printed > 0 {
+      text_out += ","
+    }
+    text_out += st.failed
+  }
+  return text_out
+}
+
+test "print and arithmetic" {
+  assert interp("print 1 + 2 * 3;") == "7"
+  assert interp("x=-3; print x*2;") == "-6"
+  assert interp("print 7/-2; print -7%3;") == "-3,-1"
+}
+
+test "loops and branches" {
+  assert interp("i=0; while i < 3 { print i; i = i + 1 }") == "0,1,2"
+  assert interp("if 0 { print 1 } else { print 2 }") == "2"
+  assert interp("if 1 { print 1 } else { print 2 }") == "1"
+}
+
+test "errors" {
+  assert interp("print y;") == "!undef"
+  assert interp("print 1; print 1/0;") == "1,!div0"
+  assert interp("i=0; while 1 { i = i + 1 }") == "!steps"
+}

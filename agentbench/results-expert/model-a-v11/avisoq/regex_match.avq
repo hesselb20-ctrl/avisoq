@@ -1,0 +1,155 @@
+import "std/strings"
+
+struct RS { pat: Str, text: Str, mt: [Int], imemo: [Int], amemo: [Int] }
+
+fn bit(b: Int) -> Int {
+  return shift_left(1, b)
+}
+
+fn has_bit(set: Int, b: Int) -> Bool {
+  return bit_and(shift_right(set, b), 1) == 1
+}
+
+fn atom_at(r: mut RS, k: Int, ae: Int, b: Int) -> Int {
+  let idx = k * (len(r.text) + 1) + b
+  if r.amemo[idx] >= 0 { return r.amemo[idx] }
+  var res = 0
+  if r.pat[k] == '(' {
+    res = alt_run(r, k + 1, ae - 1, bit(b))
+  } else if b < len(r.text) and (r.pat[k] == '.' or r.pat[k] == r.text[b]) {
+    res = bit(b + 1)
+  }
+  r.amemo[idx] = res
+  return res
+}
+
+fn closure_of(r: mut RS, k: Int, ae: Int, b: Int) -> Int {
+  var reach = bit(b)
+  var frontier = reach
+  while frontier != 0 {
+    var fresh = 0
+    for c in 0..len(r.text) + 1 {
+      if has_bit(frontier, c) {
+        fresh = bit_or(fresh, atom_at(r, k, ae, c))
+      }
+    }
+    frontier = bit_xor(fresh, bit_and(fresh, reach))
+    reach = bit_or(reach, frontier)
+  }
+  return reach
+}
+
+fn item_at(r: mut RS, k: Int, ae: Int, ie: Int, b: Int) -> Int {
+  let idx = k * (len(r.text) + 1) + b
+  if r.imemo[idx] >= 0 { return r.imemo[idx] }
+  var res = 0
+  if ie == ae {
+    res = atom_at(r, k, ae, b)
+  } else {
+    let q = r.pat[ae]
+    if q == '?' {
+      res = bit_or(bit(b), atom_at(r, k, ae, b))
+    } else if q == '*' {
+      res = closure_of(r, k, ae, b)
+    } else {
+      let cl = closure_of(r, k, ae, b)
+      for c in 0..len(r.text) + 1 {
+        if has_bit(cl, c) {
+          res = bit_or(res, atom_at(r, k, ae, c))
+        }
+      }
+    }
+  }
+  r.imemo[idx] = res
+  return res
+}
+
+fn seq_run(r: mut RS, lo: Int, hi: Int, set: Int) -> Int {
+  var cur = set
+  var k = lo
+  while k < hi {
+    var ae = k + 1
+    if r.pat[k] == '(' { ae = r.mt[k] + 1 }
+    var ie = ae
+    if ae < hi and (r.pat[ae] == '*' or r.pat[ae] == '+' or r.pat[ae] == '?') { ie = ae + 1 }
+    var nxt = 0
+    for b in 0..len(r.text) + 1 {
+      if has_bit(cur, b) {
+        nxt = bit_or(nxt, item_at(r, k, ae, ie, b))
+      }
+    }
+    cur = nxt
+    if cur == 0 { return 0 }
+    k = ie
+  }
+  return cur
+}
+
+fn alt_run(r: mut RS, lo: Int, hi: Int, set: Int) -> Int {
+  var result = 0
+  var start = lo
+  var depth = 0
+  for i in lo..hi + 1 {
+    if i == hi {
+      result = bit_or(result, seq_run(r, start, i, set))
+    } else {
+      let c = r.pat[i]
+      if c == '(' { depth += 1 }
+      if c == ')' { depth -= 1 }
+      if c == '|' and depth == 0 {
+        result = bit_or(result, seq_run(r, start, i, set))
+        start = i + 1
+      }
+    }
+  }
+  return result
+}
+
+fn regex_match(pattern: Str, text: Str) -> Bool {
+  let pl = len(pattern)
+  var mt = array(pl + 1, -1)
+  var stack: [Int] = []
+  for i in 0..pl {
+    if pattern[i] == '(' {
+      push(stack, i)
+    } else if pattern[i] == ')' {
+      let o = pop(stack)
+      mt[o] = i
+    }
+  }
+  let size = (pl + 1) * (len(text) + 1)
+  var r = RS(pat: pattern, text: text, mt: mt, imemo: array(size, -1), amemo: array(size, -1))
+  let res = alt_run(r, 0, pl, 1)
+  return has_bit(res, len(text))
+}
+
+test "regex" {
+  assert regex_match("", "")
+  assert not regex_match("", "a")
+  assert regex_match("a|", "")
+  assert regex_match("a|", "a")
+  assert not regex_match("a|", "b")
+  assert regex_match("()", "")
+  assert regex_match("a*", "")
+  assert regex_match("a*", "aaaa")
+  assert not regex_match("a+", "")
+  assert regex_match("a+b?", "aaab")
+  assert regex_match(".*", "hello")
+  assert regex_match("(ab)*c", "ababc")
+  assert not regex_match("(ab)*c", "abac")
+  assert regex_match("(a|b)*abb", "ababb")
+  assert regex_match("(a*)*", "aaa")
+  assert regex_match("(a*)*b", "aaab")
+  assert not regex_match("(a*)*b", "aaaa")
+  assert regex_match("(a?)*", "")
+  assert regex_match("(a|)+b", "b")
+  assert regex_match("a?a?a?aaa", "aaa")
+  assert not regex_match("(a|aa)+$", "a")
+  assert regex_match("((a*)*)*a", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+  assert not regex_match("(a*)*(a*)*(a*)*(a*)*(a*)*b", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+  assert regex_match("a|b|c", "c")
+  assert regex_match("(a|b)(c|d)", "bd")
+  assert regex_match("x.y", "xay")
+  assert not regex_match("x.y", "xy")
+  assert regex_match("(()*)*", "")
+}

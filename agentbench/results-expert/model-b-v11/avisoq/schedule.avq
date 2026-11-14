@@ -1,0 +1,90 @@
+import "std/strings"
+import "std/arrays"
+
+fn dig(c: Int) -> Bool {
+  return c >= '0' and c <= '9'
+}
+
+// Returns start * 2000 + end (minutes) for a valid entry, or -1.
+fn valid_part(e: Str) -> Int {
+  if len(e) != 11 {
+    return -1
+  }
+  if not (dig(e[0]) and dig(e[1]) and e[2] == ':' and dig(e[3]) and dig(e[4]) and e[5] == '-' and dig(e[6]) and dig(e[7]) and e[8] == ':' and dig(e[9]) and dig(e[10])) {
+    return -1
+  }
+  let hs = (e[0] - '0') * 10 + (e[1] - '0')
+  let ms = (e[3] - '0') * 10 + (e[4] - '0')
+  let he = (e[6] - '0') * 10 + (e[7] - '0')
+  let me = (e[9] - '0') * 10 + (e[10] - '0')
+  if hs > 23 or he > 23 or ms > 59 or me > 59 {
+    return -1
+  }
+  let start = hs * 60 + ms
+  let stop = he * 60 + me
+  if stop <= start {
+    return -1
+  }
+  return start * 2000 + stop
+}
+
+fn two(n: Int) -> Str {
+  return pad_left(str(n), 2, "0")
+}
+
+fn fmt_min(m: Int) -> Str {
+  return two(m / 60) + ":" + two(m % 60)
+}
+
+fn schedule(s: Str) -> Str {
+  if s == "" {
+    return ";total=0;invalid=0"
+  }
+  let parts = split(s, ",")
+  var codes: [Int] = []
+  var invalid = 0
+  for i in 0..len(parts) {
+    let code = valid_part(parts[i])
+    if code < 0 {
+      invalid += 1
+    } else {
+      push(codes, code)
+    }
+  }
+  sort(codes)
+  var texts: [Str] = []
+  var total = 0
+  var have = false
+  var cs = 0
+  var ce = 0
+  for i in 0..len(codes) {
+    let st = codes[i] / 2000
+    let en = codes[i] % 2000
+    if have and st <= ce {
+      if en > ce {
+        ce = en
+      }
+    } else {
+      if have {
+        push(texts, fmt_min(cs) + "-" + fmt_min(ce))
+        total += ce - cs
+      }
+      cs = st
+      ce = en
+      have = true
+    }
+  }
+  if have {
+    push(texts, fmt_min(cs) + "-" + fmt_min(ce))
+    total += ce - cs
+  }
+  return join(texts, ",") + ";total=" + str(total) + ";invalid=" + str(invalid)
+}
+
+test "schedule" {
+  assert schedule("") == ";total=0;invalid=0"
+  assert schedule("09:00-10:00") == "09:00-10:00;total=60;invalid=0"
+  assert schedule("09:00-10:00,10:00-11:00,09:30-09:45") == "09:00-11:00;total=120;invalid=0"
+  assert schedule("12:00-13:00,08:00-09:00,x,10:00-10:00,24:00-25:00") == "08:00-09:00,12:00-13:00;total=120;invalid=3"
+  assert schedule("23:00-23:59,00:00-00:30,") == "00:00-00:30,23:00-23:59;total=89;invalid=1"
+}

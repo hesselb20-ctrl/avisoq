@@ -1,0 +1,128 @@
+import "std/strings"
+
+struct Fr { n: Int, d: Int }
+struct FP { s: Str, pos: Int, div0: Bool }
+
+fn gcd_abs(a: Int, b: Int) -> Int {
+  var x = a
+  var y = b
+  if x < 0 { x = 0 - x }
+  if y < 0 { y = 0 - y }
+  while y != 0 {
+    let t = x % y
+    x = y
+    y = t
+  }
+  return x
+}
+
+fn mk(n: Int, d: Int) -> Fr {
+  var nn = n
+  var dd = d
+  if dd < 0 {
+    nn = 0 - nn
+    dd = 0 - dd
+  }
+  let g = gcd_abs(nn, dd)
+  if g > 1 {
+    nn = nn / g
+    dd = dd / g
+  }
+  if nn == 0 { dd = 1 }
+  return Fr(n: nn, d: dd)
+}
+
+fn fskip(p: mut FP) {
+  while p.pos < len(p.s) and p.s[p.pos] == ' ' { p.pos += 1 }
+}
+
+fn f_atom(p: mut FP) -> Fr {
+  fskip(p)
+  let c = p.s[p.pos]
+  if c == '-' {
+    p.pos += 1
+    let v = f_atom(p)
+    return mk(0 - v.n, v.d)
+  }
+  if c == '(' {
+    p.pos += 1
+    let v = f_sum(p)
+    fskip(p)
+    p.pos += 1
+    return v
+  }
+  var j = p.pos
+  while j < len(p.s) and p.s[j] >= '0' and p.s[j] <= '9' { j += 1 }
+  let text = p.s[p.pos..j]
+  p.pos = j
+  match parse_int(text) {
+    Some(value) => { return mk(value, 1) }
+    None => { return mk(0, 1) }
+  }
+}
+
+fn f_prod(p: mut FP) -> Fr {
+  var v = f_atom(p)
+  while true {
+    fskip(p)
+    if p.pos >= len(p.s) { break }
+    let op = p.s[p.pos]
+    if op != '*' and op != '/' { break }
+    p.pos += 1
+    let r = f_atom(p)
+    if op == '*' {
+      v = mk(v.n * r.n, v.d * r.d)
+    } else if r.n == 0 {
+      p.div0 = true
+      v = mk(0, 1)
+    } else {
+      v = mk(v.n * r.d, v.d * r.n)
+    }
+  }
+  return v
+}
+
+fn f_sum(p: mut FP) -> Fr {
+  var v = f_prod(p)
+  while true {
+    fskip(p)
+    if p.pos >= len(p.s) { break }
+    let op = p.s[p.pos]
+    if op != '+' and op != '-' { break }
+    p.pos += 1
+    let r = f_prod(p)
+    if op == '+' {
+      v = mk(v.n * r.d + r.n * v.d, v.d * r.d)
+    } else {
+      v = mk(v.n * r.d - r.n * v.d, v.d * r.d)
+    }
+  }
+  return v
+}
+
+fn frac_calc(s: Str) -> Str {
+  var p = FP(s: s, pos: 0, div0: false)
+  let v = f_sum(p)
+  if p.div0 { return "div0" }
+  if v.d == 1 { return str(v.n) }
+  return str(v.n) + "/" + str(v.d)
+}
+
+test "frac" {
+  assert frac_calc("1/2") == "1/2"
+  assert frac_calc("1/2+1/2") == "1"
+  assert frac_calc(" 1 / 2 - 3 ") == "-5/2"
+  assert frac_calc("1/0") == "div0"
+  assert frac_calc("0*(1/0)") == "div0"
+  assert frac_calc("2/-4") == "-1/2"
+  assert frac_calc("--3") == "3"
+  assert frac_calc("0/5") == "0"
+  assert frac_calc("-0") == "0"
+  assert frac_calc("1-2-3") == "-4"
+  assert frac_calc("8/4/2") == "1"
+  assert frac_calc("2*(3+4)/7") == "2"
+  assert frac_calc("1/3+1/6") == "1/2"
+  assert frac_calc("-(1/2)") == "-1/2"
+  assert frac_calc("1/(2-2)+5") == "div0"
+  assert frac_calc("7") == "7"
+}

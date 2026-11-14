@@ -1,0 +1,40 @@
+fn sat_ok(n: Int, clauses: [Int], mask: Int) -> Bool {
+  var satisfied = false
+  for x in clauses {
+    if x == 0 {
+      if not satisfied { return false }
+      satisfied = false
+    } else {
+      var v = x
+      if v < 0 { v = 0 - v }
+      let val = bit_and(shift_right(mask, n - v), 1)
+      if (x > 0 and val == 1) or (x < 0 and val == 0) { satisfied = true }
+    }
+  }
+  return true
+}
+
+fn sat(n: Int, clauses: [Int]) -> [Int] {
+  let total = shift_left(1, n)
+  for mask in 0..total {
+    if sat_ok(n, clauses, mask) {
+      var res: [Int] = []
+      for v in 1..n + 1 {
+        push(res, bit_and(shift_right(mask, n - v), 1))
+      }
+      return res
+    }
+  }
+  return [-1]
+}
+
+test "sat" {
+  assert sat(3, []) == [0, 0, 0]
+  assert sat(2, [0]) == [-1]
+  assert sat(2, [1, 0]) == [1, 0]
+  assert sat(2, [1, 2, 0, -1, 0]) == [0, 1]
+  assert sat(1, [1, 0, -1, 0]) == [-1]
+  assert sat(3, [-1, -2, 0, 3, 0]) == [0, 0, 1]
+  assert sat(12, [1, 0, 12, 0]) == [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]
+  assert sat(2, [1, 0, 0]) == [-1]
+}

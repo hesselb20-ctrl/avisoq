@@ -1,0 +1,49 @@
+fn toposort(n: Int, edges: [Int]) -> [Int] {
+  let m = len(edges) / 2
+  var indeg = array(n, 0)
+  var start = array(n + 1, 0)
+  for i in 0..m {
+    let a = edges[2 * i]
+    let b = edges[2 * i + 1]
+    indeg[b] += 1
+    start[a + 1] += 1
+  }
+  for i in 0..n {
+    start[i + 1] += start[i]
+  }
+  var fill = array(n, 0)
+  var targets = array(m, 0)
+  for i in 0..m {
+    let a = edges[2 * i]
+    let b = edges[2 * i + 1]
+    targets[start[a] + fill[a]] = b
+    fill[a] += 1
+  }
+  var taken = array(n, false)
+  var order: [Int] = []
+  var lo = 0
+  while len(order) < n {
+    while lo < n and (taken[lo] or indeg[lo] != 0) { lo += 1 }
+    if lo >= n { return [-1] }
+    let v = lo
+    taken[v] = true
+    push(order, v)
+    for j in start[v]..start[v + 1] {
+      let w = targets[j]
+      indeg[w] -= 1
+      if indeg[w] == 0 and w < lo { lo = w }
+    }
+  }
+  return order
+}
+
+test "topo" {
+  assert toposort(1, []) == [0]
+  assert toposort(3, []) == [0, 1, 2]
+  assert toposort(3, [2, 0]) == [1, 2, 0]
+  assert toposort(3, [0, 1, 1, 2, 2, 0]) == [-1]
+  assert toposort(2, [1, 1]) == [-1]
+  assert toposort(3, [0, 2, 0, 2, 1, 2]) == [0, 1, 2]
+  assert toposort(4, [3, 0, 3, 1]) == [2, 3, 0, 1]
+  assert toposort(4, [0, 1, 2, 3, 1, 3]) == [0, 1, 2, 3]
+}

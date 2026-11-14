@@ -6,10 +6,10 @@ A small, fast, safe programming language designed to be written and verified by 
 
 <img src=".github/assets/figure/scene.webp" width="100%" alt="Three beats: a mandelbrot benchmark computed on one thread with every check on in 112 ms against 108 ms for C++; the same loop written as a sum, spread over 8 threads and 8 lanes; and the result, 4.6 ms against 15 ms for C++ parallelised by hand with OpenMP.">
 
-Version 0.10. One front end, two backends (native machine code through GCC, and sandboxed
+Version 0.11. One front end, two backends (native machine code through GCC, and sandboxed
 WebAssembly), a standard library written in Avisoq, a formatter, a compile-time contract prover,
 a language server, a package manager and a differential fuzzer. The test suites pass on both
-backends: 370 compiler cases each, plus 26 editor, 17 package and 10 sandbox tests.
+backends: 369 compiler cases each, plus 26 editor, 17 package and 10 sandbox tests.
 
 ```
 import "std/strings"
@@ -109,7 +109,7 @@ module itself and runs it in a sandbox. Both keep every run-time check.
   reclaimed memory overwritten first, so a value handed back while still in use fails loudly
   instead of passing by luck.
 
-<img src=".github/assets/how/scene.webp" width="100%" alt="370 test programs go through one front end, are compiled by both the native and the WebAssembly backend, and all 370 print the same on both. The fuzzer found two mismatches, both fixed.">
+<img src=".github/assets/how/scene.webp" width="100%" alt="369 test programs go through one front end, are compiled by both the native and the WebAssembly backend, and all 369 print the same on both. The fuzzer found two mismatches, both fixed.">
 
 ## Capabilities
 
@@ -162,10 +162,20 @@ check on, they were 8 to 14 times faster in total than the Python programs the s
 wrote. Against the agents' Rust programs (`rustc -O`) they were 1.4 times faster in one run
 and level in the other, as of version 0.9; before its allocator and string work they were 14%
 to 45% slower. Solutions written fresh on 0.10, with the bigger library, ran about twice as
-fast as the Rust ones in both runs, though one task dominates that total. So today the measured case for Avisoq is: as correct as Python and Rust on
-these tasks, about as fast to run as Rust, much faster than Python, and slower for the agent
-to write than either. Ten tasks and two runs is a small sample; see the table and its caveats
-in [`agentbench/README.md`](agentbench/README.md).
+fast as the Rust ones in both runs, though one task dominates that total. In the latest round
+(0.11, with fresh Rust runs for comparison) they were 2.6 and 2.1 times faster than the Rust
+programs, and the agents took about as long in Avisoq as in Rust for one model and a third
+longer for the other.
+
+A separate comparison, `agentbench/bugs.mjs`, writes the same twelve mistakes in all three
+languages: Avisoq refuses or stops on all twelve, where Rust as shipped (`-O`) finishes with a
+wrong result on six and Python on five. Those cases were picked by the author to show the
+differences, so it is a list of behaviours, not a defect rate.
+
+So today the measured case for Avisoq is: as correct as Python and Rust on these tasks, at
+least as fast to run as Rust, much faster than Python, stricter than both about the bugs
+listed, and no quicker for an agent to write than Rust. Ten tasks and a few runs is a small
+sample; see the tables and their caveats in [`agentbench/README.md`](agentbench/README.md).
 
 <img src=".github/assets/agents/scene.webp" width="100%" alt="Two models each solved 24 of 24 tasks on the first attempt in Avisoq, Python and Rust. The Avisoq solutions were the longest: about 380 lines against 200 for Python and 330 for Rust.">
 

@@ -1,0 +1,16 @@
+import "std/bigint"
+
+fn big_divmod(a: Str, b: Str) -> Str {
+  let x = big(a)
+  let y = big(b)
+  let q = big_div(x, y)
+  let r = big_rem(x, y)
+  return big_str(q) + " " + big_str(r)
+}
+
+test "big division" {
+  assert big_divmod("-7", "2") == "-3 -1"
+  assert big_divmod("7", "-2") == "-3 1"
+  assert big_divmod("0", "5") == "0 0"
+  assert big_divmod("100000000000000000000000000000000000000000000000001", "10") == "10000000000000000000000000000000000000000000000000 1"
+}

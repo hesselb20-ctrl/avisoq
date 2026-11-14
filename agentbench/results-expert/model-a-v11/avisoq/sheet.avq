@@ -1,0 +1,121 @@
+import "std/strings"
+import "std/arrays"
+
+struct Sheet { formulas: Map[Str, Str], st: Map[Str, Int], vals: Map[Str, Int] }
+struct Ex { s: Str, pos: Int, cyc: Bool }
+
+fn cell_value(sh: mut Sheet, name: Str, e: mut Ex) -> Int {
+  if not has(sh.formulas, name) { return 0 }
+  let state = get_or(sh.st, name, 0)
+  if state == 1 {
+    e.cyc = true
+    return 0
+  }
+  if state == 2 { return get(sh.vals, name) }
+  if state == 3 {
+    e.cyc = true
+    return 0
+  }
+  put(sh.st, name, 1)
+  var sub = Ex(s: get(sh.formulas, name), pos: 0, cyc: false)
+  let v = ex_sum(sh, sub)
+  if sub.cyc {
+    put(sh.st, name, 3)
+    e.cyc = true
+    return 0
+  }
+  put(sh.st, name, 2)
+  put(sh.vals, name, v)
+  return v
+}
+
+fn ex_atom(sh: mut Sheet, e: mut Ex) -> Int {
+  let c = e.s[e.pos]
+  if c == '-' {
+    e.pos += 1
+    let v = ex_atom(sh, e)
+    return 0 - v
+  }
+  if c == '(' {
+    e.pos += 1
+    let v = ex_sum(sh, e)
+    e.pos += 1
+    return v
+  }
+  if c >= '0' and c <= '9' {
+    var j = e.pos
+    while j < len(e.s) and e.s[j] >= '0' and e.s[j] <= '9' { j += 1 }
+    let text = e.s[e.pos..j]
+    e.pos = j
+    match parse_int(text) {
+      Some(value) => { return value }
+      None => { return 0 }
+    }
+  }
+  let name = e.s[e.pos..e.pos + 2]
+  e.pos += 2
+  return cell_value(sh, name, e)
+}
+
+fn ex_prod(sh: mut Sheet, e: mut Ex) -> Int {
+  var v = ex_atom(sh, e)
+  while e.pos < len(e.s) and e.s[e.pos] == '*' {
+    e.pos += 1
+    let r = ex_atom(sh, e)
+    v = v * r
+  }
+  return v
+}
+
+fn ex_sum(sh: mut Sheet, e: mut Ex) -> Int {
+  var v = ex_prod(sh, e)
+  while e.pos < len(e.s) and (e.s[e.pos] == '+' or e.s[e.pos] == '-') {
+    let op = e.s[e.pos]
+    e.pos += 1
+    let r = ex_prod(sh, e)
+    if op == '+' {
+      v = v + r
+    } else {
+      v = v - r
+    }
+  }
+  return v
+}
+
+fn sheet(cells: Str) -> Str {
+  var sh = Sheet(formulas: {}, st: {}, vals: {})
+  let parts = split(cells, ";")
+  for part in parts {
+    if len(part) >= 3 {
+      put(sh.formulas, part[0..2], part[3..len(part)])
+    }
+  }
+  var names = keys(sh.formulas)
+  sort(names)
+  var out: [Str] = []
+  for name in names {
+    var e = Ex(s: "", pos: 0, cyc: false)
+    let v = cell_value(sh, name, e)
+    if get(sh.st, name) == 3 {
+      push(out, name + "=#CYCLE")
+    } else {
+      push(out, name + "=" + str(v))
+    }
+  }
+  return join(out, ",")
+}
+
+test "sheet" {
+  assert sheet("") == ""
+  assert sheet("A1=1+2*3") == "A1=7"
+  assert sheet("A1=B1;B1=A1") == "A1=#CYCLE,B1=#CYCLE"
+  assert sheet("A1=A1") == "A1=#CYCLE"
+  assert sheet("A1=1;A1=2") == "A1=2"
+  assert sheet("A1=Z9+1") == "A1=1"
+  assert sheet("A1=B1*0;B1=B1") == "A1=#CYCLE,B1=#CYCLE"
+  assert sheet("A1=--3;B1=-(A1+1)*2-1;C1=10-2-3") == "A1=3,B1=-9,C1=5"
+  assert sheet("B2=A1;A1=5") == "A1=5,B2=5"
+  assert sheet("A1=B1+C1;B1=1;C1=A1") == "A1=#CYCLE,B1=1,C1=#CYCLE"
+  assert sheet("A1=2*-3") == "A1=-6"
+  assert sheet("A1=1;A1=A1+1") == "A1=#CYCLE"
+}
