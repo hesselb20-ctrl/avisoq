@@ -1,0 +1,79 @@
+// Word frequencies: lambdas, growable arrays, maps, sorting by a key, and errors as values.
+// Run with:  avisoq run examples/wordfreq.avq --allow io,fs:examples
+import "std/strings"
+import "std/arrays"
+
+struct Count { word: Str, times: Int }
+
+private fn is_letter(b: Int) -> Bool {
+  return (b >= 97 and b <= 122) or (b >= 65 and b <= 90)
+}
+
+// Splits text into words: runs of letters, everything else separates them.
+fn words(text: Str) -> [Str] {
+  var out: [Str] = []
+  var start = 0
+  var i = 0
+  while i <= len(text)
+    invariant start <= i
+  {
+    if i == len(text) or not is_letter(byte_at(text, i)) {
+      if i > start { push(out, substr(text, start, i)) }
+      start = i + 1
+    }
+    i = i + 1
+  }
+  return out
+}
+
+fn tally(ws: [Str]) -> [Count] {
+  var seen: Map[Str, Int] = {}
+  for i in 0..len(ws) {
+    put(seen, ws[i], get_or(seen, ws[i], 0) + 1)
+  }
+  let names = keys(seen)
+  return map(names, fn(w) => Count(word: w, times: get(seen, w)))
+}
+
+fn main() uses io, fs {
+  let path = "examples/sample.txt"
+  match write_file(path, "the cat and the hat and the bat sat; a cat sat") {
+    Ok => { }
+    Err(error) => { print("could not write the sample:", error) }
+  }
+
+  match read_file(path) {
+    Err(error) => { print("could not read", path + ":", error) }
+    Ok(text) => {
+      var counts = tally(words(text))
+      // Most frequent first; ties in alphabetical order.
+      sort_by(counts, fn(c) => c.word)
+      sort_by(counts, fn(c) => 0 - c.times)
+      let frequent = filter(counts, fn(c) => c.times > 1)
+      each(frequent, fn(c) => print(c.word, c.times))
+      print(
+        "distinct words:",
+        len(counts),
+        "longest:",
+        fold(counts, "", fn(best, c) => longer(best, c.word)),
+      )
+    }
+  }
+}
+
+fn longer(a: Str, b: Str) -> Str {
+  if len(b) > len(a) { return b }
+  return a
+}
+
+test "words are split on anything that is not a letter" {
+  let ws = words("it's 2 late, now")
+  assert len(ws) == 4
+  assert ws[0] == "it" and ws[1] == "s" and ws[3] == "now"
+}
+
+test "tally counts repeats" {
+  let cs = tally(["a", "b", "a"])
+  assert len(cs) == 2
+  assert cs[0].word == "a" and cs[0].times == 2
+}

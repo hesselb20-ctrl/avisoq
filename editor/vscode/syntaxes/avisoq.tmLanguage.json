@@ -1,0 +1,45 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Avisoq",
+  "scopeName": "source.avq",
+  "patterns": [
+    { "name": "comment.line.double-slash.avq", "match": "//.*$" },
+    {
+      "name": "string.quoted.double.avq",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        { "name": "constant.character.escape.avq", "match": "\\\\[nt\"\\\\]" },
+        { "name": "invalid.illegal.escape.avq", "match": "\\\\." }
+      ]
+    },
+    { "name": "constant.numeric.float.avq", "match": "\\b[0-9][0-9_]*\\.[0-9]+(?:[eE][+-]?[0-9]+)?\\b" },
+    { "name": "constant.numeric.integer.avq", "match": "\\b[0-9][0-9_]*\\b" },
+    { "name": "constant.language.boolean.avq", "match": "\\b(?:true|false)\\b" },
+    {
+      "match": "\\b(fn)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+      "captures": { "1": { "name": "keyword.declaration.function.avq" }, "2": { "name": "entity.name.function.avq" } }
+    },
+    {
+      "match": "\\b(struct|enum)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+      "captures": { "1": { "name": "keyword.declaration.type.avq" }, "2": { "name": "entity.name.type.avq" } }
+    },
+    { "name": "keyword.control.avq", "match": "\\b(?:if|else|while|for|in|return|match)\\b" },
+    { "name": "keyword.other.contract.avq", "match": "\\b(?:requires|ensures|invariant|assert|uses)\\b" },
+    { "name": "keyword.declaration.avq", "match": "\\b(?:fn|let|var|struct|enum|test|import|mut)\\b" },
+    { "name": "keyword.operator.logical.avq", "match": "\\b(?:and|or|not)\\b" },
+    { "name": "support.type.primitive.avq", "match": "\\b(?:Int|Float|Bool|Str|Map)\\b" },
+    {
+      "name": "support.function.builtin.avq",
+      "match": "\\b(?:print|len|array|float|int|sqrt|now_ms|str|substr|byte_at|put|get|get_or|has|keys|remove|copy|sum|read_file|write_file|file_exists|http_get)(?=\\s*\\()"
+    },
+    { "name": "entity.name.type.avq", "match": "\\b[A-Z][A-Za-z0-9_]*\\b" },
+    { "name": "entity.name.function.call.avq", "match": "\\b[a-z_][A-Za-z0-9_]*(?=\\s*\\()" },
+    { "name": "variable.language.result.avq", "match": "\\bresult\\b" },
+    { "name": "keyword.operator.arrow.avq", "match": "->|=>" },
+    { "name": "keyword.operator.range.avq", "match": "\\.\\." },
+    { "name": "keyword.operator.comparison.avq", "match": "==|!=|<=|>=|<|>" },
+    { "name": "keyword.operator.assignment.avq", "match": "=" },
+    { "name": "keyword.operator.arithmetic.avq", "match": "[+\\-*/%]" }
+  ]
+}

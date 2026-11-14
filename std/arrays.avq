@@ -1,0 +1,214 @@
+// Array helpers. Arrays have a fixed length; functions that "add" return a new array.
+
+private fn sift_down[T: Ord](xs: mut [T], start: Int, end: Int) {
+  var root = start
+  while 2 * root + 1 < end {
+    var child = 2 * root + 1
+    if child + 1 < end and xs[child] < xs[child + 1] { child = child + 1 }
+    if xs[root] < xs[child] {
+      let held = xs[root]
+      xs[root] = xs[child]
+      xs[child] = held
+      root = child
+    } else {
+      return
+    }
+  }
+}
+
+// Sorts in place, smallest first (heap sort). Works for Int, Float and Str.
+fn sort[T: Ord](xs: mut [T]) {
+  let n = len(xs)
+  var i = n / 2 - 1
+  while i >= 0 {
+    sift_down(xs, i, n)
+    i = i - 1
+  }
+  var last = n - 1
+  while last > 0 {
+    let held = xs[0]
+    xs[0] = xs[last]
+    xs[last] = held
+    sift_down(xs, 0, last)
+    last = last - 1
+  }
+}
+
+fn sorted[T: Ord](xs: [T]) -> [T] {
+  var out = copy(xs)
+  sort(out)
+  return out
+}
+
+fn reverse[T](xs: [T]) -> [T] {
+  let n = len(xs)
+  return [i in 0..n: copy(xs[n - 1 - i])]
+}
+
+// Position of the first element equal to x, or -1.
+fn index_in[T: Eq](xs: [T], x: T) -> Int
+  ensures result >= -1
+{
+  for i in 0..len(xs) {
+    if xs[i] == x { return i }
+  }
+  return -1
+}
+
+fn max_of[T: Ord](xs: [T]) -> T
+  requires len(xs) > 0
+{
+  var best = 0
+  for i in 1..len(xs) {
+    if xs[i] > xs[best] { best = i }
+  }
+  return copy(xs[best])
+}
+
+fn min_of[T: Ord](xs: [T]) -> T
+  requires len(xs) > 0
+{
+  var best = 0
+  for i in 1..len(xs) {
+    if xs[i] < xs[best] { best = i }
+  }
+  return copy(xs[best])
+}
+
+private fn item_of_two[T](a: [T], b: [T], i: Int) -> T {
+  if i < len(a) { return copy(a[i]) }
+  return copy(b[i - len(a)])
+}
+
+fn concat[T](a: [T], b: [T]) -> [T] {
+  return [i in 0..len(a) + len(b): item_of_two(a, b, i)]
+}
+
+// A new array with x added at the end.
+fn append[T](xs: [T], x: T) -> [T] {
+  return concat(xs, [copy(x)])
+}
+
+// ---- functions that take a function ----
+// The function can be a lambda, fn(x) => x * 2, or the name of a function.
+
+// A new array with f applied to every element. Runs on every core when f is pure.
+fn map[T, U](xs: [T], f: fn(T) -> U) -> [U] {
+  return [i in 0..len(xs): f(xs[i])]
+}
+
+// The elements for which keep returns true, in their original order.
+fn filter[T](xs: [T], keep: fn(T) -> Bool) -> [T] {
+  var out: [T] = []
+  for i in 0..len(xs) {
+    if keep(xs[i]) { push(out, copy(xs[i])) }
+  }
+  return out
+}
+
+// Combines all elements into one value, left to right.
+fn fold[T, A](xs: [T], start: A, step: fn(A, T) -> A) -> A {
+  var acc = copy(start)
+  for i in 0..len(xs) {
+    acc = step(acc, xs[i])
+  }
+  return acc
+}
+
+// Calls f for every element, in order. Use this when f has an effect such as printing.
+fn each[T](xs: [T], f: fn(T)) {
+  for i in 0..len(xs) {
+    f(xs[i])
+  }
+}
+
+fn any[T](xs: [T], check: fn(T) -> Bool) -> Bool {
+  for i in 0..len(xs) {
+    if check(xs[i]) { return true }
+  }
+  return false
+}
+
+fn all[T](xs: [T], check: fn(T) -> Bool) -> Bool {
+  for i in 0..len(xs) {
+    if not check(xs[i]) { return false }
+  }
+  return true
+}
+
+fn count_if[T](xs: [T], check: fn(T) -> Bool) -> Int
+  ensures result >= 0
+{
+  var n = 0
+  for i in 0..len(xs) {
+    if check(xs[i]) { n = n + 1 }
+  }
+  return n
+}
+
+// Position of the first element for which check returns true, or -1.
+fn find_index[T](xs: [T], check: fn(T) -> Bool) -> Int
+  ensures result >= -1
+{
+  for i in 0..len(xs) {
+    if check(xs[i]) { return i }
+  }
+  return -1
+}
+
+// Merges two sorted runs of positions, order[lo..mid] and order[mid..hi], keeping equal keys in
+// their original order.
+private fn merge_runs[K: Ord](ranks: [K], order: mut [Int], buffer: mut [Int], lo: Int, mid: Int, hi: Int) {
+  var i = lo
+  var j = mid
+  var k = lo
+  while i < mid and j < hi {
+    if ranks[order[j]] < ranks[order[i]] {
+      buffer[k] = order[j]
+      j = j + 1
+    } else {
+      buffer[k] = order[i]
+      i = i + 1
+    }
+    k = k + 1
+  }
+  while i < mid {
+    buffer[k] = order[i]
+    i = i + 1
+    k = k + 1
+  }
+  while j < hi {
+    buffer[k] = order[j]
+    j = j + 1
+    k = k + 1
+  }
+  for t in lo..hi {
+    order[t] = buffer[t]
+  }
+}
+
+// Sorts in place by the value key returns for each element, smallest first.
+// Stable: elements with equal keys keep their order, so sorting twice sorts by two keys.
+fn sort_by[T, K: Ord](xs: mut [T], key: fn(T) -> K) {
+  let n = len(xs)
+  let ranks = [i in 0..n: key(xs[i])]
+  var order = [i in 0..n: i]
+  var buffer = array(n, 0)
+  var width = 1
+  while width < n {
+    var lo = 0
+    while lo < n {
+      var mid = lo + width
+      if mid > n { mid = n }
+      var hi = lo + 2 * width
+      if hi > n { hi = n }
+      merge_runs(ranks, order, buffer, lo, mid, hi)
+      lo = lo + 2 * width
+    }
+    width = width * 2
+  }
+  let arranged = [i in 0..n: copy(xs[order[i]])]
+  for i in 0..n {
+    xs[i] = copy(arranged[i])
+  }
+}

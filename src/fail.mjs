@@ -1,6 +1,6 @@
 // Runtime failure kinds shared by both backends.
 
-export const FAIL = { REQUIRES: 1, ENSURES: 2, ASSERT: 3, BOUNDS: 4, OVERFLOW: 5, DIVZERO: 6, ARRSIZE: 7, OOM: 8, KEY: 9, IO: 10 };
+export const FAIL = { REQUIRES: 1, ENSURES: 2, ASSERT: 3, BOUNDS: 4, OVERFLOW: 5, DIVZERO: 6, ARRSIZE: 7, OOM: 8, KEY: 9, IO: 10, INVARIANT: 11 };
 
 const KIND = {
   [FAIL.REQUIRES]: ['precondition', (s) => `precondition violated: requires ${s.text}`],
@@ -12,6 +12,7 @@ const KIND = {
   [FAIL.ARRSIZE]: ['array_size', () => 'invalid array length (negative or too large)'],
   [FAIL.OOM]: ['out_of_memory', () => 'out of memory'],
   [FAIL.KEY]: ['missing_key', () => 'key not found in map'],
+  [FAIL.INVARIANT]: ['invariant', (s) => `loop invariant violated: invariant ${s.text}`],
   [FAIL.IO]: ['io_error', () => 'file or network operation failed'],
 };
 

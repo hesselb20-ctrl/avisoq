@@ -1,4 +1,4 @@
-// Vow compiler test suite: node tests/run.mjs
+// Avisoq compiler test suite: node tests/run.mjs
 import { compile, run, runTests } from '../src/compiler.mjs';
 
 const BACKEND = process.argv[2] ?? 'wasm';
@@ -126,7 +126,7 @@ fn clamp(x: Int, lo: Int, hi: Int) -> Int requires lo <= hi ensures result >= lo
 }
 ${main('print(clamp(5, 0, 3), clamp(-5, 0, 3), clamp(2, 0, 3))')}`, '3 0 2\n');
 await traps('requires violated', `fn half(n: Int) -> Int requires n % 2 == 0 { return n / 2 }\n${main('print(half(3))')}`, 'precondition');
-await traps('ensures violated', `fn bad(n: Int) -> Int ensures result > n { return n }\n${main('print(bad(3))')}`, 'postcondition');
+await traps('ensures violated', `fn bad(n: Int) -> Int ensures result > n { if n > 100 { return n + 1 }\n return n / 2 }\n${main('print(bad(3))')}`, 'postcondition');
 await traps('ensures checked on early return', `fn bad(n: Int) -> Int ensures result != 0 { if n < 5 { return n }\n return 1 }\n${main('print(bad(0))')}`, 'postcondition');
 await traps('assert fails', main('assert 1 + 1 == 3'), 'assert');
 
@@ -207,7 +207,7 @@ await traps('substr out of range', main('print(substr("abc", 1, 9))'), 'bounds')
 await traps('substr reversed', main('print(substr("abc", 2, 1))'), 'bounds');
 await traps('byte_at out of range', main('print(byte_at("abc", 3))'), 'bounds');
 rejects('string plus int', main('print("a" + 1)'), 'E0201');
-rejects('string ordering', main('print("a" < "b")'), 'E0201');
+rejects('bool ordering', main('print(true < false)'), 'E0201');
 rejects('index into string', main('let s = "abc"\nprint(s[0])'), 'E0201');
 
 // ---- sum ----
@@ -363,16 +363,16 @@ rejects('generic arguments disagree', `${PICK}${main('print(pick(1, "a", true))'
 rejects('type parameter cannot be worked out', `fn none_of[T]() -> [T] { return [] }\n${main('let xs = none_of()')}`, 'E0213');
 rejects('bare generic variant without context', `${OPT}${main('let m = Nothing')}`, 'E0213');
 rejects('wrong number of type arguments', `${PAIR}fn f(p: Pair[Int]) { }\nfn main() { }`, 'E0214');
-rejects('generic body invalid for this type', `fn smaller[T](a: T, b: T) -> Bool { return a < b }\n${main('print(smaller("a", "b"))')}`, 'E0201');
+rejects('generic body invalid for this type', `fn smaller[T](a: T, b: T) -> Bool { return a < b }\n${main('print(smaller(true, false))')}`, 'E0201');
 
 // ---- arrays and maps are never shared ----
-rejects('var from an existing array', main('let a = [1, 2]\nvar b = a\nb[0] = 9'), 'E0210');
+rejects('var from an array that is still used', main('let a = [1, 2]\nvar b = a\nb[0] = 9\nprint(a[1])'), 'E0210');
 rejects('let viewing a mutable array', main('var a = [1, 2]\nlet b = a\na[0] = 9\nprint(b[0])'), 'E0210');
 rejects('returning the caller\'s array', 'fn same(a: [Int]) -> [Int] { return a }\nfn main() { }', 'E0210');
 rejects('returning a view of a parameter', 'fn row(g: [[Int]]) -> [Int] { let r = g[0]\n return r }\nfn main() { }', 'E0210');
 rejects('array filled with one shared element', main('var g = array(3, [0, 0])'), 'E0210');
-rejects('storing an existing array', main('let row = [1, 2]\nvar g = [[0], [0]]\ng[0] = row'), 'E0210');
-rejects('putting an existing array into a map', main('let row = [1, 2]\nvar m: Map[Int, [Int]] = {}\nput(m, 1, row)'), 'E0210');
+rejects('storing an array that is still used', main('let row = [1, 2]\nvar g = [[0], [0]]\ng[0] = row\nprint(row[0])'), 'E0210');
+rejects('putting an array that is still used into a map', main('let row = [1, 2]\nvar m: Map[Int, [Int]] = {}\nput(m, 1, row)\nprint(row[0])'), 'E0210');
 rejects('same array as mutable and other argument', 'fn mix(a: mut [Int], b: [Int]) { a[0] = b[0] }\nfn main() { var x = [1, 2]\n mix(x, x) }', 'E0211');
 rejects('writing through get on an immutable map', main('let m: Map[Int, [Int]] = {}\nget(m, 1)[0] = 5'), 'E0204');
 await prints('copy makes an independent array', main('let a = [1, 2, 3]\nvar b = copy(a)\nb[0] = 99\nvar g = [[1], [2]]\nvar h = copy(g)\nh[0][0] = 7\nprint(a[0], b[0], g[0][0], h[0][0])'), '1 99 1 7\n');
@@ -380,6 +380,52 @@ await prints('copy of maps and structs', `struct Bag { items: [Int], name: Str }
 await prints('read-only views and fresh results are allowed', `fn build(n: Int) -> [Int] { var out = array(n, 0)\n for i in 0..n { out[i] = i * 2 }\n return out }\n${main('let grid = [[1, 2], [3, 4]]\nlet row = grid[1]\nvar mine = build(3)\nmine[0] = 100\nvar rows = [i in 0..2: build(i + 1)]\nrows[1][0] = 50\nprint(row[0], mine[0], mine[2], rows[1][0], rows[1][1])')}`, '3 100 4 50 2\n');
 await prints('map remove keeps order', main('var m: Map[Str, Int] = {}\nput(m, "a", 1)\nput(m, "b", 2)\nput(m, "c", 3)\nlet r1 = remove(m, "b")\nlet r2 = remove(m, "zz")\nput(m, "b", 9)\nlet ks = keys(m)\nprint(r1, r2, len(m), ks[0], ks[1], ks[2], get(m, "b"), has(m, "a"))'), 'true false 3 a c b 9 true\n');
 await prints('map remove with int keys under growth', main('var m: Map[Int, Int] = {}\nfor i in 0..1000 { put(m, i, i * 2) }\nvar gone = 0\nfor i in 0..1000 { if i % 3 == 0 { if remove(m, i) { gone = gone + 1 } } }\nprint(len(m), gone, has(m, 3), get(m, 4), keys(m)[0])'), '666 334 false 8 1\n');
+
+// ---- moves: the last use of a whole local value needs no copy ----
+await prints('a value moves on its last use', main('let a = [1, 2, 3]\nvar b = a\nb[0] = 9\nvar m: Map[Int, [Int]] = {}\nlet row = [7, 8]\nput(m, 1, row)\nprint(b[0], get(m, 1)[1])'), '9 8\n');
+await prints('rows built in a loop move into the grid', main('var g: [[Int]] = []\nfor i in 0..3 { var row = array(2, i)\n row[1] = i * 10\n push(g, row) }\nvar h = [[0], [0]]\nlet r = [5, 6]\nh[1] = r\nprint(len(g), g[2][0], g[2][1], h[1][1])'), '3 2 20 6\n');
+rejects('no move when the value is used afterwards', main('let a = [1, 2]\nvar b = a\nb[0] = 9\nprint(a[0])'), 'E0210');
+rejects('no move when the value has a view', main('let a = [[1]]\nlet v = a[0]\nvar b = a\nb[0][0] = 5\nprint(v[0])'), 'E0210');
+rejects('no move from outside a loop', main('let a = [1]\nfor i in 0..2 { var b = a\n b[0] = i }'), 'E0210');
+rejects('no move of part of a value', main('let a = [[1], [2]]\nvar b = a[0]\nb[0] = 5'), 'E0210');
+
+// ---- arrays that grow ----
+await prints('push and pop', main('var xs: [Int] = []\nfor i in 0..1000 { push(xs, i * i) }\nprint(len(xs), xs[0], xs[999], pop(xs), len(xs))\nvar fs: [Float] = [0.5]\npush(fs, 1.5)\nvar bs: [Bool] = []\npush(bs, true)\npush(bs, false)\nprint(fs[1], bs[0], bs[1], len(bs))'), '1000 0 998001 998001 999\n1.5 true false 2\n');
+await prints('push of structs and strings', `${POINT}${main('var ps: [Point] = []\nvar names: [Str] = []\nfor i in 0..40 { push(ps, Point(x: float(i), y: 0.5))\n push(names, "p" + str(i)) }\nprint(len(ps), ps[39].x, ps[39].y, names[0], names[39])')}`, '40 39.0 0.5 p0 p39\n');
+await prints('push through mut parameters', `fn add_one(xs: mut [Str], s: Str) { push(xs, s) }\nfn add_two(xs: mut [Str]) { add_one(xs, "a")\n add_one(xs, "b") }\nfn count(xs: mut [Str]) -> Int { add_two(xs)\n return len(xs) }\n${main('var xs: [Str] = []\nvar last = 0\nfor i in 0..50 { last = count(xs) }\nprint(len(xs), last, xs[0], xs[99])')}`, '100 100 a b\n');
+await prints('pushed values survive memory reclamation', main(`var xs: [Str] = []\nfor i in 0..20000 { push(xs, "n" + str(i)) }\n${JUNK}print(len(xs), xs[0], xs[19999], len(junk))`), '20000 n0 n19999 50000\n');
+await traps('pop from an empty array', main('var xs: [Int] = []\nprint(pop(xs))'), 'bounds');
+await traps('a proven length is forgotten after pop', `fn first(xs: [Int]) -> Int requires len(xs) > 0 { return xs[0] }\n${main('var xs = [1]\nlet k = pop(xs)\nprint(first(xs) + k)')}`, 'precondition');
+rejects('push to an immutable array', main('let xs = [1]\npush(xs, 2)'), 'E0221');
+rejects('push to something that is not a variable', main('var g = [[1]]\npush(g[0], 2)'), 'E0221');
+rejects('passing an element to a function that grows it', `fn grow(xs: mut [Int]) { push(xs, 1) }\n${main('var g = [[1]]\ngrow(g[0])')}`, 'E0221');
+rejects('push inside a sum', `fn bad(xs: mut [Int]) -> Int { push(xs, 1)\n return 1 }\n${main('var xs = [1]\nprint(sum(i in 0..3: bad(xs)))')}`, 'E0305');
+rejects('push of the wrong type', main('var xs = [1]\npush(xs, "a")'), 'E0201');
+
+// ---- functions as arguments, lambdas, constraints ----
+const ARR = 'import "std/arrays"\n';
+await prints('map, filter and fold with lambdas', `${ARR}${main('let xs = [1, 2, 3, 4, 5]\nlet k = 10\nlet doubled = map(xs, fn(x) => x * 2 + k)\nlet evens = filter(xs, fn(x) => x % 2 == 0)\nlet total = fold(xs, 0, fn(acc, x) => acc + x)\nlet names = map(xs, fn(x) => "n" + str(x))\nprint(doubled[0], doubled[4], len(evens), evens[1], total, names[2])')}`, '12 20 2 4 15 n3\n');
+await prints('a named function as the argument', `${ARR}fn square(x: Int) -> Int { return x * x }\nfn same[T](x: T) -> T { return copy(x) }\n${main('let xs = [1, 2, 3, 4]\nprint(map(xs, square)[3], map(xs, same)[1], map(["a", "b"], same)[1])')}`, '16 2 b\n');
+await prints('a function parameter passed on, with a captured value', `fn twice[T](x: T, f: fn(T) -> T) -> T { return f(f(x)) }\nfn four_times(x: Int, f: fn(Int) -> Int) -> Int { return twice(twice(x, f), f) }\n${main('let d = 3\nprint(four_times(1, fn(x) => x + d), twice("a", fn(s) => s + "!"))')}`, '13 a!!\n');
+await prints('each with an effect, any, all, count_if, find_index', `${ARR}${main('let xs = [3, 8, 5]\neach(xs, fn(x) => print("item", x))\nprint(any(xs, fn(x) => x > 7), all(xs, fn(x) => x > 4), count_if(xs, fn(x) => x % 2 == 1), find_index(xs, fn(x) => x == 5), find_index(xs, fn(x) => x == 9))')}`, 'item 3\nitem 8\nitem 5\ntrue false 2 2 -1\n');
+await prints('sort_by on structs', `${ARR}struct Person { name: Str, age: Int }\n${main('var ps = [Person(name: "cy", age: 40), Person(name: "al", age: 25), Person(name: "bo", age: 31)]\nsort_by(ps, fn(p) => p.age)\nlet byAge = ps[0].name + ps[1].name + ps[2].name\nsort_by(ps, fn(p) => p.name)\nprint(byAge, ps[0].name + ps[1].name + ps[2].name)')}`, 'albocy albocy\n');
+await prints('sort_by is stable, so two sorts give two keys', `${ARR}struct Row { name: Str, n: Int }\n${main('var rs = [Row(name: "d", n: 2), Row(name: "a", n: 1), Row(name: "c", n: 2), Row(name: "b", n: 2), Row(name: "e", n: 1)]\nsort_by(rs, fn(r) => r.name)\nsort_by(rs, fn(r) => 0 - r.n)\nprint(rs[0].name + rs[1].name + rs[2].name + rs[3].name + rs[4].name)\nvar big = [i in 0..3000: (i * 7919) % 1000]\nsort_by(big, fn(x) => x)\nvar ok = true\nfor i in 1..len(big) { if big[i - 1] > big[i] { ok = false } }\nprint(ok, big[0], big[2999])')}`, 'bcdae\ntrue 0 999\n');
+await prints('a lambda inside a parallel sum', `fn apply(x: Int, f: fn(Int) -> Int) -> Int { return f(x) }\n${main('let m = 2\nprint(sum(i in 0..1000: apply(i, fn(x) => x * m)))')}`, '999000\n');
+await prints('map over a large array with a captured array', `${ARR}${main('let weights = [i in 0..100: i]\nlet xs = [i in 0..50000: i]\nlet ys = map(xs, fn(x) => x + weights[x % 100])\nprint(len(ys), ys[49999], sum(i in 0..len(ys): ys[i]))')}`, '50000 50098 1252450000\n');
+await prints('strings can be ordered and sorted', `${ARR}${main('var ws = ["pear", "apple", "fig", "app"]\nsort(ws)\nprint("a" < "b", "b" <= "a", "abc" > "ab", "" < "a", "z" >= "z", ws[0], ws[1], ws[3], max_of(ws))')}`, 'true false true true true app apple pear pear\n');
+rejects('an effect inside a lambda needs the caller to declare it', `${ARR}fn quiet(xs: [Int]) { each(xs, fn(x) => print(x)) }\nfn main() { }`, 'E0301');
+rejects('a lambda cannot be stored', main('let f = fn(x) => x + 1'), 'E0232');
+rejects('a function type cannot be a field', 'struct Holder { f: fn(Int) -> Int }\nfn main() { }', 'E0230');
+rejects('a function type cannot be returned', 'fn make() -> fn(Int) -> Int { return make() }\nfn main() { }', 'E0230');
+rejects('lambda with the wrong number of parameters', `${ARR}${main('print(len(map([1], fn(a, b) => a)))')}`, 'E0202');
+rejects('lambda with the wrong result type', `${ARR}${main('print(len(filter([1], fn(x) => x + 1)))')}`, 'E0201');
+rejects('a lambda cannot change outside data', `${ARR}${main('var out = [0]\neach([1, 2], fn(x) => push(out, x))')}`, 'E0231');
+rejects('a value where a function is needed', `${ARR}${main('print(len(map([1], 5)))')}`, 'E0232');
+rejects('a named function that does not fit', `${ARR}fn two(a: Int, b: Int) -> Int { return a + b }\n${main('print(len(map([1], two)))')}`, 'E0201');
+rejects('a function parameter used as a value', 'fn hold(f: fn(Int) -> Int) -> Int { let g = f\n return 1 }\nfn main() uses io { print(hold(fn(x) => x)) }', 'E0232');
+rejects('constraint not satisfied', `${ARR}${main('print(max_of([true, false]))')}`, 'E0220');
+rejects('constraint not satisfied by a struct', `${ARR}struct P { x: Int }\n${main('var ps = [P(x: 1)]\nsort(ps)')}`, 'E0220');
+rejects('unknown constraint', 'fn f[T: Hashable](x: T) -> Int { return 1 }\nfn main() uses io { print(f(1)) }', 'E0220');
 
 // ---- modules and the standard library ----
 await prints('std strings', `import "std/strings"\n${main('print(join(split("a,b,,c", ","), "|"), index_of("hello", "ll"), contains("hello", "xyz"), starts_with("hello", "he"), ends_with("hello", "lo"), trim("  hi \\n"), replace("a-b-c", "-", "+"), repeat("ab", 3), len(lines("x\\ny\\nz")))')}`, 'a|b||c 2 false true true hi a+b+c ababab 3\n');
@@ -392,32 +438,54 @@ rejects('missing module', 'import "std/nothing_here"\nfn main() { }', 'E0701');
 {
   const c = compile('import "std/math"\nfn main() uses io { let v = [1, 5, 2]\n print(clamp(v[0], v[1], v[2])) }', { backend: BACKEND, allow: ['io'] });
   const r = await run(c, { allow: ['io'] });
-  report('failure inside a module names its file', !r.ok && r.error.kind === 'precondition' && /math\.vow$/.test(r.error.file ?? ''), JSON.stringify(r));
+  report('failure inside a module names its file', !r.ok && r.error.kind === 'precondition' && /math\.avq$/.test(r.error.file ?? ''), JSON.stringify(r));
 }
 
-// ---- file and network capabilities ----
+// ---- file and network capabilities: failures are values, policy violations are refusals ----
 {
   const { mkdtempSync, rmSync, writeFileSync: wf } = await import('node:fs');
   const { tmpdir } = await import('node:os');
   const { join: pj } = await import('node:path');
-  const dir = mkdtempSync(pj(tmpdir(), 'vow-fs-'));
-  const other = mkdtempSync(pj(tmpdir(), 'vow-other-'));
+  const { spawn } = await import('node:child_process');
+  const dir = mkdtempSync(pj(tmpdir(), 'avisoq-fs-'));
+  const other = mkdtempSync(pj(tmpdir(), 'avisoq-other-'));
   wf(pj(other, 'secret.txt'), 'secret');
   const P = (d, n) => pj(d, n).replace(/\\/g, '/');
-  const prog = (body) => `fn main() uses io, fs {\n${body}\n}`;
+  const SHOW = 'fn show(r: Result[Str, Str]) uses io { match r { Ok(value) => { print("ok:", value) } Err(error) => { print("err:", error) } } }\n';
+  const prog = (body) => `${SHOW}fn main() uses io, fs {\n${body}\n}`;
   const granted = { allow: ['io', `fs:${dir}`] };
-  await prints2('write then read a file', prog(`write_file("${P(dir, 'a.txt')}", "hello\\nworld")\nprint(file_exists("${P(dir, 'a.txt')}"), read_file("${P(dir, 'a.txt')}"), file_exists("${P(dir, 'nope.txt')}"))`), 'true hello\nworld false\n', granted);
-  await traps('reading outside the granted folder is refused', prog(`print(read_file("${P(other, 'secret.txt')}"))`), 'capability_denied', granted);
-  await traps('writing outside the granted folder is refused', prog(`write_file("${P(other, 'x.txt')}", "x")`), 'capability_denied', granted);
-  await traps('escaping with .. is refused', prog(`print(read_file("${P(dir, '../' + other.split(/[\\/]/).pop() + '/secret.txt')}"))`), 'capability_denied', granted);
-  await traps('missing file is an io error', prog(`print(read_file("${P(dir, 'missing.txt')}"))`), 'io_error', granted);
+  await prints2('write then read a file', prog(`match write_file("${P(dir, 'a.txt')}", "hello\\nworld") { Ok(value) => { print("wrote", value) } Err(error) => { print("failed", error) } }\nshow(read_file("${P(dir, 'a.txt')}"))\nprint(file_exists("${P(dir, 'a.txt')}"), file_exists("${P(dir, 'nope.txt')}"))`), 'wrote 11\nok: hello\nworld\ntrue false\n', granted);
+  await prints2('a missing file is an error value', prog(`show(read_file("${P(dir, 'missing.txt')}"))\nprint(value_or(read_file("${P(dir, 'missing.txt')}"), "fallback"))`), 'err: not found\nfallback\n', granted);
+  await prints2('writing into a missing folder is an error value', prog(`match write_file("${P(dir, 'no/such/dir/x.txt')}", "x") { Ok(value) => { print("wrote", value) } Err(error) => { print("failed:", error) } }`), 'failed: not found\n', granted);
+  await traps('reading outside the granted folder is refused', prog(`show(read_file("${P(other, 'secret.txt')}"))`), 'capability_denied', granted);
+  await traps('writing outside the granted folder is refused', prog(`print(is_ok(write_file("${P(other, 'x.txt')}", "x")))`), 'capability_denied', granted);
+  await traps('escaping with .. is refused', prog(`show(read_file("${P(dir, '../' + other.split(/[\\/]/).pop() + '/secret.txt')}"))`), 'capability_denied', granted);
   await traps('fs needs a grant', prog(`print(file_exists("${P(dir, 'a.txt')}"))`), 'capability_denied', { allow: ['io'] });
-  rejects('fs effect must be declared', main('print(read_file("a.txt"))'), 'E0301');
-  if (BACKEND === 'wasm') {
-    await traps('http_get to a host that was not granted is refused', 'fn main() uses io, net { print(http_get("https://example.org/")) }', 'capability_denied', { allow: ['io', 'net:example.com'] });
-  } else {
-    rejects('http_get is not on the native backend yet', 'fn main() uses io, net { print(http_get("https://example.com/")) }', 'E0601');
-  }
+  rejects('fs effect must be declared', main('print(is_ok(read_file("a.txt")))'), 'E0301');
+  rejects('a Result cannot be used as the value directly', 'fn main() uses io, fs { print(read_file("a.txt")) }', 'E0201');
+
+  // A local server in its own process, so nothing here needs the internet.
+  const server = spawn(process.execPath, ['-e', `
+    require('http').createServer((q, s) => {
+      let body = '';
+      q.on('data', (c) => { body += c; });
+      q.on('end', () => {
+        if (q.method === 'GET' && q.url === '/hello') s.end('hello from server');
+        else if (q.method === 'GET' && q.url.startsWith('/q?')) s.end('query ' + q.url.slice(3));
+        else if (q.method === 'POST' && q.url === '/echo') s.end(q.headers['content-type'] + '|' + body);
+        else { s.statusCode = 404; s.end('nope'); }
+      });
+    }).listen(0, '127.0.0.1', function () { console.log(this.address().port); });`], { stdio: ['ignore', 'pipe', 'inherit'] });
+  const port = await new Promise((res) => server.stdout.once('data', (d) => res(String(d).trim())));
+  const U = `http://127.0.0.1:${port}`;
+  const net = (body) => `${SHOW}fn main() uses io, net {\n${body}\n}`;
+  const netOk = { allow: ['io', 'net:127.0.0.1'] };
+  await prints2('http get', net(`show(http_get("${U}/hello"))\nshow(http_get("${U}/q?x=1&y=two"))`), 'ok: hello from server\nok: query x=1&y=two\n', netOk);
+  await prints2('http post', net(`show(http_post("${U}/echo", "a=1&b=2", "application/x-www-form-urlencoded"))`), 'ok: application/x-www-form-urlencoded|a=1&b=2\n', netOk);
+  await prints2('http failures are error values', net(`show(http_get("${U}/missing"))\nshow(http_get("http://127.0.0.1:1/"))\nshow(http_get("not a url"))`), 'err: http status 404\nerr: connection failed\nerr: bad url\n', netOk);
+  await traps('a host that was not granted is refused', net(`show(http_get("${U}/hello"))`), 'capability_denied', { allow: ['io', 'net:example.com'] });
+  await traps('net needs a grant', net(`show(http_get("${U}/hello"))`), 'capability_denied', { allow: ['io'] });
+  server.kill();
   rmSync(dir, { recursive: true, force: true });
   rmSync(other, { recursive: true, force: true });
 }
@@ -443,6 +511,28 @@ await prints('code that cannot run is not reported', `${HALF}${main('let n = 0\n
   report('a variable changed in a loop is unknown until asserted', e.proven === 2 && e.runtime === 1, JSON.stringify(e));
   const w = proofOf(`${HALF}fn main() uses io { var x = 1\n while x < 100 { x = x * 2 }\n print(half(x)) }`);
   report('the exit condition of a loop is used', w.proven === 2 && w.runtime === 0, JSON.stringify(w));
+  const AT = 'fn at(xs: [Int], i: Int) -> Int requires i >= 0 and i < len(xs) { return xs[i] }\n';
+  const r1 = proofOf(`${AT}fn total(xs: [Int]) -> Int { var t = 0\n for i in 0..len(xs) { t = t + at(xs, i) }\n return t }\nfn main() { }`);
+  report('an index bounded by the length of an unknown array is proven', r1.proven === 1 && r1.runtime === 0, JSON.stringify(r1));
+  const BETWEEN = 'fn between(lo: Int, hi: Int) -> Int requires lo <= hi { return hi - lo }\n';
+  const r2 = proofOf(`${BETWEEN}fn g(a: Int, b: Int) -> Int { if a > b { return between(b, a) }\n return between(a, b) }\nfn main() { }`);
+  report('a relation between two variables is proven from a branch', r2.proven === 2 && r2.runtime === 0, JSON.stringify(r2));
+  const r3 = proofOf(`${BETWEEN}fn g(a: Int, b: Int) -> Int { let c = a + b\n let d = c - b\n return between(d, a + 1) }\nfn main() { }`);
+  report('relations follow values through lets', r3.proven === 1 && r3.runtime === 0, JSON.stringify(r3));
+  const COUNT = 'fn count_up(n: Int) -> Int requires n >= 0 ensures result == n {\n var i = 0\n while i < n invariant i <= n { i = i + 1 }\n return i }\n';
+  const r4 = proofOf(`${COUNT}fn main() { }`);
+  report('a loop invariant proves what the loop computes', r4.proven === 3 && r4.runtime === 0, JSON.stringify(r4));
+}
+rejects('a relation that can never hold is a compile error', 'fn between(lo: Int, hi: Int) -> Int requires lo <= hi { return hi - lo }\nfn h(a: Int) -> Int { return between(a + 1, a) }\nfn main() { }', 'E0501');
+rejects('a result that can never satisfy ensures', 'fn bad(n: Int) -> Int ensures result > n { return n }\nfn main() { }', 'E0502');
+await prints('a loop with an invariant runs normally', `fn count_up(n: Int) -> Int requires n >= 0 ensures result == n {\n var i = 0\n while i < n invariant i <= n { i = i + 1 }\n return i }\n${main('print(count_up(5), count_up(0))')}`, '5 0\n');
+await traps('an invariant that breaks while running', main('var i = 0\nvar steps = [1, 1, 1, 9]\nwhile i < 5 invariant i < 3 { i = i + steps[i] }'), 'invariant');
+rejects('an invariant that is false before the loop', main('var i = 10\nwhile i < 5 invariant i < 3 { i = i + 1 }'), 'E0503');
+rejects('an invariant must be pure', `fn noisy() -> Bool uses io { print(1)\n return true }\n${main('var i = 0\nwhile i < 2 invariant noisy() { i = i + 1 }')}`, 'E0302');
+{
+  const { format } = await import('../src/format.mjs');
+  const w = 'fn f(n: Int) -> Int {\n  var i = 0\n  while i < n\n    invariant i <= n\n  {\n    i = i + 1\n  }\n  return i\n}\n';
+  report('formatter lays out invariants', format('fn f(n: Int) -> Int {\n var i = 0\n while i < n invariant i <= n { i = i + 1 }\n return i }\n') === w && format(w) === w, JSON.stringify(format(w)));
 }
 
 // ---- formatter ----
@@ -459,6 +549,15 @@ await prints('code that cannot run is not reported', `${HALF}${main('let n = 0\n
   const m = 'enum E { A(x: Int), B }\n\nfn g(e: E) -> Int {\n  match e {\n    A(x) => { return x }\n    B => {\n      // nothing here\n      return 0\n    }\n  }\n}\n';
   report('match and comments inside arms survive', format(m) === m, JSON.stringify(format(m)));
 }
+
+// ---- found by the fuzzer ----
+await prints('negative zero keeps its sign on both backends', main('let z = 0.0\nprint(-z, z * -1.0, str(-z), z)'), '-0.0 -0.0 -0.0 0.0\n');
+{
+  const r = await exec(main('let z = 0\nprint(1, 2)\nprint(3, 4, 5 / z)'));
+  report('print writes nothing when one of its arguments fails', r.run && !r.run.ok && r.run.error.kind === 'division_by_zero' && r.stdout === '1 2\n', JSON.stringify(r.stdout));
+}
+
+await prints('comprehensions of numbers use lanes and agree with plain code', `fn wave(i: Int) -> Float { var x = float(i) * 0.25\n if x > 3.0 { x = x - 3.0 }\n return x * x + 0.5 }\n${main('let fs = [i in 0..37: wave(i)]\nlet ns = [i in 3..40: int(float(i) * 1.5) + 1]\nvar t = 0.0\nfor i in 0..len(fs) { t = t + fs[i] }\nprint(len(fs), fs[0], fs[12], fs[13], fs[36], t)\nprint(len(ns), ns[0], ns[7], ns[36], sum(i in 0..len(ns): ns[i]))')}`, '37 0.5 9.5 0.5625 36.5 365.375\n37 5 16 59 1193\n');
 
 // ---- capabilities ----
 await traps('io denied without grant', main('print(1)'), 'capability_denied', { allow: [] });

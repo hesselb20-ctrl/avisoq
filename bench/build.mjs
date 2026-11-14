@@ -1,5 +1,5 @@
 // Builds every benchmark binary into bench/out: node bench/build.mjs
-// Needs g++ (found the same way the Vow native backend finds gcc) and rustc with the GNU toolchain.
+// Needs g++ (found the same way the Avisoq native backend finds gcc) and rustc with the GNU toolchain.
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -28,13 +28,13 @@ sh('rustc', [...RUST, '-o', join(out, 'bench_rs.exe'), join(here, 'bench.rs')]);
 sh('rustc', [...RUST, '-C', 'overflow-checks=on', '-o', join(out, 'bench_rs_checked.exe'), join(here, 'bench.rs')]);
 
 for (const b of ['fib', 'sieve', 'mandel', 'collatz', 'mandel_sum', 'collatz_sum', 'mandel_lanes']) {
-  const src = readFileSync(join(here, `${b}.vow`), 'utf8');
+  const src = readFileSync(join(here, `${b}.avq`), 'utf8');
   for (const checked of [true, false]) {
     if (!checked && (b.endsWith('_sum') || b.endsWith('_lanes'))) continue;
     const c = compile(src, { backend: 'native', checked });
     if (!c.ok) throw new Error(`${b}: ${JSON.stringify(c.diagnostics)}`);
-    const name = `vow_${b}${checked ? '' : '_unchecked'}.exe`;
+    const name = `avisoq_${b}${checked ? '' : '_unchecked'}.exe`;
     buildNative(c, join(out, name));
-    console.log(`vow build ${name}`);
+    console.log(`avisoq build ${name}`);
   }
 }

@@ -1,34 +1,34 @@
 {
-  "name": "vow-language",
-  "displayName": "Vow",
-  "description": "Syntax highlighting, compiler diagnostics and formatting for the Vow language",
+  "name": "avisoq-language",
+  "displayName": "Avisoq",
+  "description": "Syntax highlighting, compiler diagnostics and formatting for the Avisoq language",
   "version": "0.1.0",
   "publisher": "local",
   "engines": { "vscode": "^1.80.0" },
   "categories": ["Programming Languages", "Formatters", "Linters"],
   "main": "./extension.js",
-  "activationEvents": ["onLanguage:vow"],
+  "activationEvents": ["onLanguage:avisoq"],
   "contributes": {
     "languages": [
       {
-        "id": "vow",
-        "aliases": ["Vow", "vow"],
-        "extensions": [".vow"],
+        "id": "avisoq",
+        "aliases": ["Avisoq", "avisoq"],
+        "extensions": [".avq"],
         "configuration": "./language-configuration.json"
       }
     ],
     "grammars": [
-      { "language": "vow", "scopeName": "source.vow", "path": "./syntaxes/vow.tmLanguage.json" }
+      { "language": "avisoq", "scopeName": "source.avq", "path": "./syntaxes/avisoq.tmLanguage.json" }
     ],
     "configuration": {
-      "title": "Vow",
+      "title": "Avisoq",
       "properties": {
-        "vow.compilerPath": {
+        "avisoq.compilerPath": {
           "type": "string",
           "default": "",
-          "description": "Folder that contains the Vow compiler (the one with src/cli.mjs). Empty: use the workspace folder, then the folder this extension was installed from."
+          "description": "Folder that contains the Avisoq compiler (the one with src/cli.mjs). Empty: use the workspace folder, then the folder this extension was installed from."
         },
-        "vow.nodePath": {
+        "avisoq.nodePath": {
           "type": "string",
           "default": "node",
           "description": "Path to the Node.js executable used to run the compiler."

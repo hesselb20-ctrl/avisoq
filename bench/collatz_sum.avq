@@ -1,4 +1,4 @@
-// Collatz written the idiomatic Vow way: a sum of a pure function over a range.
+// Collatz written the idiomatic Avisoq way: a sum of a pure function over a range.
 fn steps(n: Int) -> Int
   requires n >= 1
 {

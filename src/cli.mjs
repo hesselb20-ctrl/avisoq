@@ -1,11 +1,11 @@
 #!/usr/bin/env node
-// Vow command line: check | run | test | build | fmt
+// Avisoq command line: check | run | test | build | fmt | lsp | init | add | install
 import { readFileSync, writeFileSync } from 'node:fs';
 import { buildNative, compile, run, runTests } from './compiler.mjs';
 
-const USAGE = `Vow - a fast, safe language built for AI agents
+const USAGE = `Avisoq - a fast, safe language built for AI agents
 
-usage: vow <command> <file.vow> [options]
+usage: avisoq <command> <file.avq> [options]
 
 commands:
   check   type-check, effect-check and contract-check without running
@@ -13,6 +13,12 @@ commands:
   test    compile and run every test block
   build   compile to a .wasm file, or an executable with --native (-o path)
   fmt     rewrite the file in the canonical layout (--check only reports)
+  lsp     start the language server on stdin/stdout (no file argument)
+
+packages (run in the project folder):
+  init [name]                  create avisoq.json
+  add <name> <path|git url>    add a dependency (--rev <tag or commit> for git)
+  install                      fetch git dependencies into avisoq_modules
 
 options:
   --allow io,time,fs:<folder>,net:<host>
@@ -21,11 +27,14 @@ options:
   --json            machine-readable output on stdout
   --unchecked       disable integer overflow checks (bounds checks stay on)
   --no-simd         native only: do not evaluate pure loops 8 values at a time
+  --portable        native only: build for any recent 64-bit x86 CPU, not just this one
+  --no-sandbox      native only: run without the reduced-rights launcher (Windows)
+  --memory <MB>     native only: stop the program if it uses more memory than this
   -o <path>         output path for build
 `;
 
 const args = process.argv.slice(2);
-const flags = { allow: [], json: false, unchecked: false, native: false, simd: true, check: false, out: null };
+const flags = { allow: [], json: false, unchecked: false, native: false, simd: true, check: false, out: null, rev: null, sandbox: true, portable: false, memory: 0 };
 const pos = [];
 for (let i = 0; i < args.length; i++) {
   const a = args[i];
@@ -34,11 +43,31 @@ for (let i = 0; i < args.length; i++) {
   else if (a === '--native') flags.native = true;
   else if (a === '--no-simd') flags.simd = false;
   else if (a === '--check') flags.check = true;
+  else if (a === '--no-sandbox') flags.sandbox = false;
+  else if (a === '--portable') flags.portable = true;
+  else if (a === '--memory') flags.memory = Number(args[++i]) || 0;
   else if (a === '--allow') flags.allow = (args[++i] ?? '').split(',').filter(Boolean);
   else if (a === '-o') flags.out = args[++i];
+  else if (a === '--rev') flags.rev = args[++i];
   else pos.push(a);
 }
 const [cmd, file] = pos;
+if (['init', 'add', 'install'].includes(cmd)) {
+  const pkg = await import('./pkg.mjs');
+  const { basename } = await import('node:path');
+  const say = (m) => process.stdout.write(`${m}\n`);
+  let r;
+  if (cmd === 'init') r = pkg.init(process.cwd(), file ?? basename(process.cwd()).replace(/[^A-Za-z0-9_-]/g, '_'));
+  else if (cmd === 'add') r = pos.length < 3 ? { ok: false, message: 'usage: avisoq add <name> <path or git url> [--rev <tag or commit>]' } : pkg.add(process.cwd(), pos[1], pos[2], flags.rev);
+  else r = pkg.install(process.cwd(), flags.json ? () => {} : say);
+  if (flags.json) process.stdout.write(`${JSON.stringify(r, null, 2)}\n`); else (r.ok ? say : (m) => process.stderr.write(`avisoq ${cmd}: ${m}\n`))(r.message);
+  process.exit(r.ok ? 0 : 1);
+}
+if (cmd === 'lsp') {
+  const { startServer } = await import('./lsp.mjs');
+  startServer();
+  await new Promise(() => {}); // serve until the editor closes the connection
+}
 if (!cmd || !file || !['check', 'run', 'test', 'build', 'fmt'].includes(cmd)) {
   process.stdout.write(USAGE);
   process.exit(cmd ? 64 : 0);
@@ -48,7 +77,7 @@ let src;
 try {
   src = readFileSync(file, 'utf8');
 } catch {
-  process.stderr.write(`vow: cannot read ${file}\n`);
+  process.stderr.write(`avisoq: cannot read ${file}\n`);
   process.exit(66);
 }
 
@@ -85,7 +114,7 @@ if (cmd === 'fmt') {
       const d = { code: e.code, message: e.message, line: e.line, col: e.col, hint: e.hint };
       if (flags.json) out({ ok: false, phase: 'parse', diagnostics: [d] }); else process.stderr.write(showDiag(d));
     } else {
-      process.stderr.write(`vow fmt: ${e.message}\n`);
+      process.stderr.write(`avisoq fmt: ${e.message}\n`);
     }
     process.exit(1);
   }
@@ -111,8 +140,8 @@ if (cmd === 'check') {
     if (pr.proven + pr.runtime) process.stdout.write(`contracts: ${pr.proven} of ${pr.proven + pr.runtime} checks proven at compile time; the rest are checked while running\n`);
   }
 } else if (cmd === 'build') {
-  const path = flags.out ?? file.replace(/\.vow$/, '') + (flags.native ? '.exe' : '.wasm');
-  if (flags.native) buildNative(result, path);
+  const path = flags.out ?? file.replace(/\.avq$/, '') + (flags.native ? '.exe' : '.wasm');
+  if (flags.native) buildNative(result, path, { portable: flags.portable });
   else writeFileSync(path, result.wasm);
   if (flags.json) out({ ok: true, output: path });
   else process.stdout.write(`wrote ${path}\n`);
@@ -120,6 +149,9 @@ if (cmd === 'check') {
   let captured = '';
   const r = await run(result, {
     allow: flags.allow,
+    sandbox: flags.sandbox,
+    portable: flags.portable,
+    memoryMb: flags.memory,
     write: flags.json ? (s) => { captured += s; } : undefined,
   });
   if (flags.json) out({ ok: r.ok, phase: 'run', stdout: captured, ...(r.error ? { error: r.error } : {}) });

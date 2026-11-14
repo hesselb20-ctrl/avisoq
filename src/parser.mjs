@@ -1,5 +1,5 @@
-// Vow parser: tokens -> AST.
-import { lex, VowError } from './lexer.mjs';
+// Avisoq parser: tokens -> AST.
+import { lex, AvisoqError } from './lexer.mjs';
 
 const CMP = new Set(['==', '!=', '<', '<=', '>', '>=']);
 
@@ -17,7 +17,7 @@ export function parse(src) {
   const isOp = (v) => is('op', v);
   const isKw = (v) => is('kw', v);
   const show = (t) => (t.kind === 'eof' ? 'end of file' : t.kind === 'str' ? 'string literal' : `'${t.value}'`);
-  const fail = (msg, hint, t = peek()) => { throw new VowError('E0001', msg, t.line, t.col, hint); };
+  const fail = (msg, hint, t = peek()) => { throw new AvisoqError('E0001', msg, t.line, t.col, hint); };
   const expect = (kind, value, hint) => {
     if (!is(kind, value)) fail(`expected '${value ?? kind}' but found ${show(peek())}`, hint);
     return next();
@@ -40,6 +40,17 @@ export function parse(src) {
       expect('op', ']');
       return `[${inner}]`;
     }
+    if (isKw('fn')) {
+      // A function type: fn(A, B) -> R, kept as Fn[R,A,B]
+      next();
+      expect('op', '(', 'a function type is written fn(ArgType, ...) -> ResultType');
+      const args = [];
+      while (!isOp(')')) { args.push(parseType()); if (!isOp(')')) expect('op', ','); }
+      next();
+      let ret = 'Unit';
+      if (isOp('->')) { next(); ret = parseType(); }
+      return `Fn[${[ret, ...args].join(',')}]`;
+    }
     const t = ident('a type');
     if (isOp('[') && !peek().nl) {
       next();
@@ -52,11 +63,17 @@ export function parse(src) {
   }
 
   // Optional [T, U] after a declared name.
-  function parseTypeParams() {
+  // Optional [T, U: Ord] after a declared name. Returns the names; bounds go into `into`.
+  function parseTypeParams(into) {
     const params = [];
+    into.typeBounds = {};
     if (!isOp('[')) return params;
     next();
-    do { params.push(ident('a type parameter name').value); } while (isOp(',') && next());
+    do {
+      const p = ident('a type parameter name').value;
+      params.push(p);
+      if (isOp(':')) { next(); into.typeBounds[p] = ident('a constraint such as Ord, Eq or Num').value; }
+    } while (isOp(',') && next());
     expect('op', ']');
     return params;
   }
@@ -77,16 +94,18 @@ export function parse(src) {
   function parseStruct() {
     next();
     const name = ident('a struct name');
-    const typeParams = parseTypeParams();
+    const extra = {};
+    const typeParams = parseTypeParams(extra);
     expect('op', '{');
     const fields = parseFields('}', 'field');
-    return ended({ kind: 'Struct', name: name.value, typeParams, fields, line: name.line, col: name.col });
+    return ended({ kind: 'Struct', name: name.value, typeParams, ...extra, fields, line: name.line, col: name.col });
   }
 
   function parseEnum() {
     next();
     const name = ident('an enum name');
-    const typeParams = parseTypeParams();
+    const extra = {};
+    const typeParams = parseTypeParams(extra);
     expect('op', '{');
     const variants = [];
     while (!isOp('}')) {
@@ -98,9 +117,9 @@ export function parse(src) {
     }
     next();
     if (variants.length === 0) {
-      throw new VowError('E0106', `enum '${name.value}' has no variants`, name.line, name.col, 'an enum needs at least one variant');
+      throw new AvisoqError('E0106', `enum '${name.value}' has no variants`, name.line, name.col, 'an enum needs at least one variant');
     }
-    return ended({ kind: 'Enum', name: name.value, typeParams, variants, line: name.line, col: name.col });
+    return ended({ kind: 'Enum', name: name.value, typeParams, ...extra, variants, line: name.line, col: name.col });
   }
 
   function parseImport() {
@@ -112,7 +131,8 @@ export function parse(src) {
   function parseFn() {
     const kw = next();
     const name = ident('a function name');
-    const typeParams = parseTypeParams();
+    const extra = {};
+    const typeParams = parseTypeParams(extra);
     expect('op', '(');
     const params = [];
     while (!isOp(')')) {
@@ -122,7 +142,7 @@ export function parse(src) {
       if (isKw('mut')) { next(); mut = true; }
       const ty = parseType();
       if (mut && ty[0] !== '[' && !ty.startsWith('Map[')) {
-        throw new VowError('E0001', `only array and Map parameters can be 'mut', but '${pn.value}' is ${ty}`, pn.line, pn.col,
+        throw new AvisoqError('E0001', `only array and Map parameters can be 'mut', but '${pn.value}' is ${ty}`, pn.line, pn.col,
           'values other than arrays and maps are immutable; return a new value instead');
       }
       params.push({ name: pn.value, ty, mut, line: pn.line, col: pn.col });
@@ -147,7 +167,7 @@ export function parse(src) {
       (k.value === 'requires' ? requires : ensures).push({ expr, text: src.slice(start, prevEnd), line: k.line, col: k.col });
     }
     const body = parseBlock();
-    return ended({ kind: 'Fn', name: name.value, typeParams, params, ret, effects, requires, ensures, body, line: kw.line, col: name.col });
+    return ended({ kind: 'Fn', name: name.value, typeParams, ...extra, params, ret, effects, requires, ensures, body, line: kw.line, col: name.col });
   }
 
   function parseTest() {
@@ -188,8 +208,16 @@ export function parse(src) {
         case 'while': {
           next();
           const cond = parseExpr();
+          // invariant: a condition that holds before the loop and after every iteration
+          const invariants = [];
+          while (isKw('invariant')) {
+            const k = next();
+            const start = peek().pos;
+            const expr = parseExpr();
+            invariants.push({ expr, text: src.slice(start, prevEnd), line: k.line, col: k.col });
+          }
           const body = parseBlock();
-          return { kind: 'While', cond, body, ...at };
+          return { kind: 'While', cond, invariants, body, ...at };
         }
         case 'for': {
           next();
@@ -223,11 +251,11 @@ export function parse(src) {
     if (isOp('=')) {
       next();
       if (expr.kind === 'Field') {
-        throw new VowError('E0204', `cannot assign to field '${expr.name}': struct values are immutable`, expr.line, expr.col,
+        throw new AvisoqError('E0204', `cannot assign to field '${expr.name}': struct values are immutable`, expr.line, expr.col,
           'build a new value instead, for example p = Point(x: p.x + 1.0, y: p.y)');
       }
       if (expr.kind !== 'Name' && expr.kind !== 'Index') {
-        throw new VowError('E0001', 'left side of = must be a variable or an array element', expr.line, expr.col,
+        throw new AvisoqError('E0001', 'left side of = must be a variable or an array element', expr.line, expr.col,
           'to compare values use ==');
       }
       const value = parseExpr();
@@ -400,6 +428,20 @@ export function parse(src) {
       }
       return { kind: 'Name', name: t.value, ...at };
     }
+    if (isKw('fn')) {
+      // A lambda: fn(x, y) => expression
+      next();
+      expect('op', '(', 'a lambda is written fn(x) => expression');
+      const params = [];
+      while (!isOp(')')) {
+        const pn = ident('a parameter name');
+        params.push({ name: pn.value, line: pn.line, col: pn.col });
+        if (!isOp(')')) expect('op', ',');
+      }
+      next();
+      expect('op', '=>', 'a lambda is written fn(x) => expression; its parameter types come from where it is used');
+      return { kind: 'Lambda', params, body: parseExpr(), ...at };
+    }
     if (isOp('(')) {
       next();
       const e = parseExpr();
@@ -430,6 +472,12 @@ export function parse(src) {
   const program = { fns: [], tests: [], structs: [], enums: [], imports: [], decls: [], comments: toks.comments };
   while (!is('eof')) {
     let d;
+    // private: usable only inside the file that declares it
+    const isPrivate = isKw('private');
+    if (isPrivate) {
+      next();
+      if (!isKw('fn') && !isKw('struct') && !isKw('enum')) fail(`'private' must be followed by fn, struct or enum, but found ${show(peek())}`);
+    }
     if (isKw('fn')) { d = parseFn(); program.fns.push(d); }
     else if (isKw('test')) { d = parseTest(); program.tests.push(d); }
     else if (isKw('struct')) { d = parseStruct(); program.structs.push(d); }
@@ -439,6 +487,7 @@ export function parse(src) {
       fail(`expected 'fn', 'struct', 'enum', 'import' or 'test' at top level but found ${show(peek())}`,
         'all code lives inside functions; the program starts at fn main()');
     }
+    if (isPrivate) d.private = true;
     program.decls.push(d);
   }
   return program;

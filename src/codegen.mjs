@@ -1,4 +1,4 @@
-// Vow code generator: checked AST -> WebAssembly module.
+// Avisoq code generator: checked AST -> WebAssembly module.
 import { Module, I32, I64, F64, uleb, sleb, f64bytes } from './wasm.mjs';
 
 import { FAIL } from './fail.mjs';
@@ -46,6 +46,7 @@ export function codegen(program, opts = {}) {
     // String operations are pure helpers supplied by the host; they need no capability.
     imp.str_concat = m.addImport('rt', 'str_concat', [I32, I32], [I32]);
     imp.str_eq = m.addImport('rt', 'str_eq', [I32, I32], [I32]);
+    imp.str_cmp = m.addImport('rt', 'str_cmp', [I32, I32], [I32]);
     imp.str_from_i64 = m.addImport('rt', 'str_from_i64', [I64], [I32]);
     imp.str_from_f64 = m.addImport('rt', 'str_from_f64', [F64], [I32]);
     imp.str_from_bool = m.addImport('rt', 'str_from_bool', [I32], [I32]);
@@ -54,11 +55,13 @@ export function codegen(program, opts = {}) {
   }
 
   if (['read_file', 'write_file', 'file_exists'].some((b) => used.has(b))) {
-    imp.read_file = m.addImport('fs', 'read_file', [I32, I32], [I32]);
-    imp.write_file = m.addImport('fs', 'write_file', [I32, I32, I32], []);
+    imp.read_file = m.addImport('fs', 'read_file', [I32], [I32]);
+    imp.write_file = m.addImport('fs', 'write_file', [I32, I32], [I64]);
     imp.file_exists = m.addImport('fs', 'file_exists', [I32], [I32]);
   }
-  if (used.has('http_get')) imp.http_get = m.addImport('net', 'http_get', [I32, I32], [I32]);
+  if (used.has('http_get')) imp.http_get = m.addImport('net', 'http_get', [I32], [I32]);
+  if (used.has('http_post')) imp.http_post = m.addImport('net', 'http_post', [I32, I32, I32], [I32]);
+  if (['read_file', 'write_file', 'http_get', 'http_post'].some((b) => used.has(b))) imp.last_ok = m.addImport('rt', 'last_ok', [], [I32]);
   if (program.usesMaps) {
     // Maps are kept by the host and addressed by handle.
     const add = (name, params, results) => { imp[name] = m.addImport('rt', name, params, results); };
@@ -134,6 +137,7 @@ export function codegen(program, opts = {}) {
       IF, VOID, ...i32c(FAIL.ARRSIZE), LGET, 2, CALL, ...uleb(imp.fail), UNREACHABLE, END,
       LGET, 0, I32_WRAP, ...i32c(size), I32_MUL, ...i32c(8), I32_ADD, CALL, ...uleb(alloc.index), LTEE, 3,
       LGET, 0, I32_WRAP, I32_STORE, 2, 0,
+      LGET, 3, LGET, 0, I32_WRAP, I32_STORE, 2, 4,
       LGET, 3, ...i32c(8), I32_ADD, LSET, 4,
       LGET, 4, LGET, 0, I32_WRAP, ...i32c(size), I32_MUL, I32_ADD, LSET, 5,
       BLOCK, VOID, LOOP, VOID,
@@ -146,6 +150,25 @@ export function codegen(program, opts = {}) {
     ];
     arrNew[cls] = f;
   }
+
+  // room(arr: i32, shift: i32) -> i32: the array itself if it has spare capacity, else a copy
+  // with twice the capacity.   locals: 2 = len, 3 = cap, 4 = new
+  const room = m.declareFunc([I32, I32], [I32]);
+  room.locals = [I32, I32, I32];
+  room.body = [
+    LGET, 0, I32_LOAD, 2, 0, LSET, 2, LGET, 0, I32_LOAD, 2, 4, LSET, 3,
+    LGET, 2, LGET, 3, I32_LT_U,
+    IF, I32,
+    LGET, 0,
+    ELSE,
+    LGET, 3, I32_EQZ, IF, I32, ...i32c(4), ELSE, LGET, 3, ...i32c(1), I32_SHL, END, LSET, 3,
+    LGET, 3, ...i32c(Number(MAX_ARRAY_LEN)), I32_GT_U, IF, VOID, ...failConst(FAIL.ARRSIZE, 0), END,
+    LGET, 3, LGET, 1, I32_SHL, ...i32c(8), I32_ADD, CALL, ...uleb(alloc.index), LSET, 4,
+    LGET, 4, LGET, 2, I32_STORE, 2, 0, LGET, 4, LGET, 3, I32_STORE, 2, 4,
+    LGET, 4, ...i32c(8), I32_ADD, LGET, 0, ...i32c(8), I32_ADD, LGET, 2, LGET, 1, I32_SHL, 0xfc, 0x0a, 0x00, 0x00, // memory.copy
+    LGET, 4,
+    END,
+  ];
 
   // ---- string literals --------------------------------------------------
   const strings = new Map();
@@ -185,6 +208,7 @@ export function codegen(program, opts = {}) {
       const et = elemOf(t), k = elemClass(et), sh = elemShift(et), inner = copyFn(et);
       c.push(LGET, 0, I32_LOAD, 2, 0, LSET, 3);
       c.push(LGET, 3, ...i32c(sh), I32_SHL, ...i32c(8), I32_ADD, CALL, ...uleb(alloc.index), LTEE, 1, LGET, 3, I32_STORE, 2, 0);
+      c.push(LGET, 1, LGET, 3, I32_STORE, 2, 4);
       c.push(...i32c(0), LSET, 2, BLOCK, VOID, LOOP, VOID, LGET, 2, LGET, 3, I32_GE_U, BR_IF, 1);
       c.push(LGET, 1, LGET, 2, ...i32c(sh), I32_SHL, I32_ADD);
       c.push(LGET, 0, LGET, 2, ...i32c(sh), I32_SHL, I32_ADD, LD[k], sh, 8);
@@ -211,7 +235,8 @@ export function codegen(program, opts = {}) {
 
   // ---- user functions ---------------------------------------------------
   for (const f of program.fns) {
-    f.wasm = m.declareFunc(f.params.map((p) => wt(p.ty)), f.ret === 'Unit' ? [] : [wt(f.ret)]);
+    // An array parameter that may grow is handed back as an extra result, so the caller can follow a reallocation.
+    f.wasm = m.declareFunc(f.params.map((p) => wt(p.ty)), [...(f.ret === 'Unit' ? [] : [wt(f.ret)]), ...f.params.filter((p) => p.grows).map(() => I32)]);
   }
   for (const t of program.tests) t.wasm = m.declareFunc([], []);
 
@@ -285,6 +310,7 @@ export function codegen(program, opts = {}) {
           const et = elemOf(e.ty), sh = elemShift(et), tmp = e.tmpSym.idx;
           emit(...i32c(8 + (e.elems.length << sh))); call(alloc.index); ltee(tmp);
           emit(...i32c(e.elems.length), I32_STORE, 2, 0);
+          lget(tmp); emit(...i32c(e.elems.length), I32_STORE, 2, 4);
           e.elems.forEach((el, k) => {
             lget(tmp); expr(el);
             emit(STORE[elemClass(et)], sh, ...uleb(8 + (k << sh)));
@@ -334,6 +360,7 @@ export function codegen(program, opts = {}) {
       emit(END);
       lget(t1); emit(I32_WRAP, ...i32c(sh), I32_SHL, ...i32c(8), I32_ADD); call(alloc.index); ltee(arr);
       lget(t1); emit(I32_WRAP, I32_STORE, 2, 0);
+      lget(arr); lget(t1); emit(I32_WRAP, I32_STORE, 2, 4);
       lget(arr); emit(...i32c(8), I32_ADD); lset(cur);
       emit(BLOCK, VOID, LOOP, VOID);
       lget(i); lget(end); emit(I64_GE_S, BR_IF, 1);
@@ -384,7 +411,8 @@ export function codegen(program, opts = {}) {
       expr(e.right);
       if (t === 'Str') {
         if (op === '+') call(imp.str_concat);
-        else { call(imp.str_eq); if (op === '!=') emit(I32_EQZ); }
+        else if (op === '==' || op === '!=') { call(imp.str_eq); if (op === '!=') emit(I32_EQZ); }
+        else { call(imp.str_cmp); emit(...i32c(0), { '<': 0x48, '>': 0x4a, '<=': 0x4c, '>=': 0x4e }[op]); } // i32 signed compares
       } else if (t === 'Float') {
         emit({ '+': F64_ADD, '-': F64_SUB, '*': F64_MUL, '/': F64_DIV, '==': F64_EQ, '!=': F64_NE, '<': F64_LT, '>': F64_GT, '<=': F64_LE, '>=': F64_GE }[op]);
       } else if (t === 'Bool') {
@@ -414,6 +442,7 @@ export function codegen(program, opts = {}) {
       if (e.fn) {
         e.args.forEach(expr);
         call(e.fn.wasm.index);
+        for (let i = e.fn.params.length - 1; i >= 0; i--) if (e.fn.params[i].grows) lset(e.args[i].sym.idx);
         return;
       }
       switch (e.name) {
@@ -429,16 +458,48 @@ export function codegen(program, opts = {}) {
           expr(e.args[0]);
           if (isMap(e.args[0].ty)) call(imp.map_len); else emit(I32_LOAD, 2, 0, I64_EXTEND_U);
           break;
+        case 'push': {
+          const arr = e.args[0].sym.idx, val = e.tmpSym.idx, et = e.args[1].ty, sh = elemShift(et);
+          expr(e.args[1]); lset(val);
+          lget(arr); emit(...i32c(sh)); call(room.index); lset(arr);
+          lget(arr); lget(arr); emit(I32_LOAD, 2, 0, ...i32c(sh), I32_SHL, I32_ADD); lget(val); emit(STORE[elemClass(et)], sh, 8);
+          lget(arr); lget(arr); emit(I32_LOAD, 2, 0, ...i32c(1), I32_ADD, I32_STORE, 2, 0);
+          break;
+        }
+        case 'pop': {
+          const sh = elemShift(e.ty);
+          expr(e.args[0]); lset(p1);
+          lget(p1); emit(I32_LOAD, 2, 0, I32_EQZ, IF, VOID);
+          fail(FAIL.BOUNDS, e);
+          emit(END);
+          lget(p1); lget(p1); emit(I32_LOAD, 2, 0, ...i32c(1), I32_SUB, I32_STORE, 2, 0);
+          lget(p1); lget(p1); emit(I32_LOAD, 2, 0, ...i32c(sh), I32_SHL, I32_ADD, LOAD[elemClass(e.ty)], sh, 8);
+          break;
+        }
         case 'copy': {
           expr(e.args[0]);
           const c = copyFn(e.ty);
           if (c !== null) call(c);
           break;
         }
-        case 'read_file': expr(e.args[0]); emit(...i32c(site(e))); call(imp.read_file); break;
-        case 'http_get': expr(e.args[0]); emit(...i32c(site(e))); call(imp.http_get); break;
+        case 'read_file': case 'http_get': case 'http_post': case 'write_file': {
+          // The host returns the value (or the reason for failure); last_ok says which.
+          const tmp = e.tmpSym.idx, isWrite = e.name === 'write_file';
+          e.args.forEach(expr);
+          call(imp[e.name]);
+          if (isWrite) lset(t1); else lset(p1);
+          emit(...i32c(16)); call(alloc.index); lset(tmp);
+          lget(tmp); call(imp.last_ok); emit(I32_EQZ, I64_EXTEND_U, I64_STORE, 3, 0);
+          if (isWrite) {
+            call(imp.last_ok); emit(IF, VOID); lget(tmp); lget(t1); emit(I64_STORE, 3, 8);
+            emit(ELSE); lget(tmp); lget(t1); emit(I32_WRAP, I32_STORE, 2, 8, END);
+          } else {
+            lget(tmp); lget(p1); emit(I32_STORE, 2, 8);
+          }
+          lget(tmp);
+          break;
+        }
         case 'file_exists': expr(e.args[0]); call(imp.file_exists); break;
-        case 'write_file': e.args.forEach(expr); emit(...i32c(site(e))); call(imp.write_file); break;
         case 'put': case 'get': case 'get_or': case 'has': case 'keys': case 'remove': {
           const [kt, vt] = mapParts(e.args[0].ty);
           const kc = kt === 'Str' ? 's' : 'i', vc = fieldClass(vt);
@@ -493,9 +554,11 @@ export function codegen(program, opts = {}) {
           depth--; emit(END);
           break;
         case 'While':
+          contracts(s.invariants ?? [], FAIL.INVARIANT);
           emit(BLOCK, VOID, LOOP, VOID);
           expr(s.cond); emit(I32_EQZ, BR_IF, 1);
           depth += 2; loopBody(s); depth -= 2;
+          contracts(s.invariants ?? [], FAIL.INVARIANT);
           emit(BR, 0, END, END);
           break;
         case 'For':
@@ -565,6 +628,7 @@ export function codegen(program, opts = {}) {
       contracts(owner.ensures, FAIL.ENSURES);
       if (fnMark !== null) resetHeap(fnMark);
       if (owner.ret !== 'Unit') lget(owner.resultSym.idx);
+      owner.params.forEach((p, i) => { if (p.grows) lget(owner.paramSyms[i].idx); });
     }
     owner.wasm.locals = localTypes;
     owner.wasm.body = c;
@@ -586,6 +650,6 @@ export function codegen(program, opts = {}) {
     tests: program.tests.map((t) => ({ name: t.name, line: t.line })),
     hasMain: !!program.main,
   };
-  m.customs.push({ name: 'vow.meta', text: JSON.stringify(meta) });
+  m.customs.push({ name: 'avisoq.meta', text: JSON.stringify(meta) });
   return { wasm: m.encode(), meta };
 }

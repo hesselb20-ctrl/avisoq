@@ -1,4 +1,4 @@
-// Vow native backend: checked AST -> C (GNU C17), compiled by GCC.
+// Avisoq native backend: checked AST -> C (GNU C17), compiled by GCC.
 import { readFileSync } from 'node:fs';
 import { FAIL, failInfo } from './fail.mjs';
 import { containerTest, elemOf, isArr, isMap, mangle, mapParts } from './types.mjs';
@@ -25,6 +25,7 @@ export function cgen(program, opts = {}) {
     { kind: 'trap', message: 'integer overflow' },
     { kind: 'trap', message: 'float out of Int range' },
     { kind: 'capability_denied', message: 'file path is outside the folders granted with --allow fs:<folder>' },
+    { kind: 'capability_denied', message: 'host was not granted; use --allow net:<host>' },
   ];
   const strings = new Map();
   let tmpCount = 0;
@@ -188,6 +189,7 @@ export function cgen(program, opts = {}) {
           break;
         }
         case 'While': {
+          if (st.invariants?.length) throw new Unsupported();
           const live = tmp();
           L(`{ vi ${live} = ${m}; for (;;) {`);
           const c = vexpr(st.cond, live);
@@ -259,7 +261,7 @@ export function cgen(program, opts = {}) {
     let body;
     if (isArr(t)) {
       const E = ctype(elemOf(t)), c = copyFn(elemOf(t));
-      body = `varr* r = vow_arr_alloc(x->len, sizeof(${E}), 0, false); `
+      body = `varr* r = avisoq_arr_alloc(x->len, sizeof(${E}), 0, false); `
         + (c ? `for (int64_t i = 0; i < x->len; i++) VDATA(${E}, r)[i] = ${c}(VDATA(${E}, x)[i]);`
           : `if (x->len) memcpy(VDATA(${E}, r), VDATA(${E}, x), (size_t)x->len * sizeof(${E}));`) + ' return r;';
     } else if (isMap(t)) {
@@ -290,7 +292,9 @@ export function cgen(program, opts = {}) {
       return sites.length - 1;
     };
     const part = (e) => ({ c: expr(e), ty: e.ty, simple: isSimple(e) });
-    const v = (sym) => (sym.isResult ? '_res' : `v_${sym.name}`);
+    const v = (sym) => (sym.isResult ? '_res' : sym.byRef ? `(*v_${sym.name})` : `v_${sym.name}`);
+    // Where a growable array variable lives, for push and for passing it on.
+    const slotOf = (sym) => (sym.byRef ? `v_${sym.name}` : `&v_${sym.name}`);
 
     function expr(e) {
       switch (e.kind) {
@@ -313,7 +317,7 @@ export function cgen(program, opts = {}) {
         case 'Index': {
           const a = tmp(), i = tmp();
           return `({ varr* ${a} = ${expr(e.base)}; int64_t ${i} = ${expr(e.index)}; `
-            + `if (VUNLIKELY((uint64_t)${i} >= (uint64_t)${a}->len)) vow_fail(${site(FAIL.BOUNDS, e)}); `
+            + `if (VUNLIKELY((uint64_t)${i} >= (uint64_t)${a}->len)) avisoq_fail(${site(FAIL.BOUNDS, e)}); `
             + `VDATA(${ctype(e.ty)}, ${a})[${i}]; })`;
         }
         case 'Field': return `(${expr(e.base)}).f_${e.name}`;
@@ -325,7 +329,7 @@ export function cgen(program, opts = {}) {
         }
         case 'ArrayLit': {
           const a = tmp(), d = tmp(), et = ctype(elemOf(e.ty));
-          return `({ varr* ${a} = vow_arr_alloc(${e.elems.length}, sizeof(${et}), 0, false); ${et}* ${d} = VDATA(${et}, ${a}); `
+          return `({ varr* ${a} = avisoq_arr_alloc(${e.elems.length}, sizeof(${et}), 0, false); ${et}* ${d} = VDATA(${et}, ${a}); `
             + e.elems.map((el, k) => `${d}[${k}] = ${expr(el)};`).join(' ') + ` ${a}; })`;
         }
         case 'Sum': return sumExpr(e);
@@ -348,7 +352,7 @@ export function cgen(program, opts = {}) {
     const inRegion = (e, stmt) => {
       if (!e.iterReset) return stmt;
       const m = tmp();
-      return `vmark ${m} = vow_mark(); ${stmt} vow_reset(${m});`;
+      return `vmark ${m} = avisoq_mark(); ${stmt} avisoq_reset(${m});`;
     };
 
     function sumExpr(e) {
@@ -374,7 +378,7 @@ export function cgen(program, opts = {}) {
             + `  const vi _m = (vi)((VI(${k} * 8) + VLANES) < VI(${n}));\n`
             + `${g.lines.join('\n')}\n`
             + `  ${acc} += vhsum(${res} & _m);\n}\n`
-            + `if (VUNLIKELY(${acc} != (__int128)(int64_t)${acc})) vow_fail(${site(FAIL.OVERFLOW, e)}); (int64_t)${acc}; })`;
+            + `if (VUNLIKELY(${acc} != (__int128)(int64_t)${acc})) avisoq_fail(${site(FAIL.OVERFLOW, e)}); (int64_t)${acc}; })`;
         } catch (err) {
           if (!(err instanceof Unsupported)) throw err;
         }
@@ -387,7 +391,7 @@ export function cgen(program, opts = {}) {
       return `({ ${range} __int128 ${acc} = 0; ${chunkDecl(ch, n)}\n`
         + `#pragma omp parallel for reduction(+:${acc}) schedule(dynamic, ${ch}) ${parallelIf(e, n)}\n`
         + `${head} ${inRegion(e, `${acc} += (int64_t)(${body});`)} }\n`
-        + `if (VUNLIKELY(${acc} != (__int128)(int64_t)${acc})) vow_fail(${site(FAIL.OVERFLOW, e)}); (int64_t)${acc}; })`;
+        + `if (VUNLIKELY(${acc} != (__int128)(int64_t)${acc})) avisoq_fail(${site(FAIL.OVERFLOW, e)}); (int64_t)${acc}; })`;
     }
 
     // [i in start..end: expr] -- every iteration writes its own slot, so it is race-free by construction.
@@ -395,8 +399,31 @@ export function cgen(program, opts = {}) {
       const s = tmp(), en = tmp(), n = tmp(), a = tmp(), d = tmp(), k = tmp(), ch = tmp(), i = v(e.sym);
       const T = ctype(elemOf(e.ty));
       const range = rangeDecl(e, s, en, n);
+      const et = elemOf(e.ty);
+      if (simd && (et === 'Int' || et === 'Float') && !e.iterReset) {
+        // Plain numeric elements: compute eight per step and store them together.
+        try {
+          const g = laneGen(fnName);
+          g.env.set(e.sym, '_ix');
+          const res = g.vexpr(e.body, '_m');
+          if (g.stats.floatOps === 0 || g.stats.intDiv > 0) throw new Unsupported();
+          const nb = tmp(), r = tmp(), j = tmp();
+          return `({ ${range} varr* ${a} = avisoq_arr_alloc(${n}, sizeof(${T}), ${site(FAIL.ARRSIZE, e)}, false); `
+            + `${T}* ${d} = VDATA(${T}, ${a}); int64_t ${nb} = ${n} / 8 + (${n} % 8 != 0); ${chunkDecl(ch, nb)}\n`
+            + `#pragma omp parallel for schedule(dynamic, ${ch}) ${parallelIf(e, n)}\n`
+            + `for (int64_t ${k} = 0; ${k} < ${nb}; ${k}++) {\n`
+            + `  const vi _ix = (vi)((vu)VI(${s} + ${k} * 8) + (vu)VLANES);\n`
+            + `  const vi _m = (vi)((VI(${k} * 8) + VLANES) < VI(${n}));\n`
+            + `${g.lines.join('\n')}\n`
+            + `  const ${et === 'Int' ? 'vi' : 'vd'} ${r} = ${res};\n`
+            + `  if (${k} * 8 + 8 <= ${n}) memcpy(${d} + ${k} * 8, &${r}, 64); else for (int64_t ${j} = ${k} * 8; ${j} < ${n}; ${j}++) ${d}[${j}] = ${r}[${j} - ${k} * 8];\n}\n`
+            + `${a}; })`;
+        } catch (err) {
+          if (!(err instanceof Unsupported)) throw err;
+        }
+      }
       const body = expr(e.body);
-      return `({ ${range} varr* ${a} = vow_arr_alloc(${n}, sizeof(${T}), ${site(FAIL.ARRSIZE, e)}, false); `
+      return `({ ${range} varr* ${a} = avisoq_arr_alloc(${n}, sizeof(${T}), ${site(FAIL.ARRSIZE, e)}, false); `
         + `${T}* ${d} = VDATA(${T}, ${a}); ${chunkDecl(ch, n)}\n`
         + `#pragma omp parallel for schedule(dynamic, ${ch}) ${parallelIf(e, n)}\n`
         + `for (int64_t ${k} = 0; ${k} < ${n}; ${k}++) { const int64_t ${i} = ${s} + ${k}; ${inRegion(e, `${d}[${k}] = ${body};`)} }\n`
@@ -428,6 +455,7 @@ export function cgen(program, opts = {}) {
       const t = e.left.ty;
       const parts = [part(e.left), part(e.right)];
       if (t === 'Str') {
+        if (['<', '<=', '>', '>='].includes(op)) return seq(parts, ([a, b]) => `(vstr_cmp(${a}, ${b}) ${op} 0)`);
         return seq(parts, ([a, b]) => (op === '+' ? `vstr_concat(${a}, ${b})` : `${op === '!=' ? '!' : ''}vstr_eq(${a}, ${b})`));
       }
       if (t === 'Int' && ['+', '-', '*'].includes(op)) {
@@ -449,11 +477,23 @@ export function cgen(program, opts = {}) {
     }
 
     function callExpr(e) {
-      if (e.fn) return seq(e.args.map(part), (xs) => `f_${e.fn.cname}(${xs.join(', ')})`);
+      if (e.fn) {
+        const parts = e.args.map((a, i) => (e.fn.params[i].grows ? { c: slotOf(a.sym), ty: a.ty, simple: true } : part(a)));
+        return seq(parts, (xs) => `f_${e.fn.cname}(${xs.join(', ')})`);
+      }
       switch (e.name) {
         case 'print': {
           const fn = { Int: 'vp_i64', Float: 'vp_f64', Bool: 'vp_bool', Str: 'vp_str' };
-          return seq(e.args.map(part), (xs) => `(${[...xs.map((x, k) => `${fn[e.args[k].ty]}(${x})`), 'vp_end()'].join(', ')})`);
+          // Every argument is evaluated before anything is written, so a failing argument prints nothing.
+          const names = [], decls = [];
+          for (const a of e.args) {
+            if (isSimple(a)) { names.push(expr(a)); continue; }
+            const n = tmp();
+            decls.push(`${ctype(a.ty)} ${n} = ${expr(a)};`);
+            names.push(n);
+          }
+          const writes = `(${[...names.map((x, k) => `${fn[e.args[k].ty]}(${x})`), 'vp_end()'].join(', ')})`;
+          return decls.length ? `({ ${decls.join(' ')} ${writes}; })` : writes;
         }
         case 'len': return `(${expr(e.args[0])})->len`;
         case 'array': {
@@ -462,15 +502,15 @@ export function cgen(program, opts = {}) {
             || (init.kind === 'FloatLit' && Object.is(init.value, 0));
           const n = tmp(), a = tmp(), val = tmp(), d = tmp(), k = tmp();
           const s = site(FAIL.ARRSIZE, e);
-          if (zero) return `vow_arr_alloc(${expr(e.args[0])}, sizeof(${et}), ${s}, true)`;
+          if (zero) return `avisoq_arr_alloc(${expr(e.args[0])}, sizeof(${et}), ${s}, true)`;
           return `({ int64_t ${n} = ${expr(e.args[0])}; ${et} ${val} = ${expr(init)}; `
-            + `varr* ${a} = vow_arr_alloc(${n}, sizeof(${et}), ${s}, false); ${et}* ${d} = VDATA(${et}, ${a}); `
+            + `varr* ${a} = avisoq_arr_alloc(${n}, sizeof(${et}), ${s}, false); ${et}* ${d} = VDATA(${et}, ${a}); `
             + `for (int64_t ${k} = 0; ${k} < ${n}; ${k}++) ${d}[${k}] = ${val}; ${a}; })`;
         }
         case 'float': return `((double)${expr(e.args[0])})`;
         case 'int': return `vf2i(${expr(e.args[0])})`;
         case 'sqrt': return `sqrt(${expr(e.args[0])})`;
-        case 'now_ms': return 'vow_now_ms()';
+        case 'now_ms': return 'avisoq_now_ms()';
         case 'str': return `${{ Int: 'vstr_from_i64', Float: 'vstr_from_f64', Bool: 'vstr_from_bool' }[e.args[0].ty]}(${expr(e.args[0])})`;
         case 'substr': {
           const s = site(FAIL.BOUNDS, e);
@@ -481,10 +521,29 @@ export function cgen(program, opts = {}) {
           return seq(e.args.map(part), (xs) => `vstr_byte_at(${xs.join(', ')}, ${s})`);
         }
         case 'put': case 'get': case 'get_or': case 'has': case 'keys': case 'remove': return mapCall(e);
+        case 'push': {
+          const T = ctype(e.args[1].ty), val = tmp();
+          return `({ ${T} ${val} = ${expr(e.args[1])}; *(${T}*)avisoq_push(${slotOf(e.args[0].sym)}, sizeof(${T})) = ${val}; })`;
+        }
+        case 'pop': {
+          const a = tmp();
+          return `({ varr* ${a} = ${expr(e.args[0])}; if (VUNLIKELY(${a}->len == 0)) avisoq_fail(${site(FAIL.BOUNDS, e)}); VDATA(${ctype(e.ty)}, ${a})[--${a}->len]; })`;
+        }
         case 'copy': { const c = copyFn(e.ty); return c ? `${c}(${expr(e.args[0])})` : expr(e.args[0]); }
-        case 'read_file': return `vow_read_file(${expr(e.args[0])}, ${site(FAIL.IO, e)})`;
-        case 'file_exists': return `vow_file_exists(${expr(e.args[0])})`;
-        case 'write_file': { const st = site(FAIL.IO, e); return seq(e.args.map(part), (xs) => `vow_write_file(${xs.join(', ')}, ${st})`); }
+        case 'read_file': case 'http_get': case 'http_post': {
+          const T = ctype(e.ty), ok = tmp(), s = tmp();
+          const make = e.name === 'read_file' ? (xs) => `avisoq_read_file(${xs[0]}, &${ok})`
+            : e.name === 'http_get' ? (xs) => `avisoq_http("GET", ${xs[0]}, NULL, NULL, &${ok})`
+              : (xs) => `avisoq_http("POST", ${xs[0]}, ${xs[1]}, ${xs[2]}, &${ok})`;
+          return `({ bool ${ok}; const vstr* ${s} = ${seq(e.args.map(part), make)}; `
+            + `${ok} ? ((${T}){ .tag = 0, .u.v0 = { ${s} } }) : ((${T}){ .tag = 1, .u.v1 = { ${s} } }); })`;
+        }
+        case 'file_exists': return `avisoq_file_exists(${expr(e.args[0])})`;
+        case 'write_file': {
+          const T = ctype(e.ty), ok = tmp(), n = tmp(), why = tmp();
+          return `({ bool ${ok}; const vstr* ${why} = NULL; int64_t ${n} = ${seq(e.args.map(part), (xs) => `avisoq_write_file(${xs[0]}, ${xs[1]}, &${ok}, &${why})`)}; `
+            + `${ok} ? ((${T}){ .tag = 0, .u.v0 = { ${n} } }) : ((${T}){ .tag = 1, .u.v1 = { ${why} } }); })`;
+        }
         default: throw new Error(`cgen: unknown builtin ${e.name}`);
       }
     }
@@ -499,9 +558,9 @@ export function cgen(program, opts = {}) {
     function loopBody(s) {
       if (!s.iterReset) { block(s.body); return; }
       const m = tmp();
-      ind++; line(`vmark ${m} = vow_mark();`); ind--;
+      ind++; line(`vmark ${m} = avisoq_mark();`); ind--;
       block(s.body);
-      ind++; line(`vow_reset(${m});`); ind--;
+      ind++; line(`avisoq_reset(${m});`); ind--;
     }
 
     function stmt(s) {
@@ -513,7 +572,7 @@ export function cgen(program, opts = {}) {
           } else {
             const a = tmp(), i = tmp(), t = s.target;
             line(`{ varr* ${a} = ${expr(t.base)}; int64_t ${i} = ${expr(t.index)}; `
-              + `if (VUNLIKELY((uint64_t)${i} >= (uint64_t)${a}->len)) vow_fail(${site(FAIL.BOUNDS, t)}); `
+              + `if (VUNLIKELY((uint64_t)${i} >= (uint64_t)${a}->len)) avisoq_fail(${site(FAIL.BOUNDS, t)}); `
               + `VDATA(${ctype(t.ty)}, ${a})[${i}] = ${expr(s.value)}; }`);
           }
           break;
@@ -524,8 +583,12 @@ export function cgen(program, opts = {}) {
           line('}');
           break;
         case 'While':
+          for (const c of s.invariants ?? []) line(`if (VUNLIKELY(!${expr(c.expr)})) avisoq_fail(${site(FAIL.INVARIANT, c, c.text)});`);
           line(`while (${expr(s.cond)}) {`);
           loopBody(s);
+          ind++;
+          for (const c of s.invariants ?? []) line(`if (VUNLIKELY(!${expr(c.expr)})) avisoq_fail(${site(FAIL.INVARIANT, c, c.text)});`);
+          ind--;
           line('}');
           break;
         case 'For': {
@@ -559,27 +622,27 @@ export function cgen(program, opts = {}) {
           else line(s.value ? `return ${expr(s.value)};` : 'return;');
           break;
         case 'Assert':
-          line(`if (VUNLIKELY(!${expr(s.cond)})) vow_fail(${site(FAIL.ASSERT, s, s.text)});`);
+          line(`if (VUNLIKELY(!${expr(s.cond)})) avisoq_fail(${site(FAIL.ASSERT, s, s.text)});`);
           break;
         case 'ExprStmt': line(`(void)${expr(s.expr)};`); break;
         default: throw new Error(`cgen: unknown stmt ${s.kind}`);
       }
     }
 
-    const params = isTest ? 'void' : owner.params.map((p) => `${ctype(p.ty)} v_${p.name}`).join(', ') || 'void';
+    const params = isTest ? 'void' : owner.params.map((p) => `${p.grows ? 'varr**' : ctype(p.ty)} v_${p.name}`).join(', ') || 'void';
     const sig = `static ${ctype(ret)} ${cname}(${params})`;
     if (!isTest) {
-      for (const c of owner.requires) line(`if (VUNLIKELY(!${expr(c.expr)})) vow_fail(${site(FAIL.REQUIRES, c, c.text)});`);
+      for (const c of owner.requires) line(`if (VUNLIKELY(!${expr(c.expr)})) avisoq_fail(${site(FAIL.REQUIRES, c, c.text)});`);
     }
-    if (reset) line('vmark _rm = vow_mark();');
+    if (reset) line('vmark _rm = avisoq_mark();');
     if (useGoto && ret !== 'Unit') line(`${ctype(ret)} _res;`);
     ind--;
     block(owner.body);
     ind++;
     if (useGoto) {
       line('done:;');
-      for (const c of owner.ensures) line(`if (VUNLIKELY(!${expr(c.expr)})) vow_fail(${site(FAIL.ENSURES, c, c.text)});`);
-      if (reset) line('vow_reset(_rm);');
+      for (const c of owner.ensures) line(`if (VUNLIKELY(!${expr(c.expr)})) avisoq_fail(${site(FAIL.ENSURES, c, c.text)});`);
+      if (reset) line('avisoq_reset(_rm);');
       if (ret !== 'Unit') line('return _res;');
     } else if (ret !== 'Unit') {
       line('__builtin_unreachable();');
@@ -591,12 +654,15 @@ export function cgen(program, opts = {}) {
   const testOut = program.tests.map((t, i) => genFn(t, true, `t_${i}`));
 
   const out = [];
-  out.push('// Generated by the Vow compiler. Do not edit.');
+  out.push('// Generated by the Avisoq compiler. Do not edit.');
   out.push('#include <stdint.h>');
-  out.push(`static const char* const vow_sites[] = {\n${sites.map((s) => `  ${cstring(JSON.stringify(s))},`).join('\n')}\n};`);
+  out.push(`static const char* const avisoq_sites[] = {\n${sites.map((s) => `  ${cstring(JSON.stringify(s))},`).join('\n')}\n};`);
   const fsg = opts.grants?.fs ?? { any: false, roots: [] };
-  out.push(`static const int vow_fs_any = ${fsg.any ? 1 : 0};`);
-  out.push(`static const char* const vow_fs_roots[] = { ${[...fsg.roots.map((r) => cstring(r)), 'NULL'].join(', ')} };`);
+  out.push(`static const int avisoq_fs_any = ${fsg.any ? 1 : 0};`);
+  out.push(`static const char* const avisoq_fs_roots[] = { ${[...fsg.roots.map((r) => cstring(r)), 'NULL'].join(', ')} };`);
+  const netg = opts.grants?.net ?? { any: false, hosts: [] };
+  out.push(`static const int avisoq_net_any = ${netg.any ? 1 : 0};`);
+  out.push(`static const char* const avisoq_net_hosts[] = { ${[...netg.hosts.map((h) => cstring(h)), 'NULL'].join(', ')} };`);
   out.push(RUNTIME);
   out.push('#ifndef _OPENMP\nstatic inline int omp_get_max_threads(void) { return 1; }\n#endif');
   for (const [s, name] of strings) {
@@ -616,7 +682,7 @@ export function cgen(program, opts = {}) {
   for (const t of vecText) out.push(t);
   for (const f of [...fnOut, ...testOut]) out.push(f.text);
   out.push(`int main(int argc, char** argv) {
-  vow_init();
+  avisoq_init();
   if (argc >= 3 && strcmp(argv[1], "--test") == 0) {
     switch (atoi(argv[2])) {
 ${program.tests.map((t, i) => `      case ${i}: t_${i}(); break;`).join('\n')}

@@ -1,6 +1,6 @@
-// Vow lexer: source text -> tokens.
+// Avisoq lexer: source text -> tokens.
 
-export class VowError extends Error {
+export class AvisoqError extends Error {
   constructor(code, message, line, col, hint) {
     super(message);
     this.code = code;
@@ -12,7 +12,7 @@ export class VowError extends Error {
 
 export const KEYWORDS = new Set([
   'fn', 'let', 'var', 'if', 'else', 'while', 'for', 'in', 'return', 'assert',
-  'requires', 'ensures', 'uses', 'test', 'true', 'false', 'and', 'or', 'not', 'mut', 'struct', 'enum', 'match', 'import',
+  'requires', 'ensures', 'uses', 'test', 'true', 'false', 'and', 'or', 'not', 'mut', 'struct', 'enum', 'match', 'import', 'invariant', 'private',
 ]);
 
 const OPS = ['->', '=>', '..', '.', '==', '!=', '<=', '>=', '+', '-', '*', '/', '%', '<', '>', '=',
@@ -66,7 +66,7 @@ export function lex(src) {
       } else {
         const v = BigInt(text);
         if (v > I64_MAX) {
-          throw new VowError('E0002', `integer literal ${text} does not fit in Int (64-bit signed)`, l, c,
+          throw new AvisoqError('E0002', `integer literal ${text} does not fit in Int (64-bit signed)`, l, c,
             'Int holds values up to 9223372036854775807; use a Float literal like 1.0e19 for larger magnitudes');
         }
         push('int', v, pos, l, c);
@@ -86,14 +86,14 @@ export function lex(src) {
       let s = '';
       for (;;) {
         if (i >= src.length || src[i] === '\n') {
-          throw new VowError('E0003', 'unterminated string literal', l, c, 'close the string with " on the same line');
+          throw new AvisoqError('E0003', 'unterminated string literal', l, c, 'close the string with " on the same line');
         }
         if (src[i] === '"') { i++; col++; break; }
         if (src[i] === '\\') {
           const e = src[i + 1];
           const map = { n: '\n', t: '\t', '"': '"', '\\': '\\' };
           if (!(e in map)) {
-            throw new VowError('E0004', `unknown escape \\${e ?? ''}`, line, col, 'valid escapes are \\n \\t \\" \\\\');
+            throw new AvisoqError('E0004', `unknown escape \\${e ?? ''}`, line, col, 'valid escapes are \\n \\t \\" \\\\');
           }
           s += map[e];
           i += 2; col += 2;
@@ -111,8 +111,8 @@ export function lex(src) {
       push('op', op, pos, l, c);
       continue;
     }
-    throw new VowError('E0001', `unexpected character '${ch}'`, l, c,
-      ch === ';' ? 'Vow has no semicolons; put each statement on its own line'
+    throw new AvisoqError('E0001', `unexpected character '${ch}'`, l, c,
+      ch === ';' ? 'Avisoq has no semicolons; put each statement on its own line'
         : ch === '&' || ch === '|' || ch === '!' ? 'use the keywords and, or, not for boolean logic'
           : undefined);
   }

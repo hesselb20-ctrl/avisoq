@@ -1,6 +1,6 @@
 // Region planning: decides where memory can be handed back, at compile time.
 //
-// Vow has no globals, and existing heap objects can only be changed through element stores
+// Avisoq has no globals, and existing heap objects can only be changed through element stores
 // (a[i] = v) and put(m, k, v). So if a piece of code performs no store of a pointer-carrying
 // value, nothing that existed before it started can point at memory it allocated. When its
 // result is also plain data, everything it allocated is garbage once it finishes, and the
@@ -28,11 +28,13 @@ export function planRegions(program, backend) {
 
   const directAlloc = (n) => n.kind === 'ArrayLit' || n.kind === 'Comp' || n.kind === 'MapLit'
     || (n.kind === 'New' && backend === 'wasm')
-    || (n.kind === 'Call' && !n.fn && ['array', 'str', 'substr', 'keys', 'copy', 'read_file', 'http_get'].includes(n.name))
+    || (n.kind === 'Call' && !n.fn && ['array', 'str', 'substr', 'keys', 'copy', 'read_file', 'write_file', 'http_get', 'http_post'].includes(n.name))
     || (n.kind === 'Binary' && n.op === '+' && n.ty === 'Str');
 
   const pointerStore = (n) => (n.kind === 'Assign' && n.target.kind === 'Index' && !flat(n.target.ty))
-    || (n.kind === 'Call' && !n.fn && n.name === 'put' && !mapParts(n.args[0].ty).every(flat));
+    || (n.kind === 'Call' && !n.fn && n.name === 'put' && !mapParts(n.args[0].ty).every(flat))
+    // push may move an array into newly allocated memory that has to outlive this code
+    || (n.kind === 'Call' && !n.fn && n.name === 'push');
 
   // Per-function facts, closed over the call graph.
   const owners = [...program.fns, ...program.tests];

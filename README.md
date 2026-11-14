@@ -1,37 +1,33 @@
-# Vow
+# Avisoq
 
 A small, fast, safe programming language designed to be written and verified by AI agents.
-Version 0.4: one front end, two backends (native machine code through GCC, and sandboxed
-WebAssembly), a standard library written in Vow, a formatter, a compile-time contract prover,
-and a 255-case test suite that passes on both backends.
+
+Version 0.5. One front end, two backends (native machine code through GCC, and sandboxed
+WebAssembly), a standard library written in Avisoq, a formatter, a compile-time contract prover,
+a language server, a package manager and a differential fuzzer. The test suites pass on both
+backends: 314 compiler cases each, plus 26 editor, 17 package and 10 sandbox tests.
 
 ```
-import "std/core"
 import "std/strings"
+import "std/arrays"
 
-struct Entry { name: Str, score: Int }
+struct Count { word: Str, times: Int }
 
-enum Line { Parsed(entry: Entry), Blank, Bad(reason: Str) }
-
-fn parse_line(text: Str) -> Line {
-  let clean = trim(text)
-  if len(clean) == 0 { return Blank }
-  let parts = split(clean, ",")
-  if len(parts) != 2 { return Bad(reason: "expected name,score but got: " + clean) }
-  match parse_int(trim(parts[1])) {
-    Some(value) => { return Parsed(entry: Entry(name: trim(parts[0]), score: value)) }
-    None => { return Bad(reason: "score is not a number: " + clean) }
+fn tally(ws: [Str]) -> [Count] {
+  var seen: Map[Str, Int] = {}
+  for i in 0..len(ws) {
+    put(seen, ws[i], get_or(seen, ws[i], 0) + 1)
   }
+  return map(keys(seen), fn(w) => Count(word: w, times: get(seen, w)))
 }
 
 fn main() uses io, fs {
-  let rows = lines(read_file("examples/scores.txt"))
-  let parsed = [i in 0..len(rows): parse_line(rows[i])]
-  for i in 0..len(parsed) {
-    match parsed[i] {
-      Parsed(entry) => { print(entry.name, "scored", entry.score) }
-      Bad(reason) => { print("skipped:", reason) }
-      Blank => { }
+  match read_file("examples/sample.txt") {
+    Err(error) => { print("could not read the file:", error) }
+    Ok(text) => {
+      var counts = tally(split(text, " "))
+      sort_by(counts, fn(c) => 0 - c.times)
+      each(filter(counts, fn(c) => c.times > 1), fn(c) => print(c.word, c.times))
     }
   }
 }
@@ -40,148 +36,181 @@ fn main() uses io, fs {
 ## Use
 
 Requires Node 22 or newer. The native backend also needs GCC (found on PATH, through
-`VOW_CC`, or in the WinGet WinLibs install).
+`AVISOQ_CC`, or in the WinGet WinLibs install).
 
 ```
-node src/cli.mjs check examples/report.vow                             # types, effects, contracts
-node src/cli.mjs run   examples/report.vow --allow io,fs:examples      # WebAssembly sandbox
-node src/cli.mjs run   examples/report.vow --allow io,fs:examples --native
-node src/cli.mjs test  examples/report.vow
-node src/cli.mjs fmt   examples/report.vow                             # canonical layout
-node src/cli.mjs build examples/report.vow --native --allow io,fs:examples -o report.exe
-node tests/run.mjs wasm
-node tests/run.mjs native
+node src/cli.mjs check examples/wordfreq.avq                            # types, effects, contracts
+node src/cli.mjs run   examples/wordfreq.avq --allow io,fs:examples     # WebAssembly sandbox
+node src/cli.mjs run   examples/wordfreq.avq --allow io,fs:examples --native
+node src/cli.mjs test  examples/wordfreq.avq
+node src/cli.mjs fmt   examples/wordfreq.avq                            # canonical layout
+node src/cli.mjs build examples/wordfreq.avq --native --portable -o wordfreq.exe
+node src/cli.mjs lsp                                                    # language server
+node src/cli.mjs init | add <name> <path or git url> | install          # packages
 ```
 
 Add `--json` to any command for machine-readable output.
 
+Tests: `node tests/run.mjs wasm`, `node tests/run.mjs native`, `node tests/ide.mjs`,
+`node tests/pkg.mjs`, `node tests/sandbox.mjs`, and `node tests/fuzz.mjs 200` for the fuzzer.
+
 ## What makes it agent-oriented
 
-- **Contracts in the signature.** `requires` and `ensures` state what a function expects and
-  guarantees. The compiler proves the ones it can, rejects calls that can never satisfy them,
-  and checks the rest while running; a violation names the clause and its location.
+- **Contracts in the signature.** `requires`, `ensures` and loop `invariant` clauses state
+  what code expects and guarantees. The compiler proves the ones it can, rejects code that can
+  never satisfy them, and checks the rest while running.
 - **Declared effects and scoped capabilities.** A function that prints, reads the clock,
   touches files or uses the network says so (`uses io, time, fs, net`), and so does every
-  caller. The host grants them with `--allow io,fs:./data,net:example.com`: file access only
-  inside the named folder, network access only to the named host.
-- **No sharing, no surprises.** Arrays and maps are never shared between bindings. Storing one
-  somewhere new needs a fresh value or an explicit `copy(...)`, so a `let` can never change
-  under you and a function can never alter data it was not given as `mut`.
-- **Errors as values.** Enums with `match` (which must cover every variant) and the standard
-  `Option[T]` and `Result[T, E]` types replace null and exceptions.
+  caller. The host grants them with `--allow io,fs:./data,net:example.com`.
+- **Errors as values.** File and network calls return `Result`; `match` must cover every
+  variant. There is no null and there are no exceptions.
+- **No sharing, no surprises.** Arrays and maps are never shared between bindings. A value
+  moves when it is used for the last time; otherwise storing it elsewhere needs `copy(...)`.
 - **Structured diagnostics.** Every error has a stable code, file, position and usually a hint
-  with the concrete fix. All type errors are reported in one pass.
+  with the concrete fix.
 - **One way to write things.** No implicit conversions, no shadowing, no semicolons, no operator
-  overloading. `vow fmt` gives every file the same layout, and verifies that the formatted
-  text is the same program before it writes anything.
+  overloading. `avisoq fmt` gives every file the same layout.
 - **Tests in the language.** `test "name" { ... }` blocks are pure and each runs in isolation.
 
 ## What the compiler does with purity
 
-1. **Threads.** `sum(i in a..b: expr)` and `[i in a..b: expr]` run on every core. A data race
-   cannot be written, and integer totals are identical for every thread schedule.
-2. **Lanes.** Plain numeric `sum` bodies are evaluated 8 iterations per instruction on the
-   native backend, with every check gated per lane.
+1. **Threads.** `sum(i in a..b: expr)`, `[i in a..b: expr]` and library functions built on them,
+   such as `map`, run on every core. A data race cannot be written.
+2. **Lanes.** Plain numeric `sum` and comprehension bodies are evaluated 8 values per
+   instruction on the native backend, with every check gated per lane.
 3. **Memory reclamation with no collector.** Where a function or loop body stores no
    pointer-carrying value and yields plain data, everything it allocated is provably dead when
    it finishes and the allocator is rewound, at no run-time cost.
 
 ## Contracts proven at compile time
 
-The compiler tracks the range each `Int` and each array length can have, through `let`,
-branches, loops, `assert` and the `ensures` clauses of called functions.
+The prover combines the range each `Int` and array length can have with linear relations
+between values (gathered from conditions, loop bounds, asserts, assignments and contracts), and
+decides each contract by checking whether its negation contradicts what is known.
 
 ```
-fn half(n: Int) -> Int requires n > 0 { return n / 2 }
+fn at(xs: [Int], i: Int) -> Int requires i >= 0 and i < len(xs) { return xs[i] }
 
-fn ok(b: Int) -> Int {
-  if b <= 0 { return 0 }
-  return half(b)        // proven: b is at least 1 here
+fn total(xs: [Int]) -> Int {
+  var t = 0
+  for i in 0..len(xs) { t = t + at(xs, i) }   // proven: 0 <= i < len(xs)
+  return t
 }
 
-fn bad() -> Int {
-  return half(0)        // error[E0501]: this call always breaks the contract of 'half'
+fn count_up(n: Int) -> Int
+  requires n >= 0
+  ensures result == n                          // proven from the invariant
+{
+  var i = 0
+  while i < n
+    invariant i <= n
+  {
+    i = i + 1
+  }
+  return i
 }
 ```
 
-`vow check` reports how many checks were proven. This is interval reasoning, not a full
-theorem prover: it handles bounds and lengths, not arbitrary arithmetic facts. Run-time checks
-are never removed, so a gap in the prover costs a missed proof, never safety.
+A call or return that can never satisfy its contract is a compile error. Run-time checks are
+never removed, so a gap in the prover costs a missed proof, never safety. It reasons about
+linear integer arithmetic only: not multiplication of two variables, floats, strings or map
+contents.
 
 ## Safety
 
 | Hazard | Behaviour |
 |---|---|
 | Integer overflow, division by zero | Trap with source location |
-| Index out of bounds, missing map key | Trap with source location |
-| Contract that can never hold at a call or return | Compile error |
+| Index out of bounds, missing map key, empty `pop` | Trap with source location |
+| Contract or invariant that can never hold | Compile error |
 | Null, uninitialised variables, unhandled enum variant | Cannot be expressed |
 | Mutation of a `let`, a struct field or a non-`mut` parameter | Compile error |
-| Two bindings sharing one array or map | Compile error (use `copy`) |
-| Undeclared side effect, or any effect inside a `sum` or comprehension | Compile error |
+| Two bindings sharing one array or map | Compile error (the value moves, or use `copy`) |
+| Undeclared side effect; any effect or mutation in parallel code or a lambda | Compile error |
 | File outside a granted folder, host that was not granted | Refused at run time |
+| File or network failure | A `Result` value the program must handle |
 | Data race, use after free | Cannot happen by construction |
 | Runaway recursion | Contained: reported as `stack_overflow` |
+
+Native programs also run inside a reduced-rights launcher on Windows: no child processes, no
+privileges, no access to the desktop or clipboard, an optional memory limit (`--memory`), and,
+when the program was granted neither files nor network, no right to write any file at all.
 
 ## Language reference
 
 - **Types:** `Int`, `Float`, `Bool`, `Str`, arrays `[T]`, maps `Map[K, V]` (`Int` or `Str`
-  keys), structs and enums. Structs, enums and functions can take type parameters:
-  `struct Pair[A, B]`, `enum Option[T]`, `fn max[T](a: T, b: T) -> T`. Type arguments are worked
-  out from the arguments or from the expected type.
-- **Structs:** `struct Point { x: Float, y: Float }`, built with `Point(x: 1.0, y: 2.0)`, read
-  with `p.x`, immutable.
-- **Enums:** `enum Shape { Circle(r: Float), Rect(w: Float, h: Float), Empty }`, built with
-  `Circle(r: 2.0)` or a bare `Empty`, read with `match`.
-- **Match:** `match value { Circle(r) => { ... } Rect(w, h) => { ... } else => { ... } }`. Every
-  variant must be covered, or an `else` arm given. Field names can be left out to ignore them.
+  keys), structs, enums, and function types `fn(A, B) -> R` for parameters.
+- **Generics:** `struct Pair[A, B]`, `enum Option[T]`, `fn max[T: Ord](a: T, b: T) -> T`.
+  Constraints: `Ord` (Int, Float, Str), `Eq` (Int, Float, Bool, Str), `Num` (Int, Float).
+  Type arguments are worked out from the arguments or the expected type.
+- **Structs:** `struct Point { x: Float, y: Float }`, `Point(x: 1.0, y: 2.0)`, `p.x`. Immutable.
+- **Enums and match:** `enum Shape { Circle(r: Float), Empty }`, built with `Circle(r: 2.0)` or
+  a bare `Empty`. `match value { Circle(r) => { ... } else => { ... } }` must cover every variant.
+- **Functions as arguments:** a parameter of type `fn(T) -> U` accepts a function name or a
+  lambda, `fn(x) => x * 2`. Lambdas capture the variables they read. Functions cannot be stored
+  in variables or fields, or returned.
 - **Bindings:** `let` (immutable), `var` (mutable). Empty `[]` and `{}` take their type from
   the context.
-- **Functions:** `fn name(a: T, b: mut [T]) -> T uses io requires ... ensures ... { ... }`.
-- **Statements:** `if / else if / else`, `while`, `for i in start..end`, `match`, `return`, `assert`.
-- **Expressions:** `+ - * / %`, comparisons, `and or not`, `sum(i in a..b: expr)`,
-  `[i in a..b: expr]`.
-- **Modules:** `import "std/strings"` or `import "other_file"` (relative to the importing file).
-  All names live in one namespace and must be unique.
-- **Built-ins:** `print`, `len`, `array(n, init)`, `copy`, `float`, `int`, `sqrt`, `str`,
+- **Arrays:** fixed layout, growable with `push(xs, v)` and `pop(xs)` on a `var` or `mut`
+  parameter.
+- **Statements:** `if / else if / else`, `while cond invariant e { }`, `for i in a..b`,
+  `match`, `return`, `assert`.
+- **Expressions:** `+ - * / %`, comparisons (also on `Str`), `and or not`,
+  `sum(i in a..b: expr)`, `[i in a..b: expr]`.
+- **Modules:** `import "std/strings"`, `import "other_file"` (relative), `import "pkg:name/module"`.
+  `private fn` / `private struct` / `private enum` are usable only in their own file.
+- **Built-ins:** `print`, `len`, `array`, `copy`, `push`, `pop`, `float`, `int`, `sqrt`, `str`,
   `substr`, `byte_at`, `now_ms`; maps: `put`, `get`, `get_or`, `has`, `remove`, `keys`;
-  files: `read_file`, `write_file`, `file_exists`; network: `http_get`.
+  files: `read_file`, `write_file`, `file_exists`; network: `http_get`, `http_post`.
 
 ### Standard library
 
 | Module | Contents |
 |---|---|
-| `std/core` | `Option[T]`, `Result[T, E]`, `is_some`, `unwrap_or`, `is_ok`, `value_or` |
+| `std/core` (always available) | `Option[T]`, `Result[T, E]`, `is_some`, `unwrap_or`, `is_ok`, `value_or` |
 | `std/strings` | `split`, `join`, `lines`, `trim`, `replace`, `repeat`, `contains`, `index_of`, `starts_with`, `ends_with`, `parse_int` |
-| `std/arrays` | `sort`, `sorted`, `reverse`, `concat`, `append`, `index_in`, `max_of`, `min_of` |
+| `std/arrays` | `map`, `filter`, `fold`, `each`, `any`, `all`, `count_if`, `find_index`, `sort`, `sort_by` (stable), `sorted`, `reverse`, `concat`, `append`, `index_in`, `max_of`, `min_of` |
 | `std/math` | `min`, `max`, `clamp`, `abs`, `abs_float`, `pow` |
+
+## Packages
+
+A project lists its dependencies in `avisoq.json`:
+
+```
+avisoq init
+avisoq add textkit ../textkit                          # a folder on disk
+avisoq add geo https://example.com/geo.git --rev v1.2  # a git repository
+avisoq install                                         # fetches git packages into avisoq_modules, writes avisoq.lock
+```
+
+and imports them as `import "pkg:textkit/shout"`. There is no central registry.
 
 ## Editor support
 
-`editor/vscode` is a VS Code extension: syntax highlighting, compiler errors with hints on
-open and save, and Format Document. To install it, copy that folder to
-`%USERPROFILE%\.vscode\extensions\vow-language` and restart VS Code. It runs the compiler from
-the open workspace, so open the folder that contains `src/cli.mjs`.
+- **VS Code:** the extension in `editor/vscode` gives highlighting, errors while typing, hover,
+  go to definition, completion, an outline and Format Document. Build and install it with
+  `python editor/package.py` then `code --install-extension editor/avisoq-language-0.1.0.vsix`.
+  Open the folder that contains `src/cli.mjs`.
+- **Other editors:** `avisoq lsp` is a Language Server Protocol server over stdin/stdout with the
+  same features.
 
 ## Benchmarks
 
-Same algorithm in every language, each program timing its own workload, runs interleaved,
-best of 12 (Python best of 2), on an idle machine with 8 logical cores (Zen 4, AVX-512).
-C++ and Rust use their strongest ordinary flags; inputs are hidden from every optimiser.
-Ratios are relative to C++, lower is faster.
+See `bench/results.md` for the latest run. Same algorithm in every language, runs interleaved,
+on an idle machine with 8 logical cores (Zen 4, AVX-512). Ratios are relative to C++.
 
 | Language | fib(38) | sieve 20M | mandelbrot 800x800 | collatz 1M |
 |---|---:|---:|---:|---:|
-| C++ (g++ 16.2, -O3 -march=native) | 36 ms (1.00x) | 30 ms (1.00x) | 110 ms (1.00x) | 138 ms (1.00x) |
-| Rust 1.100 (-O3, target-cpu=native) | 69 ms (1.94x) | 34 ms (1.13x) | 110 ms (1.00x) | 86 ms (0.62x) |
-| Rust (same, overflow checks on) | 123 ms (3.45x) | 30 ms (1.00x) | 111 ms (1.01x) | 137 ms (1.00x) |
-| **Vow native (all checks on)** | 1.5 ms (0.04x) | 30 ms (1.01x) | 113 ms (1.02x) | 117 ms (0.85x) |
-| Vow native (`--unchecked`) | 34 ms (0.96x) | 30 ms (1.00x) | 110 ms (1.00x) | 103 ms (0.75x) |
-| **Vow native, written with `sum`** (all checks on) | | | 4.7 ms (0.04x) | 14 ms (0.10x) |
+| C++ (g++ 16.2, -O3 -march=native) | 38 ms (1.00x) | 30 ms (1.00x) | 108 ms (1.00x) | 137 ms (1.00x) |
+| Rust 1.100 (-O3, target-cpu=native) | 70 ms (1.87x) | 34 ms (1.13x) | 109 ms (1.01x) | 88 ms (0.65x) |
+| Rust (same, overflow checks on) | 124 ms (3.29x) | 29 ms (0.97x) | 111 ms (1.02x) | 136 ms (0.99x) |
+| **Avisoq native (all checks on)** | 1.5 ms (0.04x) | 31 ms (1.01x) | 112 ms (1.03x) | 119 ms (0.87x) |
+| Avisoq native (`--unchecked`) | 35 ms (0.92x) | 30 ms (0.99x) | 107 ms (0.99x) | 100 ms (0.73x) |
+| **Avisoq native, written with `sum`** (all checks on) | | | 4.6 ms (0.04x) | 14 ms (0.10x) |
 | C++ hand-parallelised with OpenMP | | | 15 ms (0.13x) | 13 ms (0.09x) |
-| Vow WebAssembly (all checks on) | 225 ms (6.31x) | 57 ms (1.87x) | 107 ms (0.97x) | 232 ms (1.68x) |
-| JavaScript (Node 26, V8) | 289 ms (8.10x) | 56 ms (1.83x) | 112 ms (1.02x) | 1466 ms (10.65x) |
-| Python 3.15 | 2738 ms (77x) | 1174 ms (39x) | 4485 ms (41x) | 5830 ms (42x) |
+| Avisoq WebAssembly (all checks on) | 213 ms (5.64x) | 56 ms (1.84x) | 105 ms (0.97x) | 231 ms (1.69x) |
+| JavaScript (Node 26, V8) | 290 ms (7.67x) | 56 ms (1.86x) | 110 ms (1.02x) | 1475 ms (10.78x) |
+| Python 3.15 | 2762 ms (73x) | 1174 ms (39x) | 4485 ms (41x) | 5745 ms (42x) |
 
 - **Same code, one thread:** level with C++ and Rust on sieve and mandelbrot, ahead of C++ on
   collatz. Rust without overflow checks is still the fastest on collatz.
@@ -191,28 +220,40 @@ Ratios are relative to C++, lower is faster.
 - A C++ programmer who writes AVX-512 intrinsics by hand would match the mandelbrot number.
   Four micro-benchmarks do not describe real programs.
 
-Reproduce: `node bench/build.mjs` then `node bench/run.mjs`.
+## How it is tested
+
+- **Both backends, same suite.** Every language test runs on native and on WebAssembly and
+  must give identical output.
+- **Differential fuzzing.** `tests/fuzz.mjs` generates random valid programs and checks that the
+  two backends agree on all output and on the kind of any failure. It found two real bugs
+  (the sign of negative zero, and partial output from a failing `print`), both fixed.
+- **Adversarial memory tests.** Programs that would exhaust memory without reclamation, and
+  programs that check live data survives it.
 
 ## Known limits
 
-- **Prover:** interval reasoning over `Int` values and array lengths only. It does not reason
-  about `Float`, strings, map contents or relations between two variables.
-- **Network:** `http_get` works on the WebAssembly backend only. There is no POST, no headers
-  and no streaming. File and network failures trap; they are not yet returned as `Result`.
-- **Generics:** type parameters have no constraints, so a generic body is checked each time it
-  is instantiated and an unsuitable type is reported inside the generic function. Unused
-  generic functions are not checked at all.
-- **No sharing costs copies:** storing an existing array into another structure needs `copy`.
-  There is no move, so building nested data from named parts copies it.
-- **Arrays have a fixed length.** `append` and `concat` build new arrays.
-- **Modules** share one global namespace; there are no private names or packages.
-- **No closures or first-class functions.**
+- **Not yet used on a real project.** Everything here was tested with programs written to
+  exercise the language. Expect gaps the moment someone writes something larger.
+- **Windows only, in practice.** The code is written to be portable, but Linux and macOS have
+  never been run. Native HTTP and the sandbox launcher are Windows-only; elsewhere native
+  `http_get` returns an error value and programs run without the launcher.
+- **Functions are not first-class.** They can be passed to functions, with captured values,
+  but not stored or returned. Each lambda creates its own copy of the function it is passed to.
+- **Prover:** linear integer reasoning only, and no SMT solver. Invariants it cannot prove are
+  still checked while running.
+- **Generic constraints** cover the three built-in ones; you cannot declare your own.
+- **No sharing costs copies** when a value is stored while still in use; only whole local
+  values move, not parts of them.
 - **Memory reclamation is conservative:** values rebuilt in an outer variable inside a long
   loop are kept until the enclosing function returns, and `main` never reclaims.
-- **Lanes** cover `sum` only, and only `Int`, `Float` and `Bool` code without arrays.
-- **The native backend is not sandboxed by the operating system.** Its file restrictions are
-  enforced by the compiled program itself, with grants fixed at build time. The WebAssembly
-  backend is sandboxed as well.
-- **The VS Code extension has not been run inside VS Code yet.** Its files are validated and
-  the commands it calls are tested, but the integration itself is untested.
-- Native binaries are built with `-march=native` and may not run on other CPUs.
+- **Lanes** cover `sum` and numeric comprehensions over `Int`, `Float` and `Bool` code without
+  array reads.
+- **Network:** GET and POST only, no headers, timeouts fixed, no streaming.
+- **Packages:** no central registry and no version solving; a dependency is a path or a git
+  revision.
+- **Native sandbox:** the launcher restricts the process but is not a full container. A
+  program granted files or network can still write wherever your user account can; the
+  per-folder and per-host limits are enforced by the compiled program itself.
+- **Maps and strings on the WebAssembly backend** go through the host and are slow.
+- **The VS Code extension has not been exercised by hand inside VS Code.** The analysis and
+  the language server are tested; the wiring into VS Code is not.

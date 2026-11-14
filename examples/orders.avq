@@ -32,9 +32,13 @@ fn describe(o: Order) -> Str {
 
 fn main() uses io {
   let orders = [
-    Order(id: 1, customer: "Ada", items: [Item(name: "cable", cents: 799, qty: 2), Item(name: "hub", cents: 2450, qty: 1)]),
+    Order(
+      id: 1,
+      customer: "Ada",
+      items: [Item(name: "cable", cents: 799, qty: 2), Item(name: "hub", cents: 2450, qty: 1)],
+    ),
     Order(id: 2, customer: "Grace", items: [Item(name: "desk", cents: 18900, qty: 1)]),
-    Order(id: 3, customer: "Linus", items: [])
+    Order(id: 3, customer: "Linus", items: []),
   ]
   for i in 0..len(orders) {
     print(describe(orders[i]))

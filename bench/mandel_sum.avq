@@ -1,4 +1,4 @@
-// Mandelbrot written the idiomatic Vow way: a sum over rows.
+// Mandelbrot written the idiomatic Avisoq way: a sum over rows.
 // 'row' is pure, so the compiler is free to run rows on every core.
 fn row(py: Int, size: Int, max_iter: Int) -> Int {
   var total = 0

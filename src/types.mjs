@@ -26,10 +26,11 @@ export function children(n) {
     case 'ArrayLit': return n.elems;
     case 'Sum': case 'Comp': return [n.start, n.end, n.body];
     case 'Call': return n.args;
+    case 'Lambda': return [n.body];
     case 'Let': return [n.init];
     case 'Assign': return [n.target, n.value];
     case 'If': return [n.cond, ...n.then, ...(n.els ?? [])];
-    case 'While': return [n.cond, ...n.body];
+    case 'While': return [n.cond, ...(n.invariants ?? []).map((c) => c.expr), ...n.body];
     case 'For': return [n.start, n.end, ...n.body];
     case 'Return': return n.value ? [n.value] : [];
     case 'Match': return [n.scrut, ...n.arms.flatMap((arm) => arm.body)];
@@ -76,7 +77,16 @@ export function unify(pat, act, params, bound) {
   return pa.length === aa.length && pa.every((x, i) => unify(x, aa[i], params, bound));
 }
 // A type or instance name as a C identifier fragment.
-export const mangle = (t) => t.replace(/\[/g, '_L').replace(/\]/g, '_R').replace(/,/g, '_');
+export const mangle = (t) => t.replace(/\[/g, '_L').replace(/\]/g, '_R').replace(/,/g, '_').replace(/</g, '_F').replace(/>/g, '_E').replace(/#/g, '_n').replace(/[^A-Za-z0-9_]/g, '_');
+
+// A type as it is written in source: [T], Map[K, V], fn(A, B) -> R.
+export function showType(t) {
+  if (isArr(t)) return `[${showType(elemOf(t))}]`;
+  const args = typeArgs(t);
+  if (!args.length) return t;
+  if (typeHead(t) === 'Fn') return `fn(${args.slice(1).map(showType).join(', ')})${args[0] === 'Unit' ? '' : ` -> ${showType(args[0])}`}`;
+  return `${typeHead(t)}[${args.map(showType).join(', ')}]`;
+}
 
 // Does a value of this type hold an array or a map anywhere inside it?
 export function containerTest(types) {

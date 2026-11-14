@@ -1,4 +1,4 @@
-// Vow compiler driver and host runtime for both backends.
+// Avisoq compiler driver and host runtime for both backends.
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
@@ -9,11 +9,12 @@ import v8 from 'node:v8';
 import { parse } from './parser.mjs';
 import { check } from './checker.mjs';
 import { planRegions } from './regions.mjs';
+import { resolvePackageImport } from './pkg.mjs';
 import { prove } from './prove.mjs';
 import { codegen } from './codegen.mjs';
 import { cgen } from './cgen.mjs';
 import { FAIL, failInfo } from './fail.mjs';
-import { VowError } from './lexer.mjs';
+import { AvisoqError } from './lexer.mjs';
 
 // V8 cannot swap a running WebAssembly loop to optimised code, so a hot loop in a
 // function that is called once would stay in the baseline tier. Compile optimised up front.
@@ -45,25 +46,39 @@ export function parseGrants(allow = []) {
 }
 
 // Parses the entry source and everything it imports into one program.
-function loadProgram(src, entryPath, diagnostics) {
+function loadProgram(src, entryPath, diagnostics, lenient = false) {
   const fail = (e, file) => {
-    if (!(e instanceof VowError)) throw e;
+    if (!(e instanceof AvisoqError)) throw e;
     diagnostics.push({ code: e.code, severity: 'error', message: e.message, ...(file ? { file } : {}), line: e.line, col: e.col, ...(e.hint ? { hint: e.hint } : {}) });
   };
   let program;
   try { program = parse(src); } catch (e) { fail(e, entryPath); return null; }
   stamp(program, entryPath);
+  program.allDecls = [...program.decls];
   const seen = new Set(entryPath ? [resolve(entryPath)] : []);
   const queue = program.imports.map((imp) => ({ imp, from: entryPath }));
+  // The core types (Option, Result) are always available.
+  if (!entryPath || resolve(entryPath) !== join(STD_DIR, 'core.avq')) queue.unshift({ imp: { path: 'std/core', line: 1, col: 1 }, from: entryPath });
   while (queue.length) {
     const { imp, from } = queue.shift();
-    let target = imp.path.startsWith('std/') ? join(STD_DIR, imp.path.slice(4)) : resolve(from ? dirname(from) : process.cwd(), imp.path);
-    if (!target.endsWith('.vow')) target += '.vow';
+    const base = from ? dirname(resolve(from)) : process.cwd();
+    let target;
+    if (imp.path.startsWith('pkg:')) {
+      const r = resolvePackageImport(imp.path, base);
+      if (r.error) {
+        diagnostics.push({ code: 'E0703', severity: 'error', message: r.error, ...(from ? { file: from } : {}), line: imp.line, col: imp.col, ...(r.hint ? { hint: r.hint } : {}) });
+        continue;
+      }
+      target = r.path;
+    } else {
+      target = imp.path.startsWith('std/') ? join(STD_DIR, imp.path.slice(4)) : resolve(base, imp.path);
+    }
+    if (!target.endsWith('.avq')) target += '.avq';
     if (seen.has(target)) continue;
     seen.add(target);
     if (!existsSync(target)) {
       diagnostics.push({ code: 'E0701', severity: 'error', message: `cannot find module '${imp.path}'`, ...(from ? { file: from } : {}), line: imp.line, col: imp.col,
-        hint: 'standard modules are imported as "std/name"; other paths are relative to the importing file' });
+        hint: 'standard modules are imported as "std/name", packages as "pkg:name/module"; other paths are relative to the importing file' });
       continue;
     }
     let mod;
@@ -72,9 +87,31 @@ function loadProgram(src, entryPath, diagnostics) {
     program.fns.push(...mod.fns);
     program.structs.push(...mod.structs);
     program.enums.push(...mod.enums);
+    program.allDecls.push(...mod.decls.filter((d) => d.kind !== 'Import' && d.kind !== 'Test'));
     queue.push(...mod.imports.map((x) => ({ imp: x, from: target })));
   }
-  return diagnostics.length ? null : program;
+  return diagnostics.length && !lenient ? null : program;
+}
+
+// For editors: checks as much as it can and always reports what it found.
+export function analyze(src, opts = {}) {
+  const diagnostics = [];
+  const program = loadProgram(src, opts.path, diagnostics, true);
+  if (!program) return { program: null, diagnostics, decls: [] };
+  const decls = program.allDecls;
+  check(program, diagnostics);
+  if (!diagnostics.length) prove(program, diagnostics);
+  dedupe(diagnostics);
+  diagnostics.sort((a, b) => (a.file ?? '').localeCompare(b.file ?? '') || a.line - b.line || a.col - b.col);
+  return { program, diagnostics, decls };
+}
+
+// A generic function is checked once per instance, which can report the same problem several times.
+function dedupe(diagnostics) {
+  const seen = new Set();
+  const unique = diagnostics.filter((d) => { const k = `${d.code}|${d.file ?? ''}|${d.line}|${d.col}|${d.message}`; if (seen.has(k)) return false; seen.add(k); return true; });
+  diagnostics.length = 0;
+  diagnostics.push(...unique);
 }
 
 // opts: { backend: 'wasm' | 'native', checked, simd, path, allow }
@@ -84,10 +121,7 @@ export function compile(src, opts = {}) {
   const program = loadProgram(src, opts.path, diagnostics);
   if (!program) return { ok: false, diagnostics };
   check(program, diagnostics);
-  if (!diagnostics.length && backend === 'native' && program.usedBuiltins.has('http_get')) {
-    diagnostics.push({ code: 'E0601', severity: 'error', message: 'http_get is not available on the native backend yet', line: 1, col: 1,
-      hint: 'run this program without --native' });
-  }
+  dedupe(diagnostics);
   if (diagnostics.length) {
     diagnostics.sort((a, b) => (a.file ?? '').localeCompare(b.file ?? '') || a.line - b.line || a.col - b.col);
     return { ok: false, diagnostics };
@@ -120,10 +154,10 @@ function capabilityError(meta, allow) {
 // WebAssembly backend host
 // ---------------------------------------------------------------------------
 
-class VowFailure extends Error {}
+class AvisoqFailure extends Error {}
 
 function describe(e) {
-  if (e instanceof VowFailure) return e.info;
+  if (e instanceof AvisoqFailure) return e.info;
   if (e instanceof RangeError) return { kind: 'stack_overflow', message: 'stack overflow (recursion too deep)' };
   if (e instanceof WebAssembly.RuntimeError) {
     const msg = /divide|unrepresentable/.test(e.message) && !/float/.test(e.message) ? 'integer overflow' : e.message;
@@ -132,7 +166,8 @@ function describe(e) {
   throw e;
 }
 
-const fmtFloat = (x) => (Number.isInteger(x) && Math.abs(x) < 1e21 ? x.toFixed(1) : String(x));
+// Negative zero keeps its sign, as on the native backend (JavaScript would print it as 0).
+const fmtFloat = (x) => (Object.is(x, -0) ? '-0.0' : Number.isInteger(x) && Math.abs(x) < 1e21 ? x.toFixed(1) : String(x));
 
 // Instantiates a compiled module. Only capabilities listed in `allow` are wired in.
 export async function instantiate(wasm, meta, { allow = [], write = (s) => process.stdout.write(s) } = {}) {
@@ -142,12 +177,12 @@ export async function instantiate(wasm, meta, { allow = [], write = (s) => proce
   const dec = new TextDecoder(), enc = new TextEncoder();
   const fail = (kind, siteId) => {
     const info = failInfo(kind, meta.sites[siteId]);
-    const err = new VowFailure(info.message);
+    const err = new AvisoqFailure(info.message);
     err.info = info;
     throw err;
   };
   const deny = (message) => {
-    const err = new VowFailure(message);
+    const err = new AvisoqFailure(message);
     err.info = { kind: 'capability_denied', message };
     throw err;
   };
@@ -158,6 +193,27 @@ export async function instantiate(wasm, meta, { allow = [], write = (s) => proce
     const ok = grants.fs.any || grants.fs.roots.some((r) => fold(full) === fold(r) || fold(full).startsWith(fold(r) + sep));
     if (!ok) deny('file path is outside the folders granted with --allow fs:<folder>');
     return full;
+  };
+  // Results of fallible host calls: the value or the reason, plus a flag read back by the program.
+  let lastOk = 0;
+  const ioReason = (e) => ({ ENOENT: 'not found', EACCES: 'permission denied', EPERM: 'permission denied', EISDIR: 'is a directory' }[e.code] ?? 'io error');
+  const io = (f) => { try { const r = f(); lastOk = 1; return r; } catch (e) { if (e instanceof AvisoqFailure) throw e; lastOk = 0; return newStr(enc.encode(ioReason(e))); } };
+  const http = (method, u, body, ctype) => {
+    const bad = (why) => { lastOk = 0; return newStr(enc.encode(why)); };
+    let url;
+    try { url = new URL(dec.decode(strBytes(u))); } catch { return bad('bad url'); }
+    if (!['http:', 'https:'].includes(url.protocol)) return bad('bad url');
+    if (!grants.net.any && !grants.net.hosts.includes(url.hostname.toLowerCase())) deny('host was not granted; use --allow net:<host>');
+    // The host call must be synchronous, so the request runs in a short-lived child process.
+    const script = 'const a = JSON.parse(process.argv[1]); fetch(a.url, { method: a.method, body: a.body === null ? undefined : Buffer.from(a.body, "base64"), headers: a.ctype ? { "content-type": a.ctype } : {} })'
+      + '.then(async (r) => { process.stdout.write(JSON.stringify({ status: r.status, body: Buffer.from(await r.arrayBuffer()).toString("base64") })); }).catch(() => process.exit(4));';
+    const arg = JSON.stringify({ url: url.href, method, body: body === null ? null : Buffer.from(body).toString('base64'), ctype });
+    const r = spawnSync(process.execPath, ['-e', script, arg], { maxBuffer: 1 << 28, timeout: 40000 });
+    if (r.status !== 0) return bad('connection failed');
+    const res = JSON.parse(r.stdout.toString('utf8'));
+    if (res.status < 200 || res.status >= 300) return bad(`http status ${res.status}`);
+    lastOk = 1;
+    return newStr(Buffer.from(res.body, 'base64'));
   };
   const strBytes = (ptr) => {
     const len = new DataView(memory.buffer).getUint32(ptr, true);
@@ -179,22 +235,16 @@ export async function instantiate(wasm, meta, { allow = [], write = (s) => proce
     },
     time: { now_ms: () => performance.now() },
     fs: {
-      read_file: (p, site) => { try { return newStr(readFileSync(fsPath(p))); } catch (e) { if (e instanceof VowFailure) throw e; fail(FAIL.IO, site); } },
-      write_file: (p, c, site) => { try { writeFileSync(fsPath(p), strBytes(c)); } catch (e) { if (e instanceof VowFailure) throw e; fail(FAIL.IO, site); } },
+      read_file: (p) => io(() => newStr(readFileSync(fsPath(p)))),
+      write_file: (p, c) => {
+        const bytes = strBytes(c), full = fsPath(p);
+        try { writeFileSync(full, bytes); lastOk = 1; return BigInt(bytes.length); } catch (e) { lastOk = 0; return BigInt(newStr(enc.encode(ioReason(e)))); }
+      },
       file_exists: (p) => (existsSync(fsPath(p)) ? 1 : 0),
     },
     net: {
-      http_get: (u, site) => {
-        let url;
-        try { url = new URL(dec.decode(strBytes(u))); } catch { fail(FAIL.IO, site); }
-        if (!['http:', 'https:'].includes(url.protocol)) fail(FAIL.IO, site);
-        if (!grants.net.any && !grants.net.hosts.includes(url.hostname.toLowerCase())) deny(`host '${url.hostname}' was not granted; use --allow net:${url.hostname}`);
-        // The host call must be synchronous, so the request runs in a short-lived child process.
-        const script = 'fetch(process.argv[1]).then(async (r) => { if (!r.ok) process.exit(3); process.stdout.write(Buffer.from(await r.arrayBuffer())); }).catch(() => process.exit(4));';
-        const r = spawnSync(process.execPath, ['-e', script, url.href], { maxBuffer: 1 << 26, timeout: 30000 });
-        if (r.status !== 0) fail(FAIL.IO, site);
-        return newStr(r.stdout);
-      },
+      http_get: (u) => http('GET', u, null, null),
+      http_post: (u, b, c) => http('POST', u, strBytes(b), dec.decode(strBytes(c))),
     },
   };
   const imports = {
@@ -210,6 +260,11 @@ export async function instantiate(wasm, meta, { allow = [], write = (s) => proce
       str_eq: (a, b) => {
         const x = strBytes(a), y = strBytes(b);
         return x.length === y.length && x.every((v, i) => v === y[i]) ? 1 : 0;
+      },
+      str_cmp: (a, b) => {
+        const x = strBytes(a), y = strBytes(b);
+        for (let i = 0; i < Math.min(x.length, y.length); i++) if (x[i] !== y[i]) return x[i] < y[i] ? -1 : 1;
+        return Math.sign(x.length - y.length);
       },
       str_from_i64: (v) => newStr(enc.encode(v.toString())),
       str_from_f64: (v) => newStr(enc.encode(fmtFloat(v))),
@@ -230,6 +285,7 @@ export async function instantiate(wasm, meta, { allow = [], write = (s) => proce
   const maps = [];
   const rawKey = (ptr) => { let s = ''; for (const b of strBytes(ptr)) s += String.fromCharCode(b); return s; };
   const mkey = { i: (k) => k, s: rawKey };
+  imports.rt.last_ok = () => lastOk;
   imports.rt.map_new = () => maps.push(new Map()) - 1;
   imports.rt.map_len = (h) => BigInt(maps[h].size);
   imports.rt.map_copy = (h) => maps.push(new Map([...maps[h]].map(([k, e]) => [k, { ...e }]))) - 1;
@@ -243,6 +299,7 @@ export async function instantiate(wasm, meta, { allow = [], write = (s) => proce
       const ptr = instance.exports.__alloc(8 + ks.length * size);
       const dv = new DataView(memory.buffer);
       dv.setUint32(ptr, ks.length, true);
+      dv.setUint32(ptr + 4, ks.length, true); // capacity
       ks.forEach((k, j) => (kc === 'i' ? dv.setBigInt64(ptr + 8 + 8 * j, k, true) : dv.setUint32(ptr + 8 + 4 * j, k, true)));
       return ptr;
     };
@@ -263,7 +320,7 @@ export async function instantiate(wasm, meta, { allow = [], write = (s) => proce
     if (grants.names.has(c)) { imports[c] = caps[c]; continue; }
     // Not granted: the module links, but every entry point refuses to act.
     imports[c] = Object.fromEntries(Object.keys(caps[c]).map((k) => [k, () => {
-      const err = new VowFailure(`capability '${c}' was not granted`);
+      const err = new AvisoqFailure(`capability '${c}' was not granted`);
       err.info = { kind: 'capability_denied', message: err.message };
       throw err;
     }]));
@@ -281,7 +338,7 @@ let gccPath;
 export function findGcc() {
   if (gccPath !== undefined) return gccPath;
   gccPath = null;
-  if (process.env.VOW_CC && existsSync(process.env.VOW_CC)) return (gccPath = process.env.VOW_CC);
+  if (process.env.AVISOQ_CC && existsSync(process.env.AVISOQ_CC)) return (gccPath = process.env.AVISOQ_CC);
   const probe = spawnSync('gcc', ['--version'], { encoding: 'utf8' });
   if (probe.status === 0) return (gccPath = 'gcc');
   const pk = join(process.env.LOCALAPPDATA ?? '', 'Microsoft', 'WinGet', 'Packages');
@@ -299,31 +356,59 @@ export function findGcc() {
 const CFLAGS = ['-std=gnu17', '-O3', '-march=native', '-ffp-contract=off', '-fopenmp', '-static', '-w',
   '-Wl,--stack,268435456', ...(process.platform === 'win32' ? ['-Wa,-muse-unaligned-vector-move'] : [])];
 
-// Compiles generated C to an executable. Results are cached by content.
-export function buildNative(compiled, outPath) {
+const gccEnv = (gcc) => {
+  const env = { ...process.env };
+  if (gcc !== 'gcc') env.PATH = dirname(gcc) + delimiter + (env.PATH ?? '');
+  return env;
+};
+
+// The launcher that runs native programs with reduced rights (Windows). Built once, then cached.
+let launcher;
+export function sandboxLauncher() {
+  if (launcher !== undefined) return launcher;
+  launcher = null;
   const gcc = findGcc();
-  if (!gcc) throw new Error('the native backend needs GCC; install it or set VOW_CC to its path');
-  const cache = join(tmpdir(), 'vow-cache');
+  if (process.platform !== 'win32' || !gcc) return launcher;
+  const source = readFileSync(new URL('./sandbox_win.c', import.meta.url));
+  const cache = join(tmpdir(), 'avisoq-cache');
   mkdirSync(cache, { recursive: true });
-  const hash = createHash('sha256').update(compiled.c).update(CFLAGS.join(' ')).digest('hex').slice(0, 24);
+  const exe = join(cache, `sandbox-${createHash('sha256').update(source).digest('hex').slice(0, 16)}.exe`);
+  if (!existsSync(exe)) {
+    const r = spawnSync(gcc, ['-O2', '-municode', '-o', exe, fileURLToPath(new URL('./sandbox_win.c', import.meta.url))], { encoding: 'utf8', env: gccEnv(gcc) });
+    if (r.status !== 0) return launcher;
+  }
+  return (launcher = exe);
+}
+
+// Compiles generated C to an executable. Results are cached by content.
+// opts.portable: build for any 64-bit x86 CPU of the last decade instead of exactly this one.
+export function buildNative(compiled, outPath, opts = {}) {
+  const gcc = findGcc();
+  if (!gcc) throw new Error('the native backend needs GCC; install it or set AVISOQ_CC to its path');
+  const cache = join(tmpdir(), 'avisoq-cache');
+  mkdirSync(cache, { recursive: true });
+  const flags = opts.portable ? CFLAGS.map((f) => (f === '-march=native' ? '-march=x86-64-v2' : f)) : CFLAGS;
+  const hash = createHash('sha256').update(compiled.c).update(flags.join(' ')).digest('hex').slice(0, 24);
   const exe = join(cache, `${hash}${process.platform === 'win32' ? '.exe' : ''}`);
   if (!existsSync(exe)) {
     const cfile = join(cache, `${hash}.c`);
     writeFileSync(cfile, compiled.c);
-    const env = { ...process.env };
-    if (gcc !== 'gcc') env.PATH = dirname(gcc) + delimiter + (env.PATH ?? '');
-    const r = spawnSync(gcc, [...CFLAGS, '-o', exe, cfile, '-lm'], { encoding: 'utf8', env });
+    const env = gccEnv(gcc);
+    const r = spawnSync(gcc, [...flags, '-o', exe, cfile, '-lm', ...(process.platform === 'win32' ? ['-lwinhttp'] : [])], { encoding: 'utf8', env });
     if (r.status !== 0) throw new Error(`internal error: generated C failed to compile (${cfile})\n${r.stderr}`);
   }
   if (outPath) copyFileSync(exe, outPath);
   return outPath ?? exe;
 }
 
-function execNative(exe, args, write) {
+// sandbox: null (run directly), 'low' or 'std' (see sandbox_win.c)
+function execNative(exe, args, write, sandbox = null, memoryMb = 0) {
+  const box = sandbox ? sandboxLauncher() : null;
+  if (box) { args = [sandbox, String(memoryMb), exe, ...args]; exe = box; }
   const r = spawnSync(exe, args, { stdio: ['ignore', write ? 'pipe' : 'inherit', 'pipe'], maxBuffer: 1 << 30 });
   if (write && r.stdout?.length) write(r.stdout.toString('utf8'));
   const stderr = r.stderr?.toString('utf8') ?? '';
-  const m = /\x01VOWFAIL (.*)/.exec(stderr);
+  const m = /\x01AVISOQFAIL (.*)/.exec(stderr);
   if (m) return { ok: false, error: JSON.parse(m[1]) };
   if (r.status === 0) return { ok: true };
   // 0xC00000FD: Windows stack overflow. SIGSEGV on other systems.
@@ -337,10 +422,14 @@ function execNative(exe, args, write) {
 // Running
 // ---------------------------------------------------------------------------
 
-export async function run(compiled, { allow = [], write } = {}) {
+export async function run(compiled, { allow = [], write, sandbox, portable, memoryMb } = {}) {
   const denied = capabilityError(compiled.meta, allow);
   if (denied) return { ok: false, error: denied };
-  if (compiled.backend === 'native') return execNative(buildNative(compiled), [], write);
+  if (compiled.backend === 'native') {
+    // A program that was granted neither files nor network also loses the right to write anywhere.
+    const mode = sandbox === false ? null : compiled.meta.effects.some((e) => e === 'fs' || e === 'net') ? 'std' : 'low';
+    return execNative(buildNative(compiled, undefined, { portable }), [], write, mode, memoryMb);
+  }
   const instance = await instantiate(compiled.wasm, compiled.meta, { allow, write });
   try {
     instance.exports.main();
@@ -358,7 +447,7 @@ export async function runTests(compiled) {
     // Fresh instance or process per test: tests cannot affect each other.
     let r;
     if (exe) {
-      r = execNative(exe, ['--test', String(i)], () => {});
+      r = execNative(exe, ['--test', String(i)], () => {}, 'low');
     } else {
       const instance = await instantiate(compiled.wasm, meta, { allow: [] });
       try { instance.exports[`test_${i}`](); r = { ok: true }; } catch (e) { r = { ok: false, error: describe(e) }; }

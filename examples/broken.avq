@@ -1,4 +1,4 @@
-// Deliberately wrong: run `vow check examples/broken.vow --json` to see the diagnostics.
+// Deliberately wrong: run `avisoq check examples/broken.avq --json` to see the diagnostics.
 fn average(xs: [Int]) -> Float {
   var total = 0
   for i in 0..len(xs) {

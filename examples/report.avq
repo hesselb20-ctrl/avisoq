@@ -1,5 +1,5 @@
 // Enums, match, generics, modules and the file capability.
-// Run with:  vow run examples/report.vow --allow io,fs:examples
+// Run with:  avisoq run examples/report.avq --allow io,fs:examples
 import "std/core"
 import "std/strings"
 import "std/arrays"
@@ -48,9 +48,13 @@ fn score_of(l: Line) -> Int {
 
 fn main() uses io, fs {
   let path = "examples/scores.txt"
-  write_file(path, "ada, 91\ngrace, 88\n\nlinus, eighty\nmargaret, 97\n")
+  match write_file(path, "ada, 91\ngrace, 88\n\nlinus, eighty\nmargaret, 97\n") {
+    Ok => { }
+    Err(error) => { print("could not write", path + ":", error) }
+  }
 
-  let rows = lines(read_file(path))
+  // Reading can fail; the failure is a value the program has to deal with.
+  let rows = lines(value_or(read_file(path), ""))
   let parsed = [i in 0..len(rows): parse_line(rows[i])]
   let good = [i in 0..len(parsed): is_parsed(parsed[i])]
 

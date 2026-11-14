@@ -1,5 +1,6 @@
-/* Vow native runtime. Included into every generated program (single translation unit).
-   The generated code defines vow_sites[] before this text. */
+/* Avisoq native runtime. Included into every generated program (single translation unit).
+   The generated code defines avisoq_sites[] before this text. */
+#include <errno.h>
 #include <math.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -19,13 +20,13 @@
 #define VMAX_ARRAY_LEN (INT64_C(1) << 27)
 
 /* Reserved failure sites. */
-enum { VSITE_OOM = 0, VSITE_DIV_OVERFLOW = 1, VSITE_FLOAT_RANGE = 2, VSITE_FS_DENIED = 3 };
+enum { VSITE_OOM = 0, VSITE_DIV_OVERFLOW = 1, VSITE_FLOAT_RANGE = 2, VSITE_FS_DENIED = 3, VSITE_NET_DENIED = 4 };
 
-__attribute__((noreturn, cold, noinline)) static void vow_fail(int site) {
-#pragma omp critical(vow_fail_lock)
+__attribute__((noreturn, cold, noinline)) static void avisoq_fail(int site) {
+#pragma omp critical(avisoq_fail_lock)
   {
     fflush(stdout);
-    fprintf(stderr, "\001VOWFAIL %s\n", vow_sites[site]);
+    fprintf(stderr, "\001AVISOQFAIL %s\n", avisoq_sites[site]);
     fflush(stderr);
     _Exit(3);
   }
@@ -34,7 +35,7 @@ __attribute__((noreturn, cold, noinline)) static void vow_fail(int site) {
 
 /* ---- memory: thread-local region allocator ----
    Small blocks are bump-allocated from 1 MB chunks; large blocks come from malloc and are
-   linked so they can be returned. vow_mark() / vow_reset() bracket a region: the compiler
+   linked so they can be returned. avisoq_mark() / avisoq_reset() bracket a region: the compiler
    inserts them where it has proved that nothing allocated inside can still be reachable. */
 #define VARENA_CHUNK (1 << 20)
 struct vmap;
@@ -45,12 +46,12 @@ static _Thread_local vtls VT = { { NULL, NULL, -1, NULL, NULL }, NULL, 0 };
 static void vmap_release(struct vmap *m);
 static struct vmap *vmap_older(struct vmap *m);
 
-static void *vow_alloc(size_t n, bool zeroed) {
+static void *avisoq_alloc(size_t n, bool zeroed) {
   vtls *t = &VT;
   n = (n + 15) & ~(size_t)15;
   if (n > 65536) {
     vbig *big = (vbig *)(zeroed ? calloc(1, n + sizeof(vbig)) : malloc(n + sizeof(vbig)));
-    if (VUNLIKELY(!big)) vow_fail(VSITE_OOM);
+    if (VUNLIKELY(!big)) avisoq_fail(VSITE_OOM);
     big->older = t->cur.big;
     t->cur.big = big;
     return big + 1;
@@ -59,9 +60,9 @@ static void *vow_alloc(size_t n, bool zeroed) {
     t->cur.chunk++;
     if (t->cur.chunk >= t->nchunks) {
       t->chunks = (char **)realloc(t->chunks, sizeof(char *) * (size_t)(t->nchunks + 1));
-      if (VUNLIKELY(!t->chunks)) vow_fail(VSITE_OOM);
+      if (VUNLIKELY(!t->chunks)) avisoq_fail(VSITE_OOM);
       t->chunks[t->nchunks] = (char *)malloc(VARENA_CHUNK);
-      if (VUNLIKELY(!t->chunks[t->nchunks])) vow_fail(VSITE_OOM);
+      if (VUNLIKELY(!t->chunks[t->nchunks])) avisoq_fail(VSITE_OOM);
       t->nchunks++;
     }
     t->cur.p = t->chunks[t->cur.chunk];
@@ -73,9 +74,9 @@ static void *vow_alloc(size_t n, bool zeroed) {
   return p;
 }
 
-static inline vmark vow_mark(void) { return VT.cur; }
+static inline vmark avisoq_mark(void) { return VT.cur; }
 
-static void vow_reset(vmark m) {
+static void avisoq_reset(vmark m) {
   vtls *t = &VT;
   while (t->cur.big != m.big) {
     vbig *b = t->cur.big;
@@ -91,53 +92,69 @@ static void vow_reset(vmark m) {
 }
 
 /* ---- arrays: 16-byte header, elements follow ---- */
-typedef struct { int64_t len; int64_t pad; } varr;
+typedef struct { int64_t len; int64_t cap; } varr;
 #define VDATA(T, a) ((T *)((a) + 1))
 
-static varr *vow_arr_alloc(int64_t n, size_t elem, int site, bool zeroed) {
-  if (VUNLIKELY((uint64_t)n > (uint64_t)VMAX_ARRAY_LEN)) vow_fail(site);
-  varr *a = (varr *)vow_alloc(sizeof(varr) + (size_t)n * elem, zeroed);
+static varr *avisoq_arr_alloc(int64_t n, size_t elem, int site, bool zeroed) {
+  if (VUNLIKELY((uint64_t)n > (uint64_t)VMAX_ARRAY_LEN)) avisoq_fail(site);
+  varr *a = (varr *)avisoq_alloc(sizeof(varr) + (size_t)n * elem, zeroed);
   a->len = n;
-  a->pad = 0;
+  a->cap = n;
   return a;
+}
+
+/* Makes room for one more element and returns its address. The array may move, so the
+   caller's variable is updated through the pointer. Capacity doubles: adding is amortised O(1). */
+static void *avisoq_push(varr **slot, size_t elem) {
+  varr *a = *slot;
+  if (a->len == a->cap) {
+    int64_t cap = a->cap ? a->cap * 2 : 4;
+    if (VUNLIKELY(cap > VMAX_ARRAY_LEN)) { if (a->len >= VMAX_ARRAY_LEN) avisoq_fail(VSITE_OOM); cap = VMAX_ARRAY_LEN; }
+    varr *n = (varr *)avisoq_alloc(sizeof(varr) + (size_t)cap * elem, false);
+    n->len = a->len;
+    n->cap = cap;
+    memcpy(n + 1, a + 1, (size_t)a->len * elem);
+    *slot = a = n;
+  }
+  return (char *)(a + 1) + elem * (size_t)a->len++;
 }
 
 /* ---- checked arithmetic ---- */
 static inline int64_t vadd(int64_t a, int64_t b, int site) {
   int64_t r;
-  if (VUNLIKELY(__builtin_add_overflow(a, b, &r))) vow_fail(site);
+  if (VUNLIKELY(__builtin_add_overflow(a, b, &r))) avisoq_fail(site);
   return r;
 }
 static inline int64_t vsub(int64_t a, int64_t b, int site) {
   int64_t r;
-  if (VUNLIKELY(__builtin_sub_overflow(a, b, &r))) vow_fail(site);
+  if (VUNLIKELY(__builtin_sub_overflow(a, b, &r))) avisoq_fail(site);
   return r;
 }
 static inline int64_t vmul(int64_t a, int64_t b, int site) {
   int64_t r;
-  if (VUNLIKELY(__builtin_mul_overflow(a, b, &r))) vow_fail(site);
+  if (VUNLIKELY(__builtin_mul_overflow(a, b, &r))) avisoq_fail(site);
   return r;
 }
 /* Multiply by a constant c >= 1. The range test runs beside the multiply instead of after it. */
 static inline int64_t vmulc(int64_t x, int64_t c, int site) {
-  if (VUNLIKELY(x > INT64_MAX / c || x < INT64_MIN / c)) vow_fail(site);
+  if (VUNLIKELY(x > INT64_MAX / c || x < INT64_MIN / c)) avisoq_fail(site);
   return (int64_t)((uint64_t)x * (uint64_t)c);
 }
 static inline int64_t vwadd(int64_t a, int64_t b) { return (int64_t)((uint64_t)a + (uint64_t)b); }
 static inline int64_t vwsub(int64_t a, int64_t b) { return (int64_t)((uint64_t)a - (uint64_t)b); }
 static inline int64_t vwmul(int64_t a, int64_t b) { return (int64_t)((uint64_t)a * (uint64_t)b); }
 static inline int64_t vdiv(int64_t a, int64_t b, int site) {
-  if (VUNLIKELY(b == 0)) vow_fail(site);
-  if (VUNLIKELY(b == -1 && a == INT64_MIN)) vow_fail(VSITE_DIV_OVERFLOW);
+  if (VUNLIKELY(b == 0)) avisoq_fail(site);
+  if (VUNLIKELY(b == -1 && a == INT64_MIN)) avisoq_fail(VSITE_DIV_OVERFLOW);
   return a / b;
 }
 static inline int64_t vmod(int64_t a, int64_t b, int site) {
-  if (VUNLIKELY(b == 0)) vow_fail(site);
+  if (VUNLIKELY(b == 0)) avisoq_fail(site);
   if (VUNLIKELY(b == -1)) return 0;
   return a % b;
 }
 static inline int64_t vf2i(double x) {
-  if (VUNLIKELY(!(x > -9223372036854777856.0 && x < 9223372036854775808.0))) vow_fail(VSITE_FLOAT_RANGE);
+  if (VUNLIKELY(!(x > -9223372036854777856.0 && x < 9223372036854775808.0))) avisoq_fail(VSITE_FLOAT_RANGE);
   return (int64_t)x;
 }
 
@@ -145,7 +162,7 @@ static inline int64_t vf2i(double x) {
 typedef struct { int64_t len; char data[]; } vstr;
 
 static vstr *vstr_new(int64_t len) {
-  vstr *s = (vstr *)vow_alloc(sizeof(vstr) + (size_t)len + 1, false);
+  vstr *s = (vstr *)avisoq_alloc(sizeof(vstr) + (size_t)len + 1, false);
   s->len = len;
   s->data[len] = 0;
   return s;
@@ -165,14 +182,20 @@ static const vstr *vstr_concat(const vstr *a, const vstr *b) {
 static bool vstr_eq(const vstr *a, const vstr *b) {
   return a->len == b->len && memcmp(a->data, b->data, (size_t)a->len) == 0;
 }
+/* Byte-wise ordering: negative, zero or positive. */
+static int vstr_cmp(const vstr *a, const vstr *b) {
+  int64_t n = a->len < b->len ? a->len : b->len;
+  int c = n ? memcmp(a->data, b->data, (size_t)n) : 0;
+  return c ? c : (a->len > b->len) - (a->len < b->len);
+}
 static const vstr *vstr_substr(const vstr *s, int64_t start, int64_t end, int site) {
-  if (VUNLIKELY(start < 0 || end < start || end > s->len)) vow_fail(site);
+  if (VUNLIKELY(start < 0 || end < start || end > s->len)) avisoq_fail(site);
   vstr *r = vstr_new(end - start);
   memcpy(r->data, s->data + start, (size_t)(end - start));
   return r;
 }
 static int64_t vstr_byte_at(const vstr *s, int64_t i, int site) {
-  if (VUNLIKELY((uint64_t)i >= (uint64_t)s->len)) vow_fail(site);
+  if (VUNLIKELY((uint64_t)i >= (uint64_t)s->len)) avisoq_fail(site);
   return (unsigned char)s->data[i];
 }
 
@@ -193,7 +216,7 @@ static struct vmap *vmap_older(struct vmap *m) { return m->older; }
 static void vmap_release(struct vmap *m) { free(m->slots); free(m->keys); free(m->vals); }
 
 static vmap *vmap_new(int64_t vsize, int strkeys) {
-  vmap *m = (vmap *)vow_alloc(sizeof(vmap), true);
+  vmap *m = (vmap *)avisoq_alloc(sizeof(vmap), true);
   m->vsize = vsize;
   m->strkeys = strkeys;
   m->older = VT.cur.maps;
@@ -235,13 +258,13 @@ static void *vmap_put(vmap *m, uint64_t key) {
   if (idx >= 0) return m->vals + idx * m->vsize;
   if (m->len == m->cap) {
     int64_t cap = m->cap ? m->cap * 2 : 8;
-    if (VUNLIKELY(cap > (INT64_C(1) << 30))) vow_fail(VSITE_OOM);
+    if (VUNLIKELY(cap > (INT64_C(1) << 30))) avisoq_fail(VSITE_OOM);
     m->keys = (uint64_t *)realloc(m->keys, (size_t)cap * sizeof(uint64_t));
     m->vals = (char *)realloc(m->vals, (size_t)(cap * m->vsize));
     free(m->slots);
     m->nslots = cap * 2;
     m->slots = (int32_t *)calloc((size_t)m->nslots, sizeof(int32_t));
-    if (VUNLIKELY(!m->keys || !m->vals || !m->slots)) vow_fail(VSITE_OOM);
+    if (VUNLIKELY(!m->keys || !m->vals || !m->slots)) avisoq_fail(VSITE_OOM);
     m->cap = cap;
     for (int64_t i = 0; i < m->len; i++) vmap_link(m, i);
   }
@@ -256,11 +279,11 @@ static void *vmap_peek(const vmap *m, uint64_t key) {
 }
 static void *vmap_get(const vmap *m, uint64_t key, int site) {
   int64_t idx = vmap_find(m, key);
-  if (VUNLIKELY(idx < 0)) vow_fail(site);
+  if (VUNLIKELY(idx < 0)) avisoq_fail(site);
   return m->vals + idx * m->vsize;
 }
 static varr *vmap_keys(const vmap *m, int site) {
-  varr *a = vow_arr_alloc(m->len, sizeof(uint64_t), site, false);
+  varr *a = avisoq_arr_alloc(m->len, sizeof(uint64_t), site, false);
   if (m->len) memcpy(VDATA(uint64_t, a), m->keys, (size_t)m->len * sizeof(uint64_t));
   return a;
 }
@@ -278,50 +301,159 @@ static bool vmap_remove(vmap *m, uint64_t key) {
 }
 
 /* ---- fs capability: only inside the folders granted at build time ---- */
-static bool vow_path_ok(const vstr *path, char *full) {
+static bool avisoq_path_ok(const vstr *path, char *full) {
 #ifdef _WIN32
   if (!_fullpath(full, path->data, 4096)) return false;
 #else
   if (!realpath(path->data, full)) { if (path->len >= 4096) return false; memcpy(full, path->data, (size_t)path->len + 1); }
 #endif
-  if (vow_fs_any) return true;
-  for (int i = 0; vow_fs_roots[i]; i++) {
-    size_t n = strlen(vow_fs_roots[i]);
+  if (avisoq_fs_any) return true;
+  for (int i = 0; avisoq_fs_roots[i]; i++) {
+    size_t n = strlen(avisoq_fs_roots[i]);
 #ifdef _WIN32
-    if (_strnicmp(full, vow_fs_roots[i], n) != 0) continue;
+    if (_strnicmp(full, avisoq_fs_roots[i], n) != 0) continue;
 #else
-    if (strncmp(full, vow_fs_roots[i], n) != 0) continue;
+    if (strncmp(full, avisoq_fs_roots[i], n) != 0) continue;
 #endif
     if (full[n] == 0 || full[n] == '\\' || full[n] == '/') return true;
   }
   return false;
 }
-static const vstr *vow_read_file(const vstr *path, int site) {
+static const vstr *avisoq_io_error(void) {
+  switch (errno) {
+    case ENOENT: return vstr_from_buf("not found");
+    case EACCES: case EPERM: return vstr_from_buf("permission denied");
+    case EISDIR: return vstr_from_buf("is a directory");
+    default: return vstr_from_buf("io error");
+  }
+}
+/* Returns the content and sets *ok, or returns the reason it failed. */
+static const vstr *avisoq_read_file(const vstr *path, bool *ok) {
   char full[4096];
-  if (!vow_path_ok(path, full)) vow_fail(VSITE_FS_DENIED);
+  *ok = false;
+  if (!avisoq_path_ok(path, full)) avisoq_fail(VSITE_FS_DENIED);
   FILE *f = fopen(full, "rb");
-  if (!f) vow_fail(site);
-  fseek(f, 0, SEEK_END);
+  if (!f) return avisoq_io_error();
+  if (fseek(f, 0, SEEK_END) != 0) { fclose(f); return vstr_from_buf("is a directory"); }
   long n = ftell(f);
   fseek(f, 0, SEEK_SET);
-  if (n < 0) { fclose(f); vow_fail(site); }
+  if (n < 0) { fclose(f); return vstr_from_buf("io error"); }
   vstr *s = vstr_new((int64_t)n);
   size_t got = fread(s->data, 1, (size_t)n, f);
   fclose(f);
-  if (got != (size_t)n) vow_fail(site);
+  if (got != (size_t)n) return vstr_from_buf("io error");
+  *ok = true;
   return s;
 }
-static void vow_write_file(const vstr *path, const vstr *content, int site) {
+/* Returns the number of bytes written and sets *ok, or stores the reason in *why. */
+static int64_t avisoq_write_file(const vstr *path, const vstr *content, bool *ok, const vstr **why) {
   char full[4096];
-  if (!vow_path_ok(path, full)) vow_fail(VSITE_FS_DENIED);
+  *ok = false;
+  if (!avisoq_path_ok(path, full)) avisoq_fail(VSITE_FS_DENIED);
   FILE *f = fopen(full, "wb");
-  if (!f) vow_fail(site);
+  if (!f) { *why = avisoq_io_error(); return 0; }
   size_t put = fwrite(content->data, 1, (size_t)content->len, f);
-  if (fclose(f) != 0 || put != (size_t)content->len) vow_fail(site);
+  if (fclose(f) != 0 || put != (size_t)content->len) { *why = vstr_from_buf("io error"); return 0; }
+  *ok = true;
+  return content->len;
 }
-static bool vow_file_exists(const vstr *path) {
+
+/* ---- net capability: only to the hosts granted at build time ---- */
+#ifdef _WIN32
+#include <windows.h>
+#include <winhttp.h>
+static wchar_t *avisoq_wide(const char *s, int len) {
+  int n = MultiByteToWideChar(CP_UTF8, 0, s, len, NULL, 0);
+  wchar_t *w = (wchar_t *)malloc(((size_t)n + 1) * sizeof(wchar_t));
+  MultiByteToWideChar(CP_UTF8, 0, s, len, w, n);
+  w[n] = 0;
+  return w;
+}
+static const vstr *avisoq_http(const char *method, const vstr *url, const vstr *body, const vstr *ctype, bool *ok) {
+  *ok = false;
+  wchar_t *wurl = avisoq_wide(url->data, (int)url->len);
+  wchar_t host[256], path[4096], extra[4096];
+  URL_COMPONENTS uc;
+  memset(&uc, 0, sizeof uc);
+  uc.dwStructSize = sizeof uc;
+  uc.lpszHostName = host; uc.dwHostNameLength = 256;
+  uc.lpszUrlPath = path; uc.dwUrlPathLength = 2048;
+  uc.lpszExtraInfo = extra; uc.dwExtraInfoLength = 2048;
+  if (!WinHttpCrackUrl(wurl, 0, 0, &uc) || (uc.nScheme != INTERNET_SCHEME_HTTP && uc.nScheme != INTERNET_SCHEME_HTTPS)) {
+    free(wurl);
+    return vstr_from_buf("bad url");
+  }
+  free(wurl);
+  char hostu[256];
+  WideCharToMultiByte(CP_UTF8, 0, host, -1, hostu, sizeof hostu, NULL, NULL);
+  if (!avisoq_net_any) {
+    bool allowed = false;
+    for (int i = 0; avisoq_net_hosts[i]; i++) if (_stricmp(hostu, avisoq_net_hosts[i]) == 0) allowed = true;
+    if (!allowed) avisoq_fail(VSITE_NET_DENIED);
+  }
+  wcsncat(path, extra, 2047);
+  const vstr *result = NULL;
+  wchar_t *hdr = NULL;
+  HINTERNET s = WinHttpOpen(L"avisoq", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+  HINTERNET c = s ? WinHttpConnect(s, host, uc.nPort, 0) : NULL;
+  HINTERNET r = c ? WinHttpOpenRequest(c, strcmp(method, "POST") == 0 ? L"POST" : L"GET", path, NULL, WINHTTP_NO_REFERER,
+                                       WINHTTP_DEFAULT_ACCEPT_TYPES, uc.nScheme == INTERNET_SCHEME_HTTPS ? WINHTTP_FLAG_SECURE : 0) : NULL;
+  if (r) {
+    WinHttpSetTimeouts(r, 10000, 10000, 30000, 30000);
+    DWORD blen = body ? (DWORD)body->len : 0;
+    if (ctype) {
+      wchar_t *wc = avisoq_wide(ctype->data, (int)ctype->len);
+      size_t n = wcslen(wc) + 32;
+      hdr = (wchar_t *)malloc(n * sizeof(wchar_t));
+      _snwprintf(hdr, n, L"Content-Type: %ls", wc);
+      free(wc);
+    }
+    DWORD status = 0, sz = sizeof status;
+    if (WinHttpSendRequest(r, hdr ? hdr : WINHTTP_NO_ADDITIONAL_HEADERS, hdr ? (DWORD)-1L : 0, body ? (LPVOID)body->data : WINHTTP_NO_REQUEST_DATA, blen, blen, 0)
+        && WinHttpReceiveResponse(r, NULL)
+        && WinHttpQueryHeaders(r, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER, WINHTTP_HEADER_NAME_BY_INDEX, &status, &sz, WINHTTP_NO_HEADER_INDEX)) {
+      size_t cap = 65536, len = 0;
+      char *buf = (char *)malloc(cap);
+      bool readOk = buf != NULL;
+      while (readOk) {
+        DWORD got = 0;
+        if (len + 32768 > cap) { cap *= 2; buf = (char *)realloc(buf, cap); if (!buf) { readOk = false; break; } }
+        if (!WinHttpReadData(r, buf + len, 32768, &got)) { readOk = false; break; }
+        if (got == 0) break;
+        len += got;
+      }
+      if (!readOk) {
+        result = vstr_from_buf("connection failed");
+      } else if (status < 200 || status >= 300) {
+        char msg[64];
+        snprintf(msg, sizeof msg, "http status %lu", (unsigned long)status);
+        result = vstr_from_buf(msg);
+      } else {
+        vstr *out = vstr_new((int64_t)len);
+        memcpy(out->data, buf, len);
+        result = out;
+        *ok = true;
+      }
+      free(buf);
+    }
+  }
+  free(hdr);
+  if (r) WinHttpCloseHandle(r);
+  if (c) WinHttpCloseHandle(c);
+  if (s) WinHttpCloseHandle(s);
+  return result ? result : vstr_from_buf("connection failed");
+}
+#else
+static const vstr *avisoq_http(const char *method, const vstr *url, const vstr *body, const vstr *ctype, bool *ok) {
+  (void)method; (void)url; (void)body; (void)ctype;
+  *ok = false;
+  return vstr_from_buf("http is not available in native builds on this platform yet");
+}
+#endif
+
+static bool avisoq_file_exists(const vstr *path) {
   char full[4096];
-  if (!vow_path_ok(path, full)) vow_fail(VSITE_FS_DENIED);
+  if (!avisoq_path_ok(path, full)) avisoq_fail(VSITE_FS_DENIED);
   FILE *f = fopen(full, "rb");
   if (f) fclose(f);
   return f != NULL;
@@ -381,7 +513,7 @@ static void vp_str(const vstr *s) { vp_sep(); fwrite(s->data, 1, (size_t)s->len,
 static void vp_end(void) { fputc('\n', stdout); vp_count = 0; }
 
 /* ---- time capability ---- */
-static double vow_now_ms(void) {
+static double avisoq_now_ms(void) {
   struct timespec ts;
   clock_gettime(CLOCK_MONOTONIC, &ts);
   return (double)ts.tv_sec * 1000.0 + (double)ts.tv_nsec / 1.0e6;
@@ -405,13 +537,13 @@ static inline bool vany(vi m) { return _mm512_test_epi64_mask((__m512i)m, (__m51
 #else
 static inline bool vany(vi m) { return (m[0] | m[1] | m[2] | m[3] | m[4] | m[5] | m[6] | m[7]) != 0; }
 #endif
-#define VCHECK(m, site) do { if (VUNLIKELY(vany(m))) vow_fail(site); } while (0)
+#define VCHECK(m, site) do { if (VUNLIKELY(vany(m))) avisoq_fail(site); } while (0)
 static inline vd vsqrtv(vd x) { vd r; for (int i = 0; i < 8; i++) r[i] = sqrt(x[i]); return r; }
 static inline __int128 vhsum(vi r) {
   return (__int128)r[0] + r[1] + r[2] + r[3] + r[4] + r[5] + r[6] + r[7];
 }
 
-static void vow_init(void) {
+static void avisoq_init(void) {
 #ifdef _WIN32
   _setmode(_fileno(stdout), _O_BINARY);
 #endif

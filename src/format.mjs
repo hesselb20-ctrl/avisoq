@@ -1,9 +1,10 @@
-// Vow formatter: one canonical layout. Comments and blank-line grouping are kept.
+// Avisoq formatter: one canonical layout. Comments and blank-line grouping are kept.
 import { parse } from './parser.mjs';
+import { showType } from './types.mjs';
 
 const WIDTH = 100;
 const PREC = { or: 1, and: 2, '==': 4, '!=': 4, '<': 4, '<=': 4, '>': 4, '>=': 4, '+': 5, '-': 5, '*': 6, '/': 6, '%': 6 };
-const fmtType = (t) => t.replace(/,/g, ', ');
+const fmtType = showType;
 const quote = (s) => `"${s.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\t/g, '\\t')}"`;
 
 function expr(e, min = 0) {
@@ -14,12 +15,15 @@ function expr(e, min = 0) {
     case 'StrLit': return quote(e.value);
     case 'Name': return e.name;
     case 'MapLit': return '{}';
+    case 'Lambda': return wrap(0.5, `fn(${e.params.map((p) => p.name).join(', ')}) => ${expr(e.body)}`);
     case 'Unary':
       return e.op === 'not' ? wrap(3, `not ${expr(e.operand, 3)}`) : wrap(7, `-${expr(e.operand, 7)}`);
     case 'Binary': {
       const p = PREC[e.op];
       // Comparisons do not chain, so both sides bind tighter; the rest associate to the left.
-      const left = expr(e.left, p === 4 ? 5 : p), right = expr(e.right, p + 1);
+      // An 'and' inside an 'or' keeps its brackets: correct without them, but easy to misread.
+      const group = (x, t) => (e.op === 'or' && x.kind === 'Binary' && x.op === 'and' ? `(${t})` : t);
+      const left = group(e.left, expr(e.left, p === 4 ? 5 : p)), right = group(e.right, expr(e.right, p + 1));
       return wrap(p, `${left} ${e.op} ${right}`);
     }
     case 'Index': return `${expr(e.base, 8)}[${expr(e.index)}]`;
@@ -136,7 +140,15 @@ export function format(src) {
       case 'Assert': out.push(`${indent}assert ${expr(s.cond)}`); break;
       case 'ExprStmt': out.push(`${indent}${exprAt(s.expr, '', indent)}`); break;
       case 'If': ifStmt(s, indent, ''); break;
-      case 'While': braced(`while ${expr(s.cond)}`, s.body, indent, s.line); break;
+      case 'While':
+        if (s.invariants.length) {
+          out.push(`${indent}while ${expr(s.cond)}`, ...s.invariants.map((c) => `${indent}  invariant ${expr(c.expr)}`), `${indent}{`);
+          lastLine = s.body.length ? firstLine(s.body[0]) - 1 : s.line;
+          block(s.body, indent);
+        } else {
+          braced(`while ${expr(s.cond)}`, s.body, indent, s.line);
+        }
+        break;
       case 'For': braced(`for ${s.name} in ${expr(s.start)}..${expr(s.end, 5)}`, s.body, indent, s.stmtLine); break;
       case 'Match': {
         out.push(`${indent}match ${expr(s.scrut)} {`);
@@ -157,7 +169,7 @@ export function format(src) {
     trailing(s.endLine);
   }
 
-  const typeParams = (d) => (d.typeParams.length ? `[${d.typeParams.join(', ')}]` : '');
+  const typeParams = (d) => (d.typeParams.length ? `[${d.typeParams.map((p) => (d.typeBounds?.[p] ? `${p}: ${d.typeBounds[p]}` : p)).join(', ')}]` : '');
   const fieldList = (fields) => fields.map((f) => `${f.name}: ${fmtType(f.ty)}`);
 
   let prev = null;
@@ -173,13 +185,13 @@ export function format(src) {
     switch (d.kind) {
       case 'Import': out.push(`import ${quote(d.path)}`); break;
       case 'Struct': {
-        const head = `struct ${d.name}${typeParams(d)}`;
+        const head = `${d.private ? 'private ' : ''}struct ${d.name}${typeParams(d)}`;
         if (d.line === d.endLine) out.push(`${head} { ${fieldList(d.fields).join(', ')} }`);
         else out.push(`${head} {`, ...fieldList(d.fields).map((f) => `  ${f},`), '}');
         break;
       }
       case 'Enum': {
-        const head = `enum ${d.name}${typeParams(d)}`;
+        const head = `${d.private ? 'private ' : ''}enum ${d.name}${typeParams(d)}`;
         const vs = d.variants.map((v) => `${v.name}${v.fields.length ? `(${fieldList(v.fields).join(', ')})` : ''}`);
         if (d.line === d.endLine) out.push(`${head} { ${vs.join(', ')} }`);
         else out.push(`${head} {`, ...vs.map((v) => `  ${v},`), '}');
@@ -192,7 +204,7 @@ export function format(src) {
         break;
       case 'Fn': {
         const params = d.params.map((p) => `${p.name}: ${p.mut ? 'mut ' : ''}${fmtType(p.ty)}`).join(', ');
-        let head = `fn ${d.name}${typeParams(d)}(${params})`;
+        let head = `${d.private ? 'private ' : ''}fn ${d.name}${typeParams(d)}(${params})`;
         if (d.ret !== 'Unit') head += ` -> ${fmtType(d.ret)}`;
         if (d.effects.length) head += ` uses ${d.effects.map((e) => e.name).join(', ')}`;
         const contracts = [...d.requires.map((c) => ({ ...c, kw: 'requires' })), ...d.ensures.map((c) => ({ ...c, kw: 'ensures' }))]

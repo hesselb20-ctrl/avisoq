@@ -84,7 +84,7 @@ fn repeat(s: Str, times: Int) -> Str
   return out
 }
 
-fn is_space(byte: Int) -> Bool {
+private fn is_space(byte: Int) -> Bool {
   return byte == 32 or byte == 9 or byte == 10 or byte == 13
 }
 

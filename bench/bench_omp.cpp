@@ -1,5 +1,5 @@
 // Hand-parallelised C++ (OpenMP) versions of the two benchmarks that can be parallelised.
-// This is what a C++ programmer has to write to match Vow's sum(...).
+// This is what a C++ programmer has to write to match Avisoq's sum(...).
 #include <chrono>
 #include <cstdint>
 #include <cstdio>

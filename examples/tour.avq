@@ -1,4 +1,4 @@
-// A tour of Vow v0.
+// A tour of Avisoq v0.
 
 // Contracts are part of the signature. They are checked at run time
 // and are visible to every caller, human or agent.
