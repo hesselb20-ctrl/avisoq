@@ -40,3 +40,44 @@ fn pow(base: Int, exponent: Int) -> Int
   }
   return result_so_far
 }
+
+// The largest and smallest Int.
+fn int_max() -> Int {
+  return 9223372036854775807
+}
+
+fn int_min() -> Int {
+  return -9223372036854775808
+}
+
+// Arithmetic that reports a result that does not fit in Int as None, where + - * would stop
+// the program.
+fn checked_add(a: Int, b: Int) -> Option[Int] {
+  if b > 0 and a > 9223372036854775807 - b { return None }
+  if b < 0 and a < -9223372036854775808 - b { return None }
+  return Some(value: a + b)
+}
+
+fn checked_sub(a: Int, b: Int) -> Option[Int] {
+  if b < 0 and a > 9223372036854775807 + b { return None }
+  if b > 0 and a < -9223372036854775808 + b { return None }
+  return Some(value: a - b)
+}
+
+fn checked_mul(a: Int, b: Int) -> Option[Int] {
+  if a == 0 or b == 0 { return Some(value: 0) }
+  if a == -1 {
+    if b == -9223372036854775808 { return None }
+    return Some(value: -b)
+  }
+  if b == -1 {
+    if a == -9223372036854775808 { return None }
+    return Some(value: -a)
+  }
+  // Neither factor is 0 or -1 here, so these divisions cannot fail.
+  if a > 0 and b > 0 and a > 9223372036854775807 / b { return None }
+  if a < 0 and b < 0 and a < 9223372036854775807 / b { return None }
+  if a > 0 and b < 0 and b < -9223372036854775808 / a { return None }
+  if a < 0 and b > 0 and a < -9223372036854775808 / b { return None }
+  return Some(value: a * b)
+}

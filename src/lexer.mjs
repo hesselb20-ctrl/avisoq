@@ -12,7 +12,7 @@ export class AvisoqError extends Error {
 
 export const KEYWORDS = new Set([
   'fn', 'let', 'var', 'if', 'else', 'while', 'for', 'in', 'return', 'assert',
-  'requires', 'ensures', 'uses', 'test', 'true', 'false', 'and', 'or', 'not', 'mut', 'struct', 'enum', 'match', 'import', 'invariant', 'private',
+  'requires', 'ensures', 'uses', 'test', 'true', 'false', 'and', 'or', 'not', 'mut', 'struct', 'enum', 'match', 'import', 'invariant', 'private', 'break', 'continue',
 ]);
 
 const OPS = ['->', '=>', '..', '.', '==', '!=', '<=', '>=', '+', '-', '*', '/', '%', '<', '>', '=',
@@ -65,9 +65,9 @@ export function lex(src) {
         toks[toks.length - 1].raw = src.slice(pos, i);
       } else {
         const v = BigInt(text);
-        if (v > I64_MAX) {
+        if (v > I64_MAX + 1n) {
           throw new AvisoqError('E0002', `integer literal ${text} does not fit in Int (64-bit signed)`, l, c,
-            'Int holds values up to 9223372036854775807; use a Float literal like 1.0e19 for larger magnitudes');
+            'Int holds values from -9223372036854775808 to 9223372036854775807; std/math has checked_add, checked_sub and checked_mul for arithmetic that may not fit');
         }
         push('int', v, pos, l, c);
         toks[toks.length - 1].raw = src.slice(pos, i);

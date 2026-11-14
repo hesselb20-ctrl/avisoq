@@ -626,5 +626,38 @@ rejects('literal too large', main('print(9223372036854775808)'), 'E0002');
   report('failure reports source location', results[1].error.line === 4 && results[1].error.message.includes('sq(3) == 10'), JSON.stringify(results[1]));
 }
 
+// ---- break and continue ----
+await prints('break leaves a while loop', main('var i = 0\nwhile true {\n  if i == 4 { break }\n  i = i + 1\n}\nprint(i)'), '4\n');
+await prints('break leaves a for loop', main('var last = -1\nfor i in 0..100 {\n  if i * i > 50 { break }\n  last = i\n}\nprint(last)'), '7\n');
+await prints('continue skips the rest of a for body', main('var t = 0\nfor i in 0..10 {\n  if i % 2 == 0 { continue }\n  t = t + i\n}\nprint(t)'), '25\n');
+await prints('continue in a while re-tests the condition', main('var i = 0\nvar t = 0\nwhile i < 10 {\n  i = i + 1\n  if i % 3 == 0 { continue }\n  t = t + i\n}\nprint(t, i)'), '37 10\n');
+await prints('break and continue act on the innermost loop', main('var hits = 0\nfor a in 0..5 {\n  for b in 0..5 {\n    if b == a { continue }\n    if b > 2 { break }\n    hits = hits + 1\n  }\n}\nprint(hits)'), '12\n');
+await prints('break inside a match arm leaves the loop', `enum Step { Go(n: Int), Stop }\nfn step(i: Int) -> Step {\n  if i < 3 { return Go(n: i) }\n  return Stop\n}\n${main('var t = 0\nvar i = 0\nwhile true {\n  match step(i) {\n    Go(n) => { t = t + n + 1 }\n    Stop => { break }\n  }\n  i = i + 1\n}\nprint(t, i)')}`, '6 3\n');
+await prints('loops that allocate still work with break and continue', `import "std/strings"\n${main('var total = 0\nfor i in 0..2000 {\n  let s = repeat("ab", i % 7)\n  if len(s) == 4 { continue }\n  if i == 1501 { break }\n  total = total + len(s)\n}\nprint(total)')}`, '8134\n');
+await prints('continue still checks the loop invariant when it holds', main('var i = 0\nvar t = 0\nwhile i < 6\n  invariant t <= i\n{\n  i = i + 1\n  if i == 2 { continue }\n  t = t + 1\n}\nprint(t)'), '5\n');
+await traps('continue does not skip a broken invariant', main('var i = 0\nvar t = 0\nvar k = 1\nwhile i < 6\n  invariant t <= i\n{\n  i = i + 1\n  t = t + k + k\n  if i > 0 { continue }\n}\nprint(t)'), 'invariant');
+await prints('after a break the loop condition may still hold', `fn pick(xs: [Int], i: Int) -> Int requires i >= 0 and i < len(xs) { return xs[i] }\n${main('let xs = [5, 6, 7]\nvar i = 0\nwhile i < 3 {\n  if xs[i] == 6 { break }\n  i = i + 1\n}\nprint(pick(xs, i))')}`, '6\n');
+rejects('break outside a loop', main('break'), 'E0220');
+rejects('continue outside a loop', 'fn f() -> Int {\n  continue\n  return 1\n}\nfn main() { }', 'E0220');
+
+// ---- the smallest Int, checked arithmetic, parse_int over the full range, array equality ----
+await prints('the smallest Int can be written', main('let m = -9223372036854775808\nprint(m, m + 1, -9223372036854775807 - 1 == m)'), '-9223372036854775808 -9223372036854775807 true\n');
+rejects('2^63 without a minus is too large', main('print(9223372036854775808 - 1)'), 'E0002');
+await prints('checked arithmetic', `import "std/math"\nfn show(r: Option[Int]) -> Str {\n  match r {\n    Some(value) => { return str(value) }\n    None => { return "none" }\n  }\n}\n${main([
+  'print(show(checked_add(1, 2)), show(checked_add(int_max(), 1)), show(checked_add(int_min(), -1)), show(checked_add(int_max(), int_min())))',
+  'print(show(checked_sub(int_min(), 1)), show(checked_sub(0, int_min())), show(checked_sub(-1, int_min())), show(checked_sub(5, 7)))',
+  'print(show(checked_mul(3037000499, 3037000499)), show(checked_mul(3037000500, 3037000500)), show(checked_mul(int_min(), -1)), show(checked_mul(-1, int_min())))',
+  'print(show(checked_mul(4611686018427387904, -2)), show(checked_mul(-4611686018427387904, 2)), show(checked_mul(4611686018427387904, 2)), show(checked_mul(-3, -3)), show(checked_mul(0, int_min())))',
+  'print(show(checked_mul(int_min(), 1)), show(checked_mul(-2, 4611686018427387905)), show(checked_mul(-4611686018427387905, -2)), show(checked_mul(-7, 6)))',
+].join('\n'))}`, '3 none none -1\nnone none 9223372036854775807 -2\n9223372030926249001 none none none\n-9223372036854775808 -9223372036854775808 none 9 0\n-9223372036854775808 none none -42\n');
+await prints('parse_int covers the whole Int range', `import "std/strings"\nfn show(r: Option[Int]) -> Str {\n  match r {\n    Some(value) => { return str(value) }\n    None => { return "none" }\n  }\n}\n${main('print(show(parse_int("9223372036854775807")), show(parse_int("-9223372036854775808")), show(parse_int("9223372036854775808")), show(parse_int("-9223372036854775809")))\nprint(show(parse_int("0")), show(parse_int("-0")), show(parse_int("007")), show(parse_int("-")), show(parse_int("")), show(parse_int("12a")), show(parse_int("99999999999999999999999")))')}`, '9223372036854775807 -9223372036854775808 none none\n0 0 7 none none none none\n');
+await prints('arrays are compared with equal', `import "std/arrays"\n${main('let e: [Int] = []\nprint(equal([1, 2, 3], [1, 2, 3]), equal([1, 2], [1, 2, 3]), equal([1, 2], [2, 1]), equal(e, e), equal(["a"], ["a"]))')}`, 'true false false true true\n');
+{
+  const c = compile(`import "std/strings"\n${main('let lines = 3\nprint(lines)')}`, { backend: BACKEND });
+  report('a name clash with the standard library says where the name comes from', !c.ok && c.diagnostics.some((d) => d.code === 'E0103' && d.message.includes('std/strings')), JSON.stringify(c.diagnostics));
+  const a = compile(main('print([1] == [1])'), { backend: BACKEND });
+  report('comparing arrays with == points at equal', !a.ok && a.diagnostics.some((d) => (d.hint ?? '').includes('equal(a, b)')), JSON.stringify(a.diagnostics));
+}
+
 console.log(`[${BACKEND}] ${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

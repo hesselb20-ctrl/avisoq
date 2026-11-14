@@ -75,7 +75,7 @@ export function format(src) {
     if (out.length && lastLine && line - lastLine > 1 && out[out.length - 1] !== '' && !out[out.length - 1].endsWith('{')) out.push('');
   }
 
-  const simple = (s) => ['Let', 'Assign', 'Return', 'Assert', 'ExprStmt'].includes(s.kind);
+  const simple = (s) => ['Let', 'Assign', 'Return', 'Assert', 'ExprStmt', 'Break', 'Continue'].includes(s.kind);
   // { stmt } stays on one line when it was written that way.
   const inlineBody = (body, openLine) => body.length === 1 && simple(body[0]) && body.closeLine === openLine
     && !comments.some((c) => c.line === openLine);
@@ -84,6 +84,8 @@ export function format(src) {
       case 'Let': return `${s.mutable ? 'var' : 'let'} ${s.name}${s.ty ? `: ${fmtType(s.ty)}` : ''} = ${expr(s.init)}`;
       case 'Assign': return `${expr(s.target)} = ${expr(s.value)}`;
       case 'Return': return s.value ? `return ${expr(s.value)}` : 'return';
+      case 'Break': return 'break';
+      case 'Continue': return 'continue';
       case 'Assert': return `assert ${expr(s.cond)}`;
       case 'ExprStmt': return expr(s.expr);
       default: throw new Error('unreachable');
@@ -138,6 +140,8 @@ export function format(src) {
       }
       case 'Return': out.push(`${indent}${s.value ? `return ${exprAt(s.value, 'return ', indent)}` : 'return'}`); break;
       case 'Assert': out.push(`${indent}assert ${expr(s.cond)}`); break;
+      case 'Break': out.push(`${indent}break`); break;
+      case 'Continue': out.push(`${indent}continue`); break;
       case 'ExprStmt': out.push(`${indent}${exprAt(s.expr, '', indent)}`); break;
       case 'If': ifStmt(s, indent, ''); break;
       case 'While':

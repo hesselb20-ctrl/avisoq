@@ -537,11 +537,17 @@ export function codegen(program, opts = {}) {
     }
 
     function block(stmts) { for (const s of stmts) stmt(s); }
+    const loops = []; // { depth: block depth inside the body, mk: heap mark or null }
     function loopBody(s) {
-      if (!s.iterReset) { block(s.body); return; }
-      const mk = markHeap();
+      const mk = s.iterReset ? markHeap() : null;
+      emit(BLOCK, VOID);
+      depth++;
+      loops.push({ depth, mk });
       block(s.body);
-      resetHeap(mk);
+      loops.pop();
+      depth--;
+      emit(END);
+      if (mk !== null) resetHeap(mk);
     }
 
     function stmt(s) {
@@ -595,6 +601,15 @@ export function codegen(program, opts = {}) {
             emit(END);
           };
           go(0);
+          break;
+        }
+        case 'Continue':
+          emit(BR, ...uleb(depth - loops[loops.length - 1].depth));
+          break;
+        case 'Break': {
+          const loop = loops[loops.length - 1];
+          if (loop.mk !== null) resetHeap(loop.mk);
+          emit(BR, ...uleb(depth - loop.depth + 2));
           break;
         }
         case 'Return':

@@ -6,10 +6,10 @@ A small, fast, safe programming language designed to be written and verified by 
 
 <img src=".github/assets/figure/scene.webp" width="100%" alt="Three beats: a mandelbrot benchmark computed on one thread with every check on in 112 ms against 108 ms for C++; the same loop written as a sum, spread over 8 threads and 8 lanes; and the result, 4.6 ms against 15 ms for C++ parallelised by hand with OpenMP.">
 
-Version 0.5. One front end, two backends (native machine code through GCC, and sandboxed
+Version 0.6. One front end, two backends (native machine code through GCC, and sandboxed
 WebAssembly), a standard library written in Avisoq, a formatter, a compile-time contract prover,
 a language server, a package manager and a differential fuzzer. The test suites pass on both
-backends: 316 compiler cases each, plus 26 editor, 17 package and 10 sandbox tests.
+backends: 335 compiler cases each, plus 26 editor, 17 package and 10 sandbox tests.
 
 ```
 import "std/strings"
@@ -106,7 +106,7 @@ module itself and runs it in a sandbox. Both keep every run-time check.
 - **Adversarial memory tests.** Programs that would exhaust memory without reclamation, and
   programs that check live data survives it.
 
-<img src=".github/assets/how/scene.webp" width="100%" alt="316 test programs go through one front end, are compiled by both the native and the WebAssembly backend, and all 316 print the same on both. The fuzzer found two mismatches, both fixed.">
+<img src=".github/assets/how/scene.webp" width="100%" alt="335 test programs go through one front end, are compiled by both the native and the WebAssembly backend, and all 335 print the same on both. The fuzzer found two mismatches, both fixed.">
 
 ## Capabilities
 
@@ -138,10 +138,11 @@ as long as Python's.
 A harder round followed: 13 small programs (an expression evaluator, a stack-machine
 interpreter, shortest path and others), with each agent free to compile and test before
 handing in. Both models again scored 13 of 13 in all three languages. Avisoq cost more: the
-runs took two to seven times as long as Python's or Rust's. So the honest claim today is that
+runs took two to seven times as long as Python's or Rust's (measured on version 0.5). So the honest claim today is that
 agents can write Avisoq reliably, not that they write it better than other languages. The
 friction the agents reported (no `break`, no checked arithmetic, and more) is listed in
-[`agentbench/README.md`](agentbench/README.md).
+[`agentbench/README.md`](agentbench/README.md) and was fixed in version 0.6. The benchmark has
+not been rerun since, so whether the fixes close the time gap is not yet measured.
 
 <img src=".github/assets/agents/scene.webp" width="100%" alt="Two models each solved 24 of 24 tasks on the first attempt in Avisoq, Python and Rust. The Avisoq solutions were the longest: about 380 lines against 200 for Python and 330 for Rust.">
 
@@ -216,7 +217,7 @@ when the program was granted neither files nor network, no right to write any fi
   the context.
 - **Arrays:** fixed layout, growable with `push(xs, v)` and `pop(xs)` on a `var` or `mut`
   parameter.
-- **Statements:** `if / else if / else`, `while cond invariant e { }`, `for i in a..b`,
+- **Statements:** `if / else if / else`, `while cond invariant e { }`, `for i in a..b`, `break`, `continue`,
   `match`, `return`, `assert`.
 - **Expressions:** `+ - * / %`, comparisons (also on `Str`), `and or not`,
   `sum(i in a..b: expr)`, `[i in a..b: expr]`.
@@ -232,8 +233,8 @@ when the program was granted neither files nor network, no right to write any fi
 |---|---|
 | `std/core` (always available) | `Option[T]`, `Result[T, E]`, `is_some`, `unwrap_or`, `is_ok`, `value_or` |
 | `std/strings` | `split`, `join`, `lines`, `trim`, `replace`, `repeat`, `contains`, `index_of`, `starts_with`, `ends_with`, `parse_int` |
-| `std/arrays` | `map`, `filter`, `fold`, `each`, `any`, `all`, `count_if`, `find_index`, `sort`, `sort_by` (stable), `sorted`, `reverse`, `concat`, `append`, `index_in`, `max_of`, `min_of` |
-| `std/math` | `min`, `max`, `clamp`, `abs`, `abs_float`, `pow` |
+| `std/arrays` | `map`, `filter`, `fold`, `each`, `any`, `all`, `count_if`, `find_index`, `equal`, `sort`, `sort_by` (stable), `sorted`, `reverse`, `concat`, `append`, `index_in`, `max_of`, `min_of` |
+| `std/math` | `min`, `max`, `clamp`, `abs`, `abs_float`, `pow`, `checked_add`, `checked_sub`, `checked_mul`, `int_max`, `int_min` |
 
 ## Packages
 

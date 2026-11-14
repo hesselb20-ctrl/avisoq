@@ -28,9 +28,15 @@ differ from the languages you know. Print this guide any time with `avisoq guide
 10. **Arrays and maps are never shared.** Using a whole local array for the last time moves
     it; otherwise write `copy(x)` when storing it somewhere else or returning a parameter.
     Reading elements (`xs[i]`) and passing arrays to functions is always fine.
-11. **No loops with `break` or `continue`.** Use a `while` with a condition, or `return` from a
-    helper function.
-12. **Comments are `//` only.**
+11. **`break` and `continue` work in `while` and `for` loops** and act on the innermost loop.
+    They are statements only.
+12. **Integer overflow stops the program.** When a result may not fit in 64 bits, use
+    `checked_add`, `checked_sub` or `checked_mul` from `std/math`; they return `Option[Int]`.
+    The smallest Int is written `-9223372036854775808`.
+13. **A variable cannot have the name of any function**, including standard library functions
+    of modules you import (`lines`, `map`, `min`, `sort` ...). The error names the module.
+14. **Arrays are not compared with `==`.** Use `equal(a, b)` from `std/arrays`.
+15. **Comments are `//` only.**
 
 ## A complete example
 
@@ -126,7 +132,7 @@ Functions can be passed as arguments, by name or as a lambda `fn(x) => x * 2`
 | `array(n, init)` | Array of `n` copies of `init` (`init` must not be an array or map) |
 | `[i in a..b: expr]` | Array built from an expression: `[i in 0..n: i * i]` |
 | `sum(i in a..b: expr)` | Sum of an `Int` or `Float` expression over a range |
-| `push(xs, v)` / `pop(xs)` | Add at / remove from the end. `xs` must be a `var` or `mut` parameter. |
+| `push(xs, v)` / `pop(xs)` | Add at / remove from the end; `pop` returns the removed value, which may be ignored. `xs` must be a `var` or `mut` parameter. |
 | `copy(x)` | Independent deep copy |
 | `str(x)` | Text of an `Int`, `Float` or `Bool` |
 | `int(f)` / `float(i)` | Convert. `int` truncates toward zero. |
@@ -145,9 +151,9 @@ joined with `+`. There is no string formatting or interpolation.
 
 | Module | Functions |
 |---|---|
-| `std/strings` | `split(s, sep) -> [Str]`, `join(parts, sep)`, `lines(s)`, `trim(s)`, `replace(s, from, to)`, `repeat(s, n)`, `contains(s, sub)`, `index_of(s, sub)` (-1 if absent), `starts_with`, `ends_with`, `parse_int(s) -> Option[Int]` |
-| `std/arrays` | `sort(xs)` (in place; Int, Float, Str), `sorted(xs)`, `sort_by(xs, fn(x) => key)`, `reverse(xs)`, `concat(a, b)`, `append(xs, x)`, `index_in(xs, x)`, `max_of(xs)`, `min_of(xs)`, `map(xs, f)`, `filter(xs, f)`, `fold(xs, start, f)`, `each(xs, f)`, `any(xs, f)`, `all(xs, f)`, `count_if(xs, f)`, `find_index(xs, f)` |
-| `std/math` | `min(a, b)`, `max(a, b)`, `clamp(x, lo, hi)`, `abs(i)`, `abs_float(f)`, `pow(base, exp)` |
+| `std/strings` | `split(s, sep) -> [Str]`, `join(parts, sep)`, `lines(s)`, `trim(s)`, `replace(s, from, to)`, `repeat(s, n)`, `contains(s, sub)`, `index_of(s, sub)` (-1 if absent), `starts_with`, `ends_with`, `parse_int(s) -> Option[Int]` (the whole Int range; `None` if it does not fit) |
+| `std/arrays` | `sort(xs)` (in place; Int, Float, Str), `sorted(xs)`, `sort_by(xs, fn(x) => key)`, `reverse(xs)`, `concat(a, b)`, `append(xs, x)`, `index_in(xs, x)`, `max_of(xs)`, `min_of(xs)`, `map(xs, f)`, `filter(xs, f)`, `fold(xs, start, f)`, `each(xs, f)`, `any(xs, f)`, `all(xs, f)`, `count_if(xs, f)`, `find_index(xs, f)`, `equal(a, b)` |
+| `std/math` | `min(a, b)`, `max(a, b)`, `clamp(x, lo, hi)`, `abs(i)`, `abs_float(f)`, `pow(base, exp)`, `checked_add(a, b)`, `checked_sub(a, b)`, `checked_mul(a, b)` (each `-> Option[Int]`, `None` on overflow), `int_max()`, `int_min()` |
 | always | `enum Option[T] { Some(value: T), None }`, `enum Result[T, E] { Ok(value: T), Err(error: E) }`, `unwrap_or(o, d)`, `is_some(o)`, `value_or(r, d)`, `is_ok(r)` |
 
 Do not define your own function with a name used by a module you import, or by a built-in.

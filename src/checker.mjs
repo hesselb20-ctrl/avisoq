@@ -33,6 +33,11 @@ export function check(program, diags) {
   let lambdaCount = 0;
   const growCalls = []; // every call, for working out which array parameters may grow
   const taken = (name) => typeDecls.has(name) || variants.has(name) || fns.has(name) || fnTemplates.has(name);
+  const definedIn = (name) => {
+    const d = fns.get(name) ?? fnTemplates.get(name);
+    const m = /std[\\/](\w+)\.avq$/.exec(d?.file ?? '');
+    return m ? ` (a function in std/${m[1]})` : '';
+  };
 
   for (const d of [...program.structs, ...program.enums]) {
     currentFile = d.file;
@@ -265,7 +270,7 @@ export function check(program, diags) {
         err('E0103', `'${name}' is already defined in this scope or an enclosing one`, node,
           'Avisoq does not allow shadowing; choose a new name');
       } else if (taken(name) || BUILTINS.has(name)) {
-        err('E0103', `'${name}' is the name of a function, type or variant`, node, 'choose a different variable name');
+        err('E0103', `'${name}' is already the name of a function, type or variant${definedIn(name)}`, node, 'names cannot be reused in Avisoq; choose a different variable name');
       }
       scopes[scopes.length - 1].set(name, sym);
       if (!sym.isParam) locals.push(sym);
@@ -452,7 +457,9 @@ export function check(program, diags) {
           if (e.op === '==' || e.op === '!=') {
             if (!BASE_TYPES.has(l)) {
               err('E0201', `'${e.op}' is not defined for ${l}`, e,
-                enums.has(l) ? 'use match to look inside an enum value' : 'only Int, Float, Bool and Str can be compared for equality; compare fields or elements instead');
+                enums.has(l) ? 'use match to look inside an enum value'
+                  : isArr(l) ? 'arrays are compared with equal(a, b) from std/arrays'
+                    : 'only Int, Float, Bool and Str can be compared for equality; compare fields or elements instead');
             }
             if (l === 'Str') program.usesStrings = true;
             return 'Bool';
@@ -1052,6 +1059,14 @@ export function check(program, diags) {
         case 'Assert':
           want(s.cond, 'Bool', 'assert condition');
           break;
+        case 'Break':
+        case 'Continue': {
+          const loop = loopStack[loopStack.length - 1];
+          if (!loop || (loop.kind !== 'While' && loop.kind !== 'For')) {
+            err('E0220', `'${s.kind.toLowerCase()}' is only allowed inside a while or for loop`, s, 'remove it, or use return to leave the function');
+          } else if (s.kind === 'Break') loop.hasBreak = true;
+          break;
+        }
         case 'ExprStmt':
           if (s.expr.kind !== 'Call') {
             expr(s.expr);

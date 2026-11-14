@@ -1,7 +1,9 @@
 // Avisoq native backend: checked AST -> C (GNU C17), compiled by GCC.
 import { readFileSync } from 'node:fs';
 import { FAIL, failInfo } from './fail.mjs';
-import { containerTest, elemOf, isArr, isMap, mangle, mapParts } from './types.mjs';
+import { children, containerTest, elemOf, isArr, isMap, mangle, mapParts } from './types.mjs';
+// INT64_C(-9223372036854775808) is not a valid C constant; spell the minimum the way <stdint.h> does
+const cint = (v) => (v === -(2n ** 63n) ? '(-INT64_C(9223372036854775807) - 1)' : `INT64_C(${v})`);
 
 const RUNTIME = readFileSync(new URL('./runtime.c', import.meta.url), 'utf8');
 
@@ -91,7 +93,7 @@ export function cgen(program, opts = {}) {
 
     function vexpr(e, m) {
       switch (e.kind) {
-        case 'IntLit': return `VI(INT64_C(${e.value}))`;
+        case 'IntLit': return `VI(${cint(e.value)})`;
         case 'FloatLit': return `VD(${floatLit(e.value)})`;
         case 'BoolLit': return e.value ? 'VI(INT64_C(-1))' : 'VI(INT64_C(0))';
         case 'Name': {
@@ -298,7 +300,7 @@ export function cgen(program, opts = {}) {
 
     function expr(e) {
       switch (e.kind) {
-        case 'IntLit': return `INT64_C(${e.value})`;
+        case 'IntLit': return cint(e.value);
         case 'FloatLit': {
           if (!Number.isFinite(e.value)) return '(1.0/0.0)';
           const s = String(e.value);
@@ -556,12 +558,20 @@ export function cgen(program, opts = {}) {
     }
 
     // A loop body whose allocations cannot outlive the iteration hands them back each time round.
+    const loops = []; // { id, mark } for the loops around the current statement
+    const usesJump = (s, kind) => { let found = false; const scan = (n) => { if (n.kind === kind) found = true; if (n.kind !== 'For' && n.kind !== 'While') for (const c of children(n)) scan(c); }; for (const b of s.body) scan(b); return found; };
     function loopBody(s) {
-      if (!s.iterReset) { block(s.body); return; }
-      const m = tmp();
-      ind++; line(`vmark ${m} = avisoq_mark();`); ind--;
+      const m = s.iterReset ? tmp() : null;
+      const ctx = { id: tmp(), mark: m };
+      ind++; if (m) line(`vmark ${m} = avisoq_mark();`); ind--;
+      loops.push(ctx);
       block(s.body);
-      ind++; line(`avisoq_reset(${m});`); ind--;
+      loops.pop();
+      ind++;
+      if (usesJump(s, 'Continue')) line(`cont_${ctx.id}: ;`);
+      if (m) line(`avisoq_reset(${m});`);
+      ind--;
+      return usesJump(s, 'Break') ? `brk_${ctx.id}: ;` : null;
     }
 
     function stmt(s) {
@@ -586,18 +596,25 @@ export function cgen(program, opts = {}) {
         case 'While':
           for (const c of s.invariants ?? []) line(`if (VUNLIKELY(!${expr(c.expr)})) avisoq_fail(${site(FAIL.INVARIANT, c, c.text)});`);
           line(`while (${expr(s.cond)}) {`);
-          loopBody(s);
-          ind++;
-          for (const c of s.invariants ?? []) line(`if (VUNLIKELY(!${expr(c.expr)})) avisoq_fail(${site(FAIL.INVARIANT, c, c.text)});`);
-          ind--;
-          line('}');
+          {
+            const after = loopBody(s);
+            ind++;
+            for (const c of s.invariants ?? []) line(`if (VUNLIKELY(!${expr(c.expr)})) avisoq_fail(${site(FAIL.INVARIANT, c, c.text)});`);
+            ind--;
+            line('}');
+            if (after) line(after);
+          }
           break;
         case 'For': {
           const en = tmp(), i = v(s.sym), st = tmp();
           line(`{ int64_t ${st} = ${expr(s.start)}; int64_t ${en} = ${expr(s.end)};`);
           line(`for (int64_t ${i} = ${st}; ${i} < ${en}; ${i}++) {`);
-          loopBody(s);
-          line('} }');
+          {
+            const after = loopBody(s);
+            line('}');
+            if (after) line(after);
+            line('}');
+          }
           break;
         }
         case 'Match': {
@@ -616,6 +633,14 @@ export function cgen(program, opts = {}) {
           }
           if (!hasElse) line('default: __builtin_unreachable();');
           line('} }');
+          break;
+        }
+        case 'Continue':
+          line(`goto cont_${loops[loops.length - 1].id};`);
+          break;
+        case 'Break': {
+          const loop = loops[loops.length - 1];
+          line(loop.mark ? `{ avisoq_reset(${loop.mark}); goto brk_${loop.id}; }` : `goto brk_${loop.id};`);
           break;
         }
         case 'Return':

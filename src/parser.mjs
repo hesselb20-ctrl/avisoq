@@ -7,6 +7,7 @@ export function parse(src) {
   const toks = lex(src);
   const eof = toks[toks.length - 1];
   let p = 0;
+  const INT_MIN_MAGNITUDE = 2n ** 63n;
   let prevEnd = 0;
   let prevLine = 1;
 
@@ -231,6 +232,12 @@ export function parse(src) {
         }
         case 'match':
           return parseMatch();
+        case 'break':
+          next();
+          return { kind: 'Break', ...at };
+        case 'continue':
+          next();
+          return { kind: 'Continue', ...at };
         case 'return': {
           next();
           let value = null;
@@ -347,6 +354,12 @@ export function parse(src) {
   const parseMul = () => binLoop(parseUnary, (t) => t.kind === 'op' && (t.value === '*' || t.value === '/' || t.value === '%'));
 
   function parseUnary() {
+    // -9223372036854775808 is one literal: its positive half does not fit in Int
+    if (isOp('-') && toks[p + 1] && toks[p + 1].kind === 'int' && toks[p + 1].value === INT_MIN_MAGNITUDE) {
+      const t = next();
+      next();
+      return { kind: 'IntLit', value: -INT_MIN_MAGNITUDE, raw: '-9223372036854775808', line: t.line, col: t.col };
+    }
     if (isOp('-')) {
       const t = next();
       return { kind: 'Unary', op: '-', operand: parseUnary(), line: t.line, col: t.col };
@@ -388,7 +401,11 @@ export function parse(src) {
   function parsePrimary() {
     const t = peek();
     const at = { line: t.line, col: t.col };
-    if (t.kind === 'int') { next(); return { kind: 'IntLit', value: t.value, raw: t.raw, ...at }; }
+    if (t.kind === 'int') {
+      if (t.value === INT_MIN_MAGNITUDE) throw new AvisoqError('E0002', `integer literal ${t.raw} does not fit in Int (64-bit signed)`, t.line, t.col, 'Int holds values from -9223372036854775808 to 9223372036854775807');
+      next();
+      return { kind: 'IntLit', value: t.value, raw: t.raw, ...at };
+    }
     if (t.kind === 'float') { next(); return { kind: 'FloatLit', value: t.value, raw: t.raw, ...at }; }
     if (t.kind === 'str') { next(); return { kind: 'StrLit', value: t.value, ...at }; }
     if (t.kind === 'kw' && (t.value === 'true' || t.value === 'false')) {

@@ -212,3 +212,12 @@ fn sort_by[T, K: Ord](xs: mut [T], key: fn(T) -> K) {
     xs[i] = copy(arranged[i])
   }
 }
+
+// True when a and b have the same length and the same elements in the same order.
+fn equal[T: Eq](a: [T], b: [T]) -> Bool {
+  if len(a) != len(b) { return false }
+  for i in 0..len(a) {
+    if a[i] != b[i] { return false }
+  }
+  return true
+}

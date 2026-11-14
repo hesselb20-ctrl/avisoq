@@ -105,6 +105,11 @@ These come from the agents' own reports and are the most useful output of the ru
 - The two agents reported opposite things about whether a bare `pop(xs)` is accepted as a
   statement. That has not been checked yet.
 
+Version 0.6 answers these: `break` and `continue`, `checked_add` / `checked_sub` /
+`checked_mul` in `std/math`, a literal for the smallest `Int`, `parse_int` over the whole range,
+`equal` for arrays, and a name-clash error that names the module. A bare `pop(xs)` was checked
+and is accepted. The benchmark has not been rerun on 0.6.
+
 ### Limits
 
 Same as above: two models from one vendor, tasks and tests written by the language's author,

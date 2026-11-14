@@ -418,6 +418,7 @@ export function prove(program, diags) {
     };
 
     // Returns the environment after the statements.
+    const loops = [];
     function block(stmts, env) {
       for (const s of stmts) {
         switch (s.kind) {
@@ -452,17 +453,31 @@ export function prove(program, diags) {
             adopt(env, join(block(s.then, t), s.els ? block(s.els, f) : f));
             break;
           }
+          case 'Break':
+            env.dead = true; // the rest of this path does not run; what holds after the loop is handled at the loop
+            break;
+          case 'Continue': {
+            const loop = loops[loops.length - 1];
+            if (loop && loop.kind === 'While' && !env.dead) checkInvariants(loop, env, false);
+            env.dead = true;
+            break;
+          }
           case 'While': {
             for (const c of s.invariants ?? []) visit(c.expr, env);
             if (!env.dead) checkInvariants(s, env, true);
             killAssigned(s.body, env);
+            // After a break neither the invariants nor the negated condition are known to hold.
+            const afterBreak = s.hasBreak ? fork(env) : null;
             for (const c of s.invariants ?? []) refine(c.expr, env, true); // holds at the top of every iteration
             visit(s.cond, env);
             const b = fork(env);
             refine(s.cond, b, true);
+            loops.push(s);
             const end = block(s.body, b);
+            loops.pop();
             if (!end.dead) checkInvariants(s, end, false);
             refine(s.cond, env, false);
+            if (afterBreak) adopt(env, afterBreak);
             break;
           }
           case 'For': {
@@ -471,7 +486,9 @@ export function prove(program, diags) {
             killAssigned(s.body, env);
             const b = fork(env);
             range(s, b);
+            loops.push(s);
             block(s.body, b);
+            loops.pop();
             break;
           }
           case 'Match': {
