@@ -1,0 +1,130 @@
+// A fraction in lowest terms with a positive denominator.
+struct Fr { n: Int, d: Int }
+
+struct FP { s: Str, pos: Int, bad: Bool }
+
+fn absolute(a: Int) -> Int {
+  if a < 0 {
+    return -a
+  }
+  return a
+}
+
+fn gcd_of(a: Int, b: Int) -> Int {
+  var x = absolute(a)
+  var y = absolute(b)
+  while y != 0 {
+    let t = x % y
+    x = y
+    y = t
+  }
+  return x
+}
+
+fn make_fr(n: Int, d: Int) -> Fr {
+  var nn = n
+  var dd = d
+  if dd < 0 {
+    nn = -nn
+    dd = -dd
+  }
+  let g = gcd_of(nn, dd)
+  return Fr(n: nn / g, d: dd / g)
+}
+
+fn fr_add(a: Fr, b: Fr) -> Fr {
+  return make_fr(a.n * b.d + b.n * a.d, a.d * b.d)
+}
+
+fn fr_sub(a: Fr, b: Fr) -> Fr {
+  return make_fr(a.n * b.d - b.n * a.d, a.d * b.d)
+}
+
+fn fr_mul(a: Fr, b: Fr) -> Fr {
+  return make_fr(a.n * b.n, a.d * b.d)
+}
+
+fn pk_f(p: mut FP) -> Int {
+  while p.pos < len(p.s) and byte_at(p.s, p.pos) == ' ' {
+    p.pos += 1
+  }
+  if p.pos < len(p.s) {
+    return byte_at(p.s, p.pos)
+  }
+  return -1
+}
+
+fn parse_fatom(p: mut FP) -> Fr {
+  let c = pk_f(p)
+  if c == '(' {
+    p.pos += 1
+    let inner = parse_fexpr(p)
+    if pk_f(p) == ')' {
+      p.pos += 1
+    }
+    return inner
+  }
+  var v = 0
+  var d = c
+  while d >= '0' and d <= '9' {
+    v = v * 10 + (d - '0')
+    p.pos += 1
+    d = pk_f(p)
+  }
+  return Fr(n: v, d: 1)
+}
+
+fn parse_funary(p: mut FP) -> Fr {
+  if pk_f(p) == '-' {
+    p.pos += 1
+    let inner = parse_funary(p)
+    return Fr(n: -inner.n, d: inner.d)
+  }
+  return parse_fatom(p)
+}
+
+fn parse_fterm(p: mut FP) -> Fr {
+  var acc = parse_funary(p)
+  var c = pk_f(p)
+  while c == '*' or c == '/' {
+    p.pos += 1
+    let r = parse_funary(p)
+    if c == '*' {
+      acc = fr_mul(acc, r)
+    } else if r.n == 0 {
+      p.bad = true
+    } else {
+      acc = make_fr(acc.n * r.d, acc.d * r.n)
+    }
+    c = pk_f(p)
+  }
+  return acc
+}
+
+fn parse_fexpr(p: mut FP) -> Fr {
+  var acc = parse_fterm(p)
+  var c = pk_f(p)
+  while c == '+' or c == '-' {
+    p.pos += 1
+    let r = parse_fterm(p)
+    if c == '+' {
+      acc = fr_add(acc, r)
+    } else {
+      acc = fr_sub(acc, r)
+    }
+    c = pk_f(p)
+  }
+  return acc
+}
+
+fn frac_calc(s: Str) -> Str {
+  var p = FP(s: s, pos: 0, bad: false)
+  let v = parse_fexpr(p)
+  if p.bad {
+    return "div0"
+  }
+  if v.d == 1 {
+    return str(v.n)
+  }
+  return str(v.n) + "/" + str(v.d)
+}

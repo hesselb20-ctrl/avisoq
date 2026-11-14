@@ -1,0 +1,90 @@
+fn strip_zeros(s: Str) -> Str {
+  var i = 0
+  while i < len(s) - 1 and s[i] == '0' { i += 1 }
+  return s[i..len(s)]
+}
+
+// compare magnitudes (no leading zeros): -1, 0, 1
+fn cmp_mag(a: Str, b: Str) -> Int {
+  if len(a) != len(b) {
+    if len(a) < len(b) { return -1 }
+    return 1
+  }
+  if a < b { return -1 }
+  if a == b { return 0 }
+  return 1
+}
+
+// a - b for magnitudes with a >= b
+fn sub_mag(a: Str, b: Str) -> Str {
+  var digits: [Int] = []
+  var borrow = 0
+  var i = len(a) - 1
+  var j = len(b) - 1
+  while i >= 0 {
+    var d = (a[i] - '0') - borrow
+    if j >= 0 { d = d - (b[j] - '0') }
+    if d < 0 {
+      d += 10
+      borrow = 1
+    } else {
+      borrow = 0
+    }
+    push(digits, d)
+    i -= 1
+    j -= 1
+  }
+  var out = ""
+  var k = len(digits) - 1
+  while k >= 0 {
+    out = out + chr('0' + digits[k])
+    k -= 1
+  }
+  return strip_zeros(out)
+}
+
+fn big_divmod(a: Str, b: Str) -> Str {
+  var neg_a = false
+  var neg_b = false
+  var ma = a
+  var mb = b
+  if a[0] == '-' {
+    neg_a = true
+    ma = a[1..len(a)]
+  }
+  if b[0] == '-' {
+    neg_b = true
+    mb = b[1..len(b)]
+  }
+  var rem = "0"
+  var quo = ""
+  for d in ma {
+    if rem == "0" {
+      rem = chr(d)
+    } else {
+      rem = rem + chr(d)
+    }
+    var cnt = 0
+    while cmp_mag(rem, mb) >= 0 {
+      rem = sub_mag(rem, mb)
+      cnt += 1
+    }
+    quo = quo + str(cnt)
+  }
+  quo = strip_zeros(quo)
+  var qs = quo
+  var rs = rem
+  if neg_a != neg_b and quo != "0" { qs = "-" + quo }
+  if neg_a and rem != "0" { rs = "-" + rem }
+  return qs + " " + rs
+}
+
+test "big_divmod" {
+  assert big_divmod("-7", "2") == "-3 -1"
+  assert big_divmod("7", "-2") == "-3 1"
+  assert big_divmod("0", "5") == "0 0"
+  assert big_divmod("5", "7") == "0 5"
+  assert big_divmod("-5", "7") == "0 -5"
+  assert big_divmod("100000000000000000000000000000000000000000000000000", "3") == "33333333333333333333333333333333333333333333333333 1"
+  assert big_divmod("10", "10") == "1 0"
+}

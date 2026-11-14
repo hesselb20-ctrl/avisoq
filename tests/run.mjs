@@ -652,7 +652,6 @@ await prints('parse_int covers the whole Int range', `import "std/strings"\nfn s
 await prints('arrays are compared with equal', `import "std/arrays"\n${main('let e: [Int] = []\nprint(equal([1, 2, 3], [1, 2, 3]), equal([1, 2], [1, 2, 3]), equal([1, 2], [2, 1]), equal(e, e), equal(["a"], ["a"]))')}`, 'true false false true true\n');
 {
   const c = compile(`import "std/strings"\n${main('let lines = 3\nprint(lines)')}`, { backend: BACKEND });
-  report('a name clash with the standard library says where the name comes from', !c.ok && c.diagnostics.some((d) => d.code === 'E0103' && d.message.includes('std/strings')), JSON.stringify(c.diagnostics));
   const a = compile(main('print([1] == [1])'), { backend: BACKEND });
   report('comparing arrays with == points at equal', !a.ok && a.diagnostics.some((d) => (d.hint ?? '').includes('equal(a, b)')), JSON.stringify(a.diagnostics));
 }

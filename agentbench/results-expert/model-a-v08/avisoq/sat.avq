@@ -1,0 +1,45 @@
+import "std/arrays"
+
+fn sat(n: Int, clauses: [Int]) -> [Int] {
+  var total = 1
+  for i in 0..n { total *= 2 }
+  for mask in 0..total {
+    var bits = array(n + 1, 0)
+    var rest = mask
+    var v = n
+    while v >= 1 {
+      bits[v] = rest % 2
+      rest = rest / 2
+      v -= 1
+    }
+    var all_ok = true
+    var clause_ok = false
+    for lit in clauses {
+      if lit == 0 {
+        if not clause_ok { all_ok = false }
+        clause_ok = false
+      } else if lit > 0 {
+        if bits[lit] == 1 { clause_ok = true }
+      } else {
+        if bits[-lit] == 0 { clause_ok = true }
+      }
+      if not all_ok { break }
+    }
+    if all_ok {
+      var res: [Int] = []
+      for k in 1..(n + 1) { push(res, bits[k]) }
+      return res
+    }
+  }
+  return [-1]
+}
+
+
+test "sat" {
+  assert equal(sat(2, [1, 0]), [1, 0])
+  assert equal(sat(2, [1, 0, -1, 0]), [-1])
+  assert equal(sat(3, []), [0, 0, 0])
+  assert equal(sat(2, [0]), [-1])
+  assert equal(sat(3, [-1, -2, 0, 2, 3, 0]), [0, 0, 1])
+  assert equal(sat(1, [-1, 0]), [0])
+}

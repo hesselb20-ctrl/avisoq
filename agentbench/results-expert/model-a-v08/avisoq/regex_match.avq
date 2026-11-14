@@ -1,0 +1,131 @@
+struct Nfa { pat: Str, pos: Int, count: Int, ef: [Int], et: [Int], cf: [Int], ct: [Int], cc: [Int] }
+
+fn new_state(p: mut Nfa) -> Int {
+  p.count += 1
+  return p.count - 1
+}
+
+fn add_eps(p: mut Nfa, a: Int, b: Int) {
+  push(p.ef, a)
+  push(p.et, b)
+}
+
+fn parse_alt(p: mut Nfa) -> (Int, Int) {
+  let s = new_state(p)
+  let e = new_state(p)
+  while true {
+    let (a, b) = parse_seq(p)
+    add_eps(p, s, a)
+    add_eps(p, b, e)
+    if p.pos < len(p.pat) and p.pat[p.pos] == '|' {
+      p.pos += 1
+    } else {
+      break
+    }
+  }
+  return (s, e)
+}
+
+fn parse_seq(p: mut Nfa) -> (Int, Int) {
+  let start = new_state(p)
+  var cur = start
+  while p.pos < len(p.pat) and p.pat[p.pos] != '|' and p.pat[p.pos] != ')' {
+    let (a, b) = parse_item(p)
+    add_eps(p, cur, a)
+    cur = b
+  }
+  return (start, cur)
+}
+
+fn parse_item(p: mut Nfa) -> (Int, Int) {
+  var a = 0
+  var b = 0
+  let ch = p.pat[p.pos]
+  if ch == '(' {
+    p.pos += 1
+    let (x, y) = parse_alt(p)
+    a = x
+    b = y
+    p.pos += 1
+  } else {
+    a = new_state(p)
+    b = new_state(p)
+    push(p.cf, a)
+    push(p.ct, b)
+    if ch == '.' {
+      push(p.cc, -1)
+    } else {
+      push(p.cc, ch)
+    }
+    p.pos += 1
+  }
+  while p.pos < len(p.pat) and (p.pat[p.pos] == '*' or p.pat[p.pos] == '+' or p.pat[p.pos] == '?') {
+    let op = p.pat[p.pos]
+    p.pos += 1
+    let s2 = new_state(p)
+    let e2 = new_state(p)
+    add_eps(p, s2, a)
+    if op == '*' or op == '?' { add_eps(p, s2, e2) }
+    if op == '*' or op == '+' { add_eps(p, b, a) }
+    add_eps(p, b, e2)
+    a = s2
+    b = e2
+  }
+  return (a, b)
+}
+
+fn close_set(p: Nfa, set: mut [Bool]) {
+  var changed = true
+  while changed {
+    changed = false
+    for i in 0..len(p.ef) {
+      if set[p.ef[i]] and not set[p.et[i]] {
+        set[p.et[i]] = true
+        changed = true
+      }
+    }
+  }
+}
+
+fn regex_match(pattern: Str, text: Str) -> Bool {
+  var p = Nfa(pat: pattern, pos: 0, count: 0, ef: [], et: [], cf: [], ct: [], cc: [])
+  let (s, e) = parse_alt(p)
+  var cur = array(p.count, false)
+  cur[s] = true
+  close_set(p, cur)
+  for t in text {
+    var nxt = array(p.count, false)
+    for i in 0..len(p.cf) {
+      if cur[p.cf[i]] and (p.cc[i] == -1 or p.cc[i] == t) {
+        nxt[p.ct[i]] = true
+      }
+    }
+    close_set(p, nxt)
+    cur = nxt
+  }
+  return cur[e]
+}
+
+test "regex" {
+  assert regex_match("", "")
+  assert not regex_match("", "a")
+  assert regex_match("a|", "")
+  assert regex_match("a|", "a")
+  assert not regex_match("a|", "b")
+  assert regex_match("()", "")
+  assert regex_match("(ab)*", "ababab")
+  assert not regex_match("(ab)*", "aba")
+  assert regex_match(".*", "hello")
+  assert regex_match("a+b?c", "aaac")
+  assert not regex_match("a+b?c", "c")
+  assert regex_match("(a|b)*abb", "ababb")
+  assert regex_match("(a*)*", "aaaa")
+  assert regex_match("(a*)*b", "aaab")
+  assert not regex_match("(a*)*b", "aaaa")
+  assert regex_match("a?a?a?aaa", "aaa")
+  assert regex_match("(|a)+", "aa")
+  assert regex_match("(a|)(b|)", "")
+  assert regex_match("ab|cd", "cd")
+  assert not regex_match("ab|cd", "abcd")
+  assert regex_match("(a+)+b", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab")
+}

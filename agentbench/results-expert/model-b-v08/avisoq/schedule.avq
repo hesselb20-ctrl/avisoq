@@ -1,0 +1,97 @@
+import "std/strings"
+
+// Shape check for HH:MM-HH:MM. Returns true only when the entry has exactly that layout.
+fn shape_ok(e: Str) -> Bool {
+  if len(e) != 11 {
+    return false
+  }
+  if byte_at(e, 2) != ':' or byte_at(e, 5) != '-' or byte_at(e, 8) != ':' {
+    return false
+  }
+  return true
+}
+
+// Two digits at position i of e, or -1 when they are not both digits.
+fn two_digits(e: Str, i: Int) -> Int {
+  if i + 1 >= len(e) {
+    return -1
+  }
+  let a = byte_at(e, i)
+  let b = byte_at(e, i + 1)
+  if a >= '0' and a <= '9' {
+    if b >= '0' and b <= '9' {
+      return (a - '0') * 10 + (b - '0')
+    }
+  }
+  return -1
+}
+
+// Minutes since midnight of the time at position i (HH:MM), or -1 when it is not a valid time.
+fn clock_at(e: Str, i: Int) -> Int {
+  let h = two_digits(e, i)
+  let m = two_digits(e, i + 3)
+  if h < 0 or m < 0 or h > 23 or m > 59 {
+    return -1
+  }
+  return h * 60 + m
+}
+
+fn pad2(n: Int) -> Str {
+  if n < 10 {
+    return "0" + str(n)
+  }
+  return str(n)
+}
+
+fn clock(t: Int) -> Str {
+  return pad2(t / 60) + ":" + pad2(t % 60)
+}
+
+fn schedule(s: Str) -> Str {
+  var best: [Int] = array(1440, -1)
+  var invalid = 0
+  if len(s) > 0 {
+    let parts = split(s, ",")
+    for i in 0..len(parts) {
+      let e = parts[i]
+      var a = -1
+      var b = -1
+      if shape_ok(e) {
+        a = clock_at(e, 0)
+        b = clock_at(e, 6)
+      }
+      if a < 0 or b < 0 or b <= a {
+        invalid += 1
+      } else {
+        if b > best[a] {
+          best[a] = b
+        }
+      }
+    }
+  }
+  var out: [Str] = []
+  var total = 0
+  var cs = -1
+  var ce = -1
+  for m in 0..1440 {
+    if best[m] >= 0 {
+      if cs >= 0 and m <= ce {
+        if best[m] > ce {
+          ce = best[m]
+        }
+      } else {
+        if cs >= 0 {
+          push(out, clock(cs) + "-" + clock(ce))
+          total += ce - cs
+        }
+        cs = m
+        ce = best[m]
+      }
+    }
+  }
+  if cs >= 0 {
+    push(out, clock(cs) + "-" + clock(ce))
+    total += ce - cs
+  }
+  return join(out, ",") + ";total=" + str(total) + ";invalid=" + str(invalid)
+}

@@ -1,0 +1,116 @@
+import "std/strings"
+import "std/arrays"
+
+struct Ctx { formulas: Map[Str, Str], vals: Map[Str, Int], state: Map[Str, Int], cyc: Map[Str, Int] }
+struct Fp { src: Str, pos: Int, bad: Bool }
+
+fn parse_factor(f: mut Fp, c: mut Ctx) -> Int {
+  let ch = f.src[f.pos]
+  if ch == '-' {
+    f.pos += 1
+    return -parse_factor(f, c)
+  }
+  if ch == '(' {
+    f.pos += 1
+    let v = parse_sum(f, c)
+    f.pos += 1
+    return v
+  }
+  if is_digit(ch) {
+    var v = 0
+    while f.pos < len(f.src) and is_digit(f.src[f.pos]) {
+      v = v * 10 + (f.src[f.pos] - '0')
+      f.pos += 1
+    }
+    return v
+  }
+  let name = f.src[f.pos..f.pos + 2]
+  f.pos += 2
+  eval_cell(c, name)
+  if get_or(c.cyc, name, 0) == 1 {
+    f.bad = true
+    return 0
+  }
+  return get_or(c.vals, name, 0)
+}
+
+fn parse_prod(f: mut Fp, c: mut Ctx) -> Int {
+  var v = parse_factor(f, c)
+  while f.pos < len(f.src) and f.src[f.pos] == '*' {
+    f.pos += 1
+    let w = parse_factor(f, c)
+    v = v * w
+  }
+  return v
+}
+
+fn parse_sum(f: mut Fp, c: mut Ctx) -> Int {
+  var v = parse_prod(f, c)
+  while f.pos < len(f.src) and (f.src[f.pos] == '+' or f.src[f.pos] == '-') {
+    let op = f.src[f.pos]
+    f.pos += 1
+    let w = parse_prod(f, c)
+    if op == '+' {
+      v = v + w
+    } else {
+      v = v - w
+    }
+  }
+  return v
+}
+
+fn eval_cell(c: mut Ctx, name: Str) {
+  let st = get_or(c.state, name, 0)
+  if st == 2 { return }
+  if st == 1 {
+    put(c.cyc, name, 1)
+    return
+  }
+  if not has(c.formulas, name) {
+    put(c.state, name, 2)
+    put(c.vals, name, 0)
+    return
+  }
+  put(c.state, name, 1)
+  var f = Fp(src: get(c.formulas, name), pos: 0, bad: false)
+  let v = parse_sum(f, c)
+  if f.bad { put(c.cyc, name, 1) }
+  put(c.vals, name, v)
+  put(c.state, name, 2)
+}
+
+fn sheet(cells: Str) -> Str {
+  var c = Ctx(formulas: {}, vals: {}, state: {}, cyc: {})
+  var names: [Str] = []
+  for entry in split(cells, ";") {
+    if len(entry) < 3 { continue }
+    let name = entry[0..2]
+    if not has(c.formulas, name) { push(names, name) }
+    put(c.formulas, name, entry[3..len(entry)])
+  }
+  sort(names)
+  var out: [Str] = []
+  for name in names {
+    eval_cell(c, name)
+    if get_or(c.cyc, name, 0) == 1 {
+      push(out, name + "=#CYCLE")
+    } else {
+      push(out, name + "=" + str(get(c.vals, name)))
+    }
+  }
+  return join(out, ",")
+}
+
+test "sheet" {
+  assert sheet("") == ""
+  assert sheet("A1=1+2*3") == "A1=7"
+  assert sheet("A1=B1;B1=A1") == "A1=#CYCLE,B1=#CYCLE"
+  assert sheet("A1=B1+1;B1=C1;C1=4") == "A1=5,B1=4,C1=4"
+  assert sheet("A1=Z9+2") == "A1=2"
+  assert sheet("A1=1;A1=2") == "A1=2"
+  assert sheet("A1=A1") == "A1=#CYCLE"
+  assert sheet("A1=B1;B1=B1;C1=A1;D1=7") == "A1=#CYCLE,B1=#CYCLE,C1=#CYCLE,D1=7"
+  assert sheet("A1=--3-(2-1)*-2") == "A1=5"
+  assert sheet("A1=0*B1;B1=A1") == "A1=#CYCLE,B1=#CYCLE"
+  assert sheet("B2=1;A1=B2-3-4") == "A1=-6,B2=1"
+}

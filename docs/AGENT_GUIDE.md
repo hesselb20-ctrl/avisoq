@@ -91,7 +91,7 @@ let size = if n > 10 then "big" else "small"   // a conditional expression (not 
 
 - A character literal is an `Int`: `'a'` is 97, `'\n'` is 10, `' '` is 32. Never write the number.
 - `std/strings` has `is_digit(b)`, `is_letter(b)`, `is_lower(b)`, `is_upper(b)`, `is_space(b)`,
-  `pad_left(s, width, fill)` and `pad_right(s, width, fill)`.
+  `pad_left(s, width, "0")` and `pad_right(s, width, " ")` (the fill is a one-character Str).
 - In `for x in items`, `x` is a read-only view of the element. To change elements, loop over
   the index: `for i in 0..len(items) { items[i] = ... }`.
 
@@ -267,7 +267,8 @@ joined with `+`. There is no string formatting or interpolation.
 | `std/math` | `min(a, b)`, `max(a, b)`, `clamp(x, lo, hi)`, `abs(i)`, `abs_float(f)`, `pow(base, exp)`, `checked_add(a, b)`, `checked_sub(a, b)`, `checked_mul(a, b)` (each `-> Option[Int]`, `None` on overflow), `int_max()`, `int_min()` |
 | always | `enum Option[T] { Some(value: T), None }`, `enum Result[T, E] { Ok(value: T), Err(error: E) }`, `unwrap_or(o, d)`, `is_some(o)`, `value_or(r, d)`, `is_ok(r)` |
 
-Do not define your own function with a name used by a module you import, or by a built-in.
+You may define a function with the same name as a standard library function: yours is used.
+Do not reuse the name of a built-in.
 
 ## Patterns
 

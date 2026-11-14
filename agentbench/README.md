@@ -218,6 +218,48 @@ with fresh agents and the same instructions. Solutions are in `results-expert/mo
   across sibling branches, no bit operations, no `for` loop that counts down, no conditional
   expression.
 
+### Rerun on version 0.8, and how fast the agent-written code runs
+
+Version 0.8 added shorthand aimed at the bulk in the earlier solutions: character literals
+(`'a'` is the Int 97), `for x in items`, `+=`, `s[i]` and `s[a..b]` on strings, a conditional
+expression, and byte-class helpers in `std/strings`. A program's own function now also wins over
+a standard library function of the same name. Solutions are in `results-expert/model-a-v08`
+and `model-b-v08`.
+
+| Avisoq, run A / run B | 0.6 | 0.7 | 0.8 | Python | Rust |
+|---|---:|---:|---:|---:|---:|
+| Correct out of 10 | 9 / 10 | 10 / 10 | 10 / 10 | 10 / 10 | 10 / 10 |
+| Time the agent took | 220 s / 584 s | 213 s / 391 s | 164 s / 398 s | 117 s / 165 s | 116 s / 212 s |
+| Non-blank lines | 1154 / 1040 | 1194 / 1040 | 1024 / 1199 | 562 / 669 | 1015 / 1186 |
+
+Both agents used character literals, `+=` and string indexing in most solutions; run A used
+`for x in items` in 6 of 10, run B in none. Run A got shorter and faster; run B did not. An
+agent still takes about 1.4 times (run A) to 2.4 times (run B) as long with Avisoq as with
+Python. Writing speed is not where Avisoq wins.
+
+**Where it does win over Python: how fast the result runs.** `speed.mjs` runs each agent's
+solutions on every hidden test input, 20 times over, inside one process (start-up and compile
+time are not counted). Avisoq is the native backend with every check on; Rust is `rustc -O`.
+Total for all 10 tasks, best of three:
+
+| | Avisoq 0.8 | Python | Rust | Python / Avisoq | Rust / Avisoq |
+|---|---:|---:|---:|---:|---:|
+| Run A (Sonnet) | 29 ms | 240 ms | 25 ms | 8.3x | 0.86x |
+| Run B (Haiku) | 47 ms | 223 ms | 26 ms | 4.8x | 0.55x |
+
+- **Against Python:** the Avisoq programs ran 5 to 8 times faster in total, and faster on 8 or 9
+  of the 10 tasks. The exception is `big_divmod`, where Python uses its built-in big integers
+  and Avisoq does long division on digit arrays (10 to 30 times slower).
+- **Against Rust:** slower in total, by 14% in run A and 45% in run B. Avisoq was ahead on 6
+  tasks in run A and on 2 in run B.
+- The agents chose their own algorithms per language, so a single task can swing either way for
+  reasons that have nothing to do with the language. The totals are the fairer number, and
+  each is dominated by one or two tasks.
+
+```
+node agentbench/speed.mjs results-expert/model-a --avisoq results-expert/model-a-v08
+```
+
 ## Running it yourself
 
 ```

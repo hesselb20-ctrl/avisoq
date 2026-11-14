@@ -1,0 +1,39 @@
+import "std/strings"
+import "std/arrays"
+
+fn is_digit(b: Int) -> Bool {
+  return b == '7'
+}
+
+fn repeat(s: Str, n: Int) -> Str {
+  return "mine"
+}
+
+fn sort(xs: mut [Int]) {
+  xs[0] = 99
+}
+
+fn main() uses io {
+  var xs = [3, 1, 2]
+  sort(xs)
+  print(
+    is_digit('7'),
+    is_digit('3'),
+    repeat("ab", 3),
+    pad_left("x", 4, "-"),
+    xs[0],
+    sorted([3, 1, 2])[0],
+    is_letter('q'),
+  )
+}
+
+fn at(i: Int) -> Int {
+  return i + 1
+}
+
+test "names across the library boundary" {
+  let lines = split("a b", " ")
+  let any = 3
+  assert len(lines) == 2 and any == 3 and at(1) == 2
+  assert starts_with("abc", "ab") and index_of("abc", "c") == 2
+}

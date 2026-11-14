@@ -1,0 +1,141 @@
+// Thompson-style NFA: states hold a kind (1 letter, 2 any, 3 split, 4 epsilon),
+// the letter, and up to two successors. The match state is the last one built.
+struct Nfa { pat: Str, pos: Int, kind: [Int], ch: [Int], o1: [Int], o2: [Int] }
+
+fn add_state(n: mut Nfa, k: Int, c: Int, n1: Int, n2: Int) -> Int {
+  push(n.kind, k)
+  push(n.ch, c)
+  push(n.o1, n1)
+  push(n.o2, n2)
+  return len(n.kind) - 1
+}
+
+fn peek_pat(n: mut Nfa) -> Int {
+  if n.pos < len(n.pat) {
+    return byte_at(n.pat, n.pos)
+  }
+  return -1
+}
+
+fn parse_base(n: mut Nfa) -> (Int, Int) {
+  let c = peek_pat(n)
+  if c == '(' {
+    n.pos += 1
+    let (gs, ge) = parse_alt(n)
+    if peek_pat(n) == ')' {
+      n.pos += 1
+    }
+    return (gs, ge)
+  }
+  n.pos += 1
+  var kd = 1
+  if c == '.' {
+    kd = 2
+  }
+  let cs = add_state(n, kd, c, -1, -1)
+  let ce = add_state(n, 4, 0, -1, -1)
+  n.o1[cs] = ce
+  return (cs, ce)
+}
+
+fn parse_quant(n: mut Nfa) -> (Int, Int) {
+  let (bs, be) = parse_base(n)
+  let q = peek_pat(n)
+  if q == '*' {
+    n.pos += 1
+    let ep = add_state(n, 4, 0, -1, -1)
+    let sp = add_state(n, 3, 0, bs, ep)
+    n.o1[be] = sp
+    return (sp, ep)
+  }
+  if q == '+' {
+    n.pos += 1
+    let ep = add_state(n, 4, 0, -1, -1)
+    let sp = add_state(n, 3, 0, bs, ep)
+    n.o1[be] = sp
+    return (bs, ep)
+  }
+  if q == '?' {
+    n.pos += 1
+    let ep = add_state(n, 4, 0, -1, -1)
+    let sp = add_state(n, 3, 0, bs, ep)
+    n.o1[be] = ep
+    return (sp, ep)
+  }
+  return (bs, be)
+}
+
+fn parse_seq(n: mut Nfa) -> (Int, Int) {
+  let es = add_state(n, 4, 0, -1, -1)
+  var e = es
+  var c = peek_pat(n)
+  while c != -1 and c != '|' and c != ')' {
+    let (qs, qe) = parse_quant(n)
+    n.o1[e] = qs
+    e = qe
+    c = peek_pat(n)
+  }
+  return (es, e)
+}
+
+fn parse_alt(n: mut Nfa) -> (Int, Int) {
+  let (fs, fe) = parse_seq(n)
+  var s = fs
+  var e = fe
+  while peek_pat(n) == '|' {
+    n.pos += 1
+    let (gs, ge) = parse_seq(n)
+    let ep = add_state(n, 4, 0, -1, -1)
+    let sp = add_state(n, 3, 0, s, gs)
+    n.o1[e] = ep
+    n.o1[ge] = ep
+    s = sp
+    e = ep
+  }
+  return (s, e)
+}
+
+// Adds to set every state reachable from start by epsilon moves (splits and epsilon states).
+fn add_closure(n: Nfa, start: Int, set: mut [Bool]) {
+  var stk: [Int] = [start]
+  while len(stk) > 0 {
+    let st = pop(stk)
+    if not set[st] {
+      set[st] = true
+      if n.kind[st] == 3 {
+        push(stk, n.o1[st])
+        push(stk, n.o2[st])
+      } else if n.kind[st] == 4 and n.o1[st] >= 0 {
+        push(stk, n.o1[st])
+      }
+    }
+  }
+}
+
+fn regex_match(pattern: Str, text: Str) -> Bool {
+  var kd: [Int] = []
+  var cl: [Int] = []
+  var n1: [Int] = []
+  var n2: [Int] = []
+  var n = Nfa(pat: pattern, pos: 0, kind: kd, ch: cl, o1: n1, o2: n2)
+  let (s, e) = parse_alt(n)
+  let acc = add_state(n, 4, 0, -1, -1)
+  n.o1[e] = acc
+  let m = len(n.kind)
+  var cur: [Bool] = array(m, false)
+  add_closure(n, s, cur)
+  for i in 0..len(text) {
+    var nxt: [Bool] = array(m, false)
+    let c = byte_at(text, i)
+    for q in 0..m {
+      if cur[q] and n.kind[q] == 1 and n.ch[q] == c {
+        add_closure(n, n.o1[q], nxt)
+      }
+      if cur[q] and n.kind[q] == 2 {
+        add_closure(n, n.o1[q], nxt)
+      }
+    }
+    cur = nxt
+  }
+  return cur[acc]
+}

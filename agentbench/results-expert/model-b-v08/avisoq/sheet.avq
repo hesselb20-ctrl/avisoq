@@ -1,0 +1,146 @@
+import "std/strings"
+
+// Cells are numbered: letter index * 9 + digit - 1 (A1 is 0, A9 is 8, B1 is 9, ...).
+struct Sheet { forms: [Str], asg: [Bool], state: [Int], val: [Int], bad: [Bool] }
+
+struct FP { s: Str, pos: Int, cyc: Bool }
+
+fn pk(p: mut FP) -> Int {
+  if p.pos < len(p.s) {
+    return byte_at(p.s, p.pos)
+  }
+  return -1
+}
+
+fn is_upper_ch(b: Int) -> Bool {
+  return b >= 'A' and b <= 'Z'
+}
+
+fn is_digit_ch(b: Int) -> Bool {
+  return b >= '0' and b <= '9'
+}
+
+// Value of a referenced cell. An unassigned cell is 0; a cell that is still being
+// worked out, or that is itself #CYCLE, makes the reading cell #CYCLE.
+fn ref_value(p: mut FP, sh: mut Sheet, idx: Int) -> Int {
+  if not sh.asg[idx] {
+    return 0
+  }
+  if sh.state[idx] == 0 {
+    cell_eval(sh, idx)
+  }
+  if sh.state[idx] == 1 or sh.bad[idx] {
+    p.cyc = true
+    return 0
+  }
+  return sh.val[idx]
+}
+
+fn parse_atom(p: mut FP, sh: mut Sheet) -> Int {
+  let c = pk(p)
+  if is_digit_ch(c) {
+    var v = 0
+    var d = pk(p)
+    while is_digit_ch(d) {
+      v = v * 10 + (d - '0')
+      p.pos += 1
+      d = pk(p)
+    }
+    return v
+  }
+  if c == '(' {
+    p.pos += 1
+    let inner = parse_sum(p, sh)
+    if pk(p) == ')' {
+      p.pos += 1
+    }
+    return inner
+  }
+  if is_upper_ch(c) {
+    let idx = (c - 'A') * 9 + (byte_at(p.s, p.pos + 1) - '1')
+    p.pos += 2
+    return ref_value(p, sh, idx)
+  }
+  return 0
+}
+
+fn parse_unary(p: mut FP, sh: mut Sheet) -> Int {
+  if pk(p) == '-' {
+    p.pos += 1
+    let inner = parse_unary(p, sh)
+    return -inner
+  }
+  return parse_atom(p, sh)
+}
+
+fn parse_prod(p: mut FP, sh: mut Sheet) -> Int {
+  var acc = parse_unary(p, sh)
+  var c = pk(p)
+  while c == '*' {
+    p.pos += 1
+    let r = parse_unary(p, sh)
+    acc = acc * r
+    c = pk(p)
+  }
+  return acc
+}
+
+fn parse_sum(p: mut FP, sh: mut Sheet) -> Int {
+  var acc = parse_prod(p, sh)
+  var c = pk(p)
+  while c == '+' or c == '-' {
+    p.pos += 1
+    let r = parse_prod(p, sh)
+    if c == '+' {
+      acc = acc + r
+    } else {
+      acc = acc - r
+    }
+    c = pk(p)
+  }
+  return acc
+}
+
+fn cell_eval(sh: mut Sheet, idx: Int) {
+  sh.state[idx] = 1
+  var p = FP(s: sh.forms[idx], pos: 0, cyc: false)
+  let v = parse_sum(p, sh)
+  sh.state[idx] = 2
+  sh.bad[idx] = p.cyc
+  sh.val[idx] = v
+}
+
+fn sheet(cells: Str) -> Str {
+  var forms: [Str] = array(234, "")
+  var asg: [Bool] = array(234, false)
+  var state: [Int] = array(234, 0)
+  var val: [Int] = array(234, 0)
+  var bad: [Bool] = array(234, false)
+  var sh = Sheet(forms: forms, asg: asg, state: state, val: val, bad: bad)
+  let parts = split(cells, ";")
+  for i in 0..len(parts) {
+    let seg = parts[i]
+    if len(seg) >= 4 {
+      let idx = (byte_at(seg, 0) - 'A') * 9 + (byte_at(seg, 1) - '1')
+      sh.forms[idx] = substr(seg, 3, len(seg))
+      sh.asg[idx] = true
+    }
+  }
+  for idx in 0..234 {
+    if sh.asg[idx] and sh.state[idx] == 0 {
+      cell_eval(sh, idx)
+    }
+  }
+  var outs: [Str] = []
+  for idx in 0..234 {
+    if sh.asg[idx] {
+      var text = str(sh.val[idx])
+      if sh.bad[idx] {
+        text = "#CYCLE"
+      }
+      let name = chr(65 + idx / 9) + chr(49 + idx % 9)
+      push(outs, name + "=" + text)
+    }
+  }
+  return join(outs, ",")
+}

@@ -6,7 +6,7 @@ A small, fast, safe programming language designed to be written and verified by 
 
 <img src=".github/assets/figure/scene.webp" width="100%" alt="Three beats: a mandelbrot benchmark computed on one thread with every check on in 112 ms against 108 ms for C++; the same loop written as a sum, spread over 8 threads and 8 lanes; and the result, 4.6 ms against 15 ms for C++ parallelised by hand with OpenMP.">
 
-Version 0.7. One front end, two backends (native machine code through GCC, and sandboxed
+Version 0.8. One front end, two backends (native machine code through GCC, and sandboxed
 WebAssembly), a standard library written in Avisoq, a formatter, a compile-time contract prover,
 a language server, a package manager and a differential fuzzer. The test suites pass on both
 backends: 366 compiler cases each, plus 26 editor, 17 package and 10 sandbox tests.
@@ -150,9 +150,15 @@ A third, expert round (10 larger programs, 373 hidden tests) produced the first 
 it was Avisoq's: 19 of 20 correct against 20 of 20 for Python and for Rust. The failure was a
 loud overflow stop, not a wrong answer. That round also exposed two compiler bugs, both fixed
 in 0.6.1. Version 0.7 added mutable struct state, tuples, constants and the `?` operator;
-rerun on it, both Avisoq agents scored 10 of 10, level with Python and Rust, but still took
-about twice as long as the Python agents. Avisoq is not yet better for agents than Python or
-Rust on anything measured here.
+rerun on it, both Avisoq agents scored 10 of 10, level with Python and Rust. Version 0.8 added
+shorthand (character literals, `for x in items`, `+=`, string indexing); the agents still take
+1.4 to 2.4 times as long with Avisoq as with Python.
+
+What the agents' Avisoq programs do better is run: on the same inputs they were 5 to 8 times
+faster in total than the Python programs the same agents wrote, with every safety check on.
+They were 14% to 45% slower than the agents' Rust programs. So today the measured case for
+Avisoq is: as correct as Python on these tasks, several times faster to run, and slower for
+the agent to write. It is not ahead of Rust on anything measured here.
 
 <img src=".github/assets/agents/scene.webp" width="100%" alt="Two models each solved 24 of 24 tasks on the first attempt in Avisoq, Python and Rust. The Avisoq solutions were the longest: about 380 lines against 200 for Python and 330 for Rust.">
 

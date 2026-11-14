@@ -1,0 +1,115 @@
+// Magnitudes are digit arrays, most significant digit first, without leading zeros.
+
+fn strip_digits(xs: [Int]) -> [Int] {
+  var i = 0
+  while i < len(xs) - 1 and xs[i] == 0 {
+    i += 1
+  }
+  var out: [Int] = []
+  for k in i..len(xs) {
+    push(out, xs[k])
+  }
+  return out
+}
+
+fn digits_of(s: Str) -> [Int] {
+  var out: [Int] = []
+  var start = 0
+  if byte_at(s, 0) == '-' {
+    start = 1
+  }
+  for k in start..len(s) {
+    push(out, byte_at(s, k) - '0')
+  }
+  return strip_digits(out)
+}
+
+fn digits_text(xs: [Int]) -> Str {
+  var acc = ""
+  for i in 0..len(xs) {
+    acc = acc + chr('0' + xs[i])
+  }
+  return acc
+}
+
+fn is_zero_digits(xs: [Int]) -> Bool {
+  return len(xs) == 1 and xs[0] == 0
+}
+
+fn cmp_mag(a: [Int], b: [Int]) -> Int {
+  if len(a) != len(b) {
+    if len(a) < len(b) {
+      return -1
+    }
+    return 1
+  }
+  for i in 0..len(a) {
+    if a[i] != b[i] {
+      if a[i] < b[i] {
+        return -1
+      }
+      return 1
+    }
+  }
+  return 0
+}
+
+// a - b, for a >= b.
+fn sub_mag(a: [Int], b: [Int]) -> [Int] {
+  var res: [Int] = array(len(a), 0)
+  var borrow = 0
+  var i = len(a) - 1
+  var j = len(b) - 1
+  while i >= 0 {
+    var dv = a[i] - borrow
+    if j >= 0 {
+      dv = dv - b[j]
+    }
+    if dv < 0 {
+      dv = dv + 10
+      borrow = 1
+    } else {
+      borrow = 0
+    }
+    res[i] = dv
+    i -= 1
+    j -= 1
+  }
+  return strip_digits(res)
+}
+
+// Long division of magnitudes: returns quotient and remainder.
+fn divmod_mag(a: [Int], b: [Int]) -> ([Int], [Int]) {
+  var q: [Int] = array(len(a), 0)
+  var rem: [Int] = [0]
+  for i in 0..len(a) {
+    var shifted: [Int] = copy(rem)
+    if is_zero_digits(shifted) {
+      shifted = []
+    }
+    push(shifted, a[i])
+    rem = strip_digits(shifted)
+    var k = 0
+    while cmp_mag(rem, b) >= 0 {
+      rem = sub_mag(rem, b)
+      k += 1
+    }
+    q[i] = k
+  }
+  return (strip_digits(q), rem)
+}
+
+fn big_divmod(a: Str, b: Str) -> Str {
+  let neg_a = byte_at(a, 0) == '-'
+  let neg_b = byte_at(b, 0) == '-'
+  let (q, r) = divmod_mag(digits_of(a), digits_of(b))
+  var qs = digits_text(q)
+  if neg_a != neg_b and not is_zero_digits(q) {
+    qs = "-" + qs
+  }
+  var rs = digits_text(r)
+  if neg_a and not is_zero_digits(r) {
+    rs = "-" + rs
+  }
+  return qs + " " + rs
+}

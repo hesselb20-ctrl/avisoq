@@ -1,0 +1,77 @@
+import "std/strings"
+import "std/arrays"
+
+fn two_digits(s: Str, i: Int) -> Int {
+  if is_digit(s[i]) and is_digit(s[i + 1]) {
+    return (s[i] - '0') * 10 + (s[i + 1] - '0')
+  }
+  return -1
+}
+
+// minutes of "HH:MM" at offset i, or -1
+fn clock_at(s: Str, i: Int) -> Int {
+  let h = two_digits(s, i)
+  let m = two_digits(s, i + 3)
+  if h < 0 or m < 0 or h > 23 or m > 59 { return -1 }
+  if s[i + 2] != ':' { return -1 }
+  return h * 60 + m
+}
+
+fn clock_text(t: Int) -> Str {
+  return pad_left(str(t / 60), 2, "0") + ":" + pad_left(str(t % 60), 2, "0")
+}
+
+fn schedule(s: Str) -> Str {
+  var spans: [Int] = []
+  var invalid = 0
+  if len(s) > 0 {
+    let parts = split(s, ",")
+    for part in parts {
+      var good = false
+      if len(part) == 11 and part[5] == '-' {
+        let a = clock_at(part, 0)
+        let b = clock_at(part, 6)
+        if a >= 0 and b >= 0 and b > a {
+          good = true
+          push(spans, a * 2000 + b)
+        }
+      }
+      if not good { invalid += 1 }
+    }
+  }
+  sort(spans)
+  var out: [Str] = []
+  var total = 0
+  var have = false
+  var cur_s = 0
+  var cur_e = 0
+  for k in spans {
+    let a = k / 2000
+    let b = k % 2000
+    if not have {
+      have = true
+      cur_s = a
+      cur_e = b
+    } else if a <= cur_e {
+      if b > cur_e { cur_e = b }
+    } else {
+      push(out, clock_text(cur_s) + "-" + clock_text(cur_e))
+      total += cur_e - cur_s
+      cur_s = a
+      cur_e = b
+    }
+  }
+  if have {
+    push(out, clock_text(cur_s) + "-" + clock_text(cur_e))
+    total += cur_e - cur_s
+  }
+  return join(out, ",") + ";total=" + str(total) + ";invalid=" + str(invalid)
+}
+
+test "schedule" {
+  assert schedule("") == ";total=0;invalid=0"
+  assert schedule("09:00-10:00,10:00-11:00,12:00-12:30") == "09:00-11:00,12:00-12:30;total=150;invalid=0"
+  assert schedule("9:00-10:00,,10:00-09:00,23:59-23:59,00:00-23:59") == "00:00-23:59;total=1439;invalid=4"
+  assert schedule("10:00-11:00 ") == ";total=0;invalid=1"
+  assert schedule("24:00-25:00") == ";total=0;invalid=1"
+}

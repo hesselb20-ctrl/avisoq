@@ -45,6 +45,14 @@ export function check(program, diags) {
   let lambdaCount = 0;
   const growCalls = []; // every call, for working out which array parameters may grow
   const taken = (name) => typeDecls.has(name) || variants.has(name) || fns.has(name) || fnTemplates.has(name) || consts.has(name);
+  // A local variable may share its name with a function from the other side of the standard
+  // library boundary: a program's variable called `lines` next to std/strings' lines(), or a
+  // library-internal variable next to a function the program defines. Neither can call the other.
+  const isStd = (file) => /[\\/]std[\\/][a-z_]+\.avq$/.test(file ?? '');
+  const acrossStd = (name) => {
+    const f = fns.get(name) ?? fnTemplates.get(name);
+    return !!f && !BUILTINS.has(name) && !typeDecls.has(name) && !variants.has(name) && !consts.has(name) && isStd(f.file) !== isStd(currentFile);
+  };
   const definedIn = (name) => {
     const d = fns.get(name) ?? fnTemplates.get(name);
     const m = /std[\\/](\w+)\.avq$/.exec(d?.file ?? '');
@@ -294,7 +302,7 @@ export function check(program, diags) {
       if (lookup(name)) {
         err('E0103', `'${name}' is already defined in this scope or an enclosing one`, node,
           'Avisoq does not allow shadowing; choose a new name');
-      } else if (taken(name) || BUILTINS.has(name)) {
+      } else if ((taken(name) || BUILTINS.has(name)) && !acrossStd(name)) {
         err('E0103', `'${name}' is already the name of a function, type or variant${definedIn(name)}`, node, 'names cannot be reused in Avisoq; choose a different variable name');
       }
       scopes[scopes.length - 1].set(name, sym);

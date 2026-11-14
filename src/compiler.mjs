@@ -92,7 +92,28 @@ function loadProgram(src, entryPath, diagnostics, lenient = false) {
     program.allDecls.push(...mod.decls.filter((d) => d.kind !== 'Import' && d.kind !== 'Test'));
     queue.push(...mod.imports.map((x) => ({ imp: x, from: target })));
   }
+  shadowStd(program);
   return diagnostics.length && !lenient ? null : program;
+}
+
+// A program's own function, struct, enum or constant wins over a standard library function of
+// the same name. The library keeps using its own: its function is renamed out of the way, and
+// so are the uses of it inside the library. New library functions therefore never break a
+// program that already has one with that name.
+function shadowStd(program) {
+  const std = resolve(STD_DIR).toLowerCase();
+  const inStd = (d) => !!d.file && resolve(d.file).toLowerCase().startsWith(std);
+  const own = new Set([...program.fns, ...program.structs, ...program.enums, ...program.consts].filter((d) => !inStd(d)).map((d) => d.name));
+  const renamed = new Map();
+  for (const f of program.fns) if (inStd(f) && own.has(f.name)) { renamed.set(f.name, `std__${f.name}`); f.shadowed = f.name; f.name = `std__${f.name}`; }
+  if (!renamed.size) return;
+  const visit = (n) => {
+    if (!n || typeof n !== 'object') return;
+    if (Array.isArray(n)) { for (const x of n) visit(x); return; }
+    if ((n.kind === 'Call' || n.kind === 'Name') && renamed.has(n.name)) n.name = renamed.get(n.name);
+    for (const k in n) if (k !== 'file' && n[k] && typeof n[k] === 'object') visit(n[k]);
+  };
+  for (const f of program.fns) if (inStd(f)) { visit(f.body); visit(f.requires); visit(f.ensures); }
 }
 
 // For editors: checks as much as it can and always reports what it found.

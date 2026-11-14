@@ -1,0 +1,49 @@
+// True when every clause holds under the assignment bits (bits[v] is 0 or 1, v from 1 to n).
+fn all_hold(bits: [Int], clauses: [Int]) -> Bool {
+  var sat_now = false
+  for i in 0..len(clauses) {
+    let x = clauses[i]
+    if x == 0 {
+      if not sat_now {
+        return false
+      }
+      sat_now = false
+    } else if x > 0 {
+      if bits[x] == 1 {
+        sat_now = true
+      }
+    } else {
+      if bits[-x] == 0 {
+        sat_now = true
+      }
+    }
+  }
+  return true
+}
+
+fn sat(n: Int, clauses: [Int]) -> [Int] {
+  var total = 1
+  for i in 0..n {
+    total = total * 2
+  }
+  // Counting upward over masks, with variable 1 as the most significant bit, gives the
+  // assignments in the required order (0 before 1, compared from the left).
+  for mask in 0..total {
+    var bits: [Int] = array(n + 1, 0)
+    var rest = mask
+    var v = n
+    while v >= 1 {
+      bits[v] = rest % 2
+      rest = rest / 2
+      v -= 1
+    }
+    if all_hold(bits, clauses) {
+      var answer: [Int] = []
+      for w in 1..n + 1 {
+        push(answer, bits[w])
+      }
+      return answer
+    }
+  }
+  return [-1]
+}

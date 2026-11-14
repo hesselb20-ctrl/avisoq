@@ -1,0 +1,323 @@
+
+struct St { src: Str, pos: Int, vars: Map[Str, Int], out: [Str], steps: Int, err: Str }
+
+fn is_ws(b: Int) -> Bool {
+  return b == ' ' or b == '\n' or b == '\t' or b == '\r'
+}
+
+fn is_digit(b: Int) -> Bool {
+  return b >= '0' and b <= '9'
+}
+
+fn at_byte(src: Str, i: Int) -> Int {
+  if i < len(src) {
+    return byte_at(src, i)
+  }
+  return -1
+}
+
+fn skip_ws(st: mut St) {
+  var c = at_byte(st.src, st.pos)
+  while is_ws(c) {
+    st.pos += 1
+    c = at_byte(st.src, st.pos)
+  }
+}
+
+fn peek_ch(st: mut St) -> Int {
+  skip_ws(st)
+  return at_byte(st.src, st.pos)
+}
+
+fn word_end(src: Str, start: Int) -> Int {
+  var i = start
+  var b = at_byte(src, i)
+  while b >= 'a' and b <= 'z' {
+    i += 1
+    b = at_byte(src, i)
+  }
+  return i
+}
+
+fn read_word(st: mut St) -> Str {
+  skip_ws(st)
+  let e = word_end(st.src, st.pos)
+  let w = substr(st.src, st.pos, e)
+  st.pos = e
+  return w
+}
+
+fn peek_word(st: mut St) -> Str {
+  skip_ws(st)
+  let e = word_end(st.src, st.pos)
+  return substr(st.src, st.pos, e)
+}
+
+fn expect_ch(st: mut St, ch: Int) {
+  let c = peek_ch(st)
+  if c == ch {
+    st.pos += 1
+  }
+}
+
+fn read_num(st: mut St) -> Int {
+  skip_ws(st)
+  var v = 0
+  var d = at_byte(st.src, st.pos)
+  while is_digit(d) {
+    v = v * 10 + (d - '0')
+    st.pos += 1
+    d = at_byte(st.src, st.pos)
+  }
+  return v
+}
+
+// True when the code should run: the run flag is set and no error has happened yet.
+fn active(run: Bool, err: Str) -> Bool {
+  return run and err == ""
+}
+
+fn tick(st: mut St) {
+  st.steps += 1
+  if st.steps > 5000 {
+    st.err = "!steps"
+  }
+}
+
+fn cmp_result(op: Int, a: Int, b: Int) -> Int {
+  var ok = false
+  if op == 1 {
+    ok = a < b
+  } else if op == 2 {
+    ok = a <= b
+  } else if op == 3 {
+    ok = a > b
+  } else if op == 4 {
+    ok = a >= b
+  } else if op == 5 {
+    ok = a == b
+  } else {
+    ok = a != b
+  }
+  if ok {
+    return 1
+  }
+  return 0
+}
+
+fn cmp_op(st: mut St) -> Int {
+  let c = peek_ch(st)
+  let d = at_byte(st.src, st.pos + 1)
+  if c == '<' {
+    if d == '=' {
+      st.pos += 2
+      return 2
+    }
+    st.pos += 1
+    return 1
+  }
+  if c == '>' {
+    if d == '=' {
+      st.pos += 2
+      return 4
+    }
+    st.pos += 1
+    return 3
+  }
+  if c == '=' and d == '=' {
+    st.pos += 2
+    return 5
+  }
+  if c == '!' and d == '=' {
+    st.pos += 2
+    return 6
+  }
+  return -1
+}
+
+fn parse_atom(st: mut St, run: Bool) -> Int {
+  let c = peek_ch(st)
+  if is_digit(c) {
+    return read_num(st)
+  }
+  if c == '(' {
+    st.pos += 1
+    let inner = parse_cmp(st, run)
+    expect_ch(st, ')')
+    return inner
+  }
+  let nm = read_word(st)
+  if active(run, st.err) {
+    if has(st.vars, nm) {
+      return get(st.vars, nm)
+    }
+    st.err = "!undef"
+  }
+  return 0
+}
+
+fn parse_unary(st: mut St, run: Bool) -> Int {
+  let c = peek_ch(st)
+  if c == '-' {
+    st.pos += 1
+    let inner = parse_unary(st, run)
+    return -inner
+  }
+  return parse_atom(st, run)
+}
+
+fn parse_term(st: mut St, run: Bool) -> Int {
+  var acc = parse_unary(st, run)
+  var op = peek_ch(st)
+  while op == '*' or op == '/' or op == '%' {
+    st.pos += 1
+    let rhs = parse_unary(st, run)
+    if active(run, st.err) {
+      if op == '*' {
+        acc = acc * rhs
+      } else if rhs == 0 {
+        st.err = "!div0"
+      } else if op == '/' {
+        acc = acc / rhs
+      } else {
+        acc = acc % rhs
+      }
+    }
+    op = peek_ch(st)
+  }
+  return acc
+}
+
+fn parse_sum(st: mut St, run: Bool) -> Int {
+  var acc = parse_term(st, run)
+  var op = peek_ch(st)
+  while op == '+' or op == '-' {
+    st.pos += 1
+    let rhs = parse_term(st, run)
+    if active(run, st.err) {
+      if op == '+' {
+        acc = acc + rhs
+      } else {
+        acc = acc - rhs
+      }
+    }
+    op = peek_ch(st)
+  }
+  return acc
+}
+
+fn parse_cmp(st: mut St, run: Bool) -> Int {
+  let left = parse_sum(st, run)
+  let op = cmp_op(st)
+  if op < 0 {
+    return left
+  }
+  let right = parse_sum(st, run)
+  if active(run, st.err) {
+    return cmp_result(op, left, right)
+  }
+  return 0
+}
+
+fn stmts(st: mut St, run: Bool) {
+  var c = peek_ch(st)
+  while c != -1 and c != '}' {
+    stmt(st, run)
+    c = peek_ch(st)
+  }
+}
+
+fn print_stmt(st: mut St, run: Bool) {
+  if active(run, st.err) {
+    tick(st)
+  }
+  let pv = parse_cmp(st, active(run, st.err))
+  expect_ch(st, ';')
+  if active(run, st.err) {
+    push(st.out, str(pv))
+  }
+}
+
+fn assign_stmt(st: mut St, run: Bool, nm: Str) {
+  expect_ch(st, '=')
+  if active(run, st.err) {
+    tick(st)
+  }
+  let av = parse_cmp(st, active(run, st.err))
+  expect_ch(st, ';')
+  if active(run, st.err) {
+    put(st.vars, nm, av)
+  }
+}
+
+fn if_stmt(st: mut St, run: Bool) {
+  if active(run, st.err) {
+    tick(st)
+  }
+  let ic = parse_cmp(st, active(run, st.err))
+  let taken = active(run, st.err) and ic != 0
+  let skipped = active(run, st.err) and ic == 0
+  expect_ch(st, '{')
+  stmts(st, taken)
+  expect_ch(st, '}')
+  if peek_word(st) == "else" {
+    read_word(st)
+    expect_ch(st, '{')
+    stmts(st, skipped)
+    expect_ch(st, '}')
+  }
+}
+
+fn while_stmt(st: mut St, run: Bool) {
+  let cond_pos = st.pos
+  var going = true
+  while going {
+    st.pos = cond_pos
+    if active(run, st.err) {
+      tick(st)
+    }
+    let wc = parse_cmp(st, active(run, st.err))
+    let again = active(run, st.err) and wc != 0
+    expect_ch(st, '{')
+    stmts(st, again)
+    expect_ch(st, '}')
+    if not again {
+      going = false
+    }
+  }
+}
+
+fn stmt(st: mut St, run: Bool) {
+  let w = read_word(st)
+  if w == "print" {
+    print_stmt(st, run)
+  } else if w == "if" {
+    if_stmt(st, run)
+  } else if w == "while" {
+    while_stmt(st, run)
+  } else {
+    assign_stmt(st, run, w)
+  }
+}
+
+fn interp(src: Str) -> Str {
+  var vars: Map[Str, Int] = {}
+  var out: [Str] = []
+  var st = St(src: src, pos: 0, vars: vars, out: out, steps: 0, err: "")
+  stmts(st, true)
+  if st.err != "" {
+    push(st.out, st.err)
+  }
+  return join_all(st.out)
+}
+
+fn join_all(parts: [Str]) -> Str {
+  var acc = ""
+  for i in 0..len(parts) {
+    if i > 0 {
+      acc = acc + ","
+    }
+    acc = acc + parts[i]
+  }
+  return acc
+}

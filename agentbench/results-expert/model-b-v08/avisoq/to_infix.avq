@@ -1,0 +1,54 @@
+import "std/strings"
+
+// An item on the stack: op is 0 for a single operand, otherwise the operator's byte.
+struct Item { text: Str, op: Int }
+
+fn prec_of(op: Int) -> Int {
+  if op == '^' {
+    return 3
+  }
+  if op == '*' or op == '/' {
+    return 2
+  }
+  if op == '+' or op == '-' {
+    return 1
+  }
+  return 4
+}
+
+fn wrap_left(l: Item, op: Int) -> Str {
+  if l.op != 0 {
+    if prec_of(l.op) < prec_of(op) or (prec_of(l.op) == prec_of(op) and op == '^') {
+      return "(" + l.text + ")"
+    }
+  }
+  return l.text
+}
+
+fn wrap_right(r: Item, op: Int) -> Str {
+  if r.op != 0 {
+    if prec_of(r.op) < prec_of(op) or (prec_of(r.op) == prec_of(op) and (op == '-' or op == '/')) {
+      return "(" + r.text + ")"
+    }
+  }
+  return r.text
+}
+
+fn to_infix(postfix: Str) -> Str {
+  let toks = split(postfix, " ")
+  var st: [Item] = []
+  for i in 0..len(toks) {
+    let tok = toks[i]
+    let c = byte_at(tok, 0)
+    if c >= 'a' and c <= 'z' {
+      push(st, Item(text: tok, op: 0))
+    } else {
+      let right = pop(st)
+      let left = pop(st)
+      let joined = wrap_left(left, c) + tok + wrap_right(right, c)
+      push(st, Item(text: joined, op: c))
+    }
+  }
+  let top = pop(st)
+  return top.text
+}

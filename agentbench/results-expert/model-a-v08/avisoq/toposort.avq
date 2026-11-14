@@ -1,0 +1,34 @@
+import "std/arrays"
+
+fn toposort(n: Int, edges: [Int]) -> [Int] {
+  var taken = array(n, false)
+  var order: [Int] = []
+  for round in 0..n {
+    var chosen = -1
+    var i = 0
+    while i < n and chosen < 0 {
+      if not taken[i] {
+        var ok = true
+        var j = 0
+        while j + 1 < len(edges) {
+          if edges[j + 1] == i and not taken[edges[j]] { ok = false }
+          j += 2
+        }
+        if ok { chosen = i }
+      }
+      i += 1
+    }
+    if chosen < 0 { return [-1] }
+    taken[chosen] = true
+    push(order, chosen)
+  }
+  return order
+}
+
+test "toposort basic" {
+  assert equal(toposort(3, [2, 1, 1, 0]), [2, 1, 0])
+  assert equal(toposort(3, [0, 1, 1, 0]), [-1])
+  assert equal(toposort(2, [1, 1]), [-1])
+  assert equal(toposort(4, [0, 3, 0, 3]), [0, 1, 2, 3])
+  assert equal(toposort(1, []), [0])
+}
