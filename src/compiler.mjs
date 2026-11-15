@@ -214,7 +214,7 @@ const fmtFloat = (x) => (Object.is(x, -0) ? '-0.0' : Number.isInteger(x) && Math
 // Instantiates a compiled module. Only capabilities listed in `allow` are wired in.
 // limits: { deadline } (performance.now() value, 0 for none), read each time the program's step budget runs out.
 // host: { name: function } for the functions the program declares with extern "host".
-export async function instantiate(wasm, meta, { allow = [], write = (s) => process.stdout.write(s), limits = null, host = {}, waits = false } = {}) {
+export async function instantiate(wasm, meta, { allow = [], write = (s) => process.stdout.write(s), limits = null, host = {}, waits = false, codec = null } = {}) {
   const grants = parseGrants(allow);
   let memory, instance;
   let parts = [];
@@ -420,15 +420,30 @@ export async function instantiate(wasm, meta, { allow = [], write = (s) => proce
   // waits: host functions may return promises; the program is suspended until they settle
   // (WebAssembly promise integration), and its exports must be called through WebAssembly.promising.
   const hostKind = (e) => (e && typeof e.kind === 'string' ? e.kind : 'host');
+  // What a script may handle when the tool returns Result: the tool failing or answering
+  // nonsense. Not a refused call, a missing tool or anything the runner decided.
+  const soft = new Set(['tool', 'tool_server', 'host']);
+  let lastError = '';
+  imports.rt.last_error = () => newStr(enc.encode(lastError));
+  const scalar = (t) => t === 'Int' || t === 'Float' || t === 'Bool' || t === 'Str' || t === 'Unit';
+  const zero = (t) => (t === 'Int' ? 0n : t === 'Float' ? 0 : 0);
   imports.host = Object.fromEntries((meta.host ?? []).map((h) => {
     const what = h.tool ? 'tool' : 'host function';
     const before = (raw) => {
       if (typeof host[h.name] !== 'function') hostFail('capability_denied', `${what} '${h.name}' was not provided`);
-      return raw.map((v, i) => (h.params[i] === 'Int' ? (v >= -9007199254740991n && v <= 9007199254740991n ? Number(v) : v) : h.params[i] === 'Bool' ? v !== 0 : h.params[i] === 'Str' ? dec.decode(strBytes(v)) : v));
+      return raw.map((v, i) => {
+        const t = h.params[i];
+        if (t === 'Int') return v >= -9007199254740991n && v <= 9007199254740991n ? Number(v) : v;
+        if (t === 'Bool') return v !== 0;
+        if (t === 'Str') return dec.decode(strBytes(v));
+        if (t === 'Float') return v;
+        return codec.fromRaw(v, t); // arrays, structs, enums: plain JavaScript values
+      });
     };
-    const failed = (e) => { if (e instanceof AvisoqFailure) throw e; hostFail(hostKind(e), e && e.kind ? e.message : `${what} '${h.name}' failed: ${e && e.message ? e.message : String(e)}`); };
+    const message = (e) => (e && e.kind ? e.message : `${what} '${h.name}' failed: ${e && e.message ? e.message : String(e)}`);
     const after = (r) => {
-      const wrong = (want) => hostFail('host', `${what} '${h.name}' must return ${want} but returned ${typeof r === 'object' ? JSON.stringify(r) : String(r)}`);
+      const badKind = h.tool ? 'tool' : 'host';
+      const wrong = (want) => hostFail(badKind, `${what} '${h.name}' must return ${want} but returned ${typeof r === 'object' ? JSON.stringify(r) : String(r)}`);
       if (h.ret === 'Unit') return undefined;
       if (h.ret === 'Int') {
         if (typeof r === 'number' && Number.isInteger(r)) return BigInt(r);
@@ -437,25 +452,36 @@ export async function instantiate(wasm, meta, { allow = [], write = (s) => proce
       }
       if (h.ret === 'Float') return typeof r === 'number' ? r : wrong('a Float');
       if (h.ret === 'Bool') return typeof r === 'boolean' ? (r ? 1 : 0) : wrong('a Bool');
-      return typeof r === 'string' ? newStr(enc.encode(r)) : wrong('a Str');
+      if (h.ret === 'Str') return typeof r === 'string' ? newStr(enc.encode(r)) : wrong('a Str');
+      try { return codec.toRaw(r, h.ret, `the answer of ${what} '${h.name}'`); } catch (e) { hostFail(badKind, e.message); }
+      return 0;
+    };
+    // The outcome of the call as the program sees it: a value, or (for a Result) a handled failure.
+    const settle = (run) => {
+      try {
+        const value = after(run());
+        if (h.fallible) lastOk = 1;
+        return value;
+      } catch (e) {
+        const kind = e instanceof AvisoqFailure ? e.info.kind : hostKind(e);
+        if (h.fallible && soft.has(kind)) { lastOk = 0; lastError = e instanceof AvisoqFailure ? e.info.message : message(e); return zero(h.ret); }
+        if (e instanceof AvisoqFailure) throw e;
+        hostFail(kind, message(e));
+      }
+      return 0;
     };
     if (waits) {
       return [h.name, new WebAssembly.Suspending(async (...raw) => {
         const args = before(raw);
         const started = performance.now();
-        let r;
-        try { r = await host[h.name](...args); } catch (e) { failed(e); }
+        let r, thrown = null;
+        try { r = await host[h.name](...args); } catch (e) { thrown = e ?? new Error('failed'); }
         // time spent waiting for the outside world is not the program's own
         if (limits && limits.deadline) limits.deadline += performance.now() - started;
-        return after(r);
+        return settle(() => { if (thrown) throw thrown; return r; });
       })];
     }
-    return [h.name, (...raw) => {
-      const args = before(raw);
-      let r;
-      try { r = host[h.name](...args); } catch (e) { failed(e); }
-      return after(r);
-    }];
+    return [h.name, (...raw) => { const args = before(raw); return settle(() => host[h.name](...args)); }];
   }));
   for (const c of Object.keys(caps)) {
     if (grants.names.has(c)) { imports[c] = caps[c]; continue; }

@@ -1,36 +1,33 @@
 // Refunds the shipping cost of an order that arrived late, and tells the customer.
 // An agent wrote this; a person approves what it can do before it runs:
-//   avisoq plan refund_late_order.avq
-import "std/json"
+//   avisoq plan refund_late_order.avq --tools tools.json
 
-// The order as JSON: {"id": 1, "email": "...", "days_late": 3, "shipping_cents": 499, "refunded": false}
-tool lookup_order(order: Int) -> Str
+// The tool answers with JSON; these are the fields this script reads from it.
+struct Order { id: Int, email: Str, days_late: Int, shipping_cents: Int, refunded: Bool }
+
+// Result: an order that does not exist is something to report, not a reason to stop.
+tool lookup_order(order: Int) -> Result[Order, Str]
 
 tool refund(order: Int, amount_cents: Int) -> Str
   at most 1
   total amount_cents at most 2000
   requires amount_cents > 0
 
-tool send_email(to: Str, subject: Str, body: Str) -> Str
+tool send_email(to: Str, subject: Str, body: Str) -> Result[Str, Str]
   at most 1
 
 fn handle(order: Int) -> Str uses tools
   requires order > 0
 {
-  let found = json_parse(lookup_order(order))
-  match found {
-    Err(error) => { return "could not read order " + str(order) + ": " + error }
+  match lookup_order(order) {
+    Err(error) => { return "could not look up order " + str(order) + ": " + error }
     Ok(info) => {
-      let late = unwrap_or(json_int(json_get(info, "days_late")), 0)
-      let shipping = unwrap_or(json_int(json_get(info, "shipping_cents")), 0)
-      let email = unwrap_or(json_str(json_get(info, "email")), "")
-      if unwrap_or(json_bool(json_get(info, "refunded")), false) { return "order " + str(order) + " was already refunded" }
-      if late < 2 or shipping <= 0 { return "order " + str(order) + " does not qualify" }
-      let receipt = refund(order, shipping)
-      if len(email) > 0 {
-        let sent = send_email(email, "Your shipping refund", "Your order arrived " + str(late) + " days late, so we refunded the shipping cost. " + receipt)
-      }
-      return "refunded " + str(shipping) + " cents on order " + str(order)
+      if info.refunded { return "order " + str(order) + " was already refunded" }
+      if info.days_late < 2 or info.shipping_cents <= 0 { return "order " + str(order) + " does not qualify" }
+      let receipt = refund(order, info.shipping_cents)
+      let told = send_email(info.email, "Your shipping refund", "Your order arrived " + str(info.days_late) + " days late, so we refunded the shipping cost. " + receipt)
+      let note = match told { Ok(sent) => "", Err(why) => " (the email could not be sent: " + why + ")" }
+      return "refunded " + str(info.shipping_cents) + " cents on order " + str(order) + note
     }
   }
 }

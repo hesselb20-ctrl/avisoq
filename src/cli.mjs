@@ -28,6 +28,7 @@ scripts that act through tools:
   replay <script>             rerun the last logged run against its log, calling nothing
   tools                       print the declarations of the tools in --tools, ready to paste
   gateway                     let an AI agent submit scripts: an MCP server that checks, asks and runs
+  keygen [name]               make a signing key; from then on only signed approvals count here
 
 packages (run in the project folder):
   init [name]                  create avisoq.json
@@ -49,6 +50,7 @@ options:
   --policy <file>   what may run without asking a person: { "tools": { "name": { "max": 1 } } }
   --log <file>      where act writes its log (default: <script>.runs.jsonl)
   --fn <name>       which function of the script to start, when it has more than one
+  --approvers <file> accept only approvals signed by the people in this file (default: avisoq.approvers.json if present)
   --portable        native only: build for any recent 64-bit x86 CPU, not just this one
   --no-sandbox      native only: run without the reduced-rights launcher (Windows)
   --memory <MB>     stop the program, or a call, if it uses more memory than this (run: native only)
@@ -75,6 +77,8 @@ for (let i = 0; i < args.length; i++) {
   else if (a === '--log') flags.log = args[++i];
   else if (a === '--fn') flags.fn = args[++i];
   else if (a === '--dir') flags.dir = args[++i];
+  else if (a === '--approvers') flags.approvers = args[++i];
+  else if (a === '--key') flags.key = args[++i];
   else if (a === '--time-limit') flags.timeLimit = Number(args[++i]) || 0;
   else if (a === '--memory') flags.memory = Number(args[++i]) || 0;
   else if (a === '--allow') flags.allow = (args[++i] ?? '').split(',').filter(Boolean);
@@ -103,7 +107,7 @@ if (cmd === 'lsp') {
   startServer();
   await new Promise(() => {}); // serve until the editor closes the connection
 }
-if (['plan', 'approve', 'act', 'replay', 'tools', 'gateway'].includes(cmd)) {
+if (['plan', 'approve', 'act', 'replay', 'tools', 'gateway', 'keygen'].includes(cmd)) {
   const { runCommand } = await import('./act-cli.mjs');
   process.exit(await runCommand(cmd, pos.slice(1), flags));
 }

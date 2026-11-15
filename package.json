@@ -1,6 +1,6 @@
 {
   "name": "avisoq",
-  "version": "0.16.0",
+  "version": "0.17.0",
   "description": "Avisoq: the language AI agents write their actions in. What a script can do (which tools, how often, under which rules) is known and approved before it runs.",
   "license": "MIT",
   "author": "Hessel",
@@ -15,7 +15,7 @@
   "files": ["src", "std", "docs", "examples", "bindings", "README.md", "CHANGELOG.md", "LICENSE"],
   "engines": { "node": ">=22" },
   "scripts": {
-    "test": "node tests/run.mjs wasm && node tests/ide.mjs && node tests/pkg.mjs && node tests/embed.mjs && node tests/mcp.mjs && node tests/act.mjs && node tests/docs.mjs",
+    "test": "node tests/run.mjs wasm && node tests/ide.mjs && node tests/pkg.mjs && node tests/embed.mjs && node tests/mcp.mjs && node tests/act.mjs && node tests/attack.mjs && node tests/docs.mjs",
     "test:native": "node tests/run.mjs native && node tests/sandbox.mjs && node tests/interop.mjs && node tests/embed-native.mjs",
     "fuzz": "node tests/fuzz.mjs 200",
     "test:memory": "node tests/memory.mjs"

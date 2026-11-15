@@ -10,7 +10,8 @@
 // For every function that can be started from outside, this lists the tools it can reach, how
 // often it can call each one, and the rules on their arguments. "How often" has two sources:
 // the cap in the declaration, which the runtime enforces, and a count of the call sites, which
-// is a proof when no call sits in a loop or in a recursive function.
+// is a proof when no call sits in a recursive function or in a loop whose length is not
+// written out (for i in 0..3 counts as three rounds; for i in 0..n does not).
 import { callableFns } from './exports.mjs';
 import { showType, walk } from './types.mjs';
 
@@ -18,6 +19,11 @@ const MANY = Infinity;
 const add = (a, b) => { const out = new Map(a); for (const [k, n] of b) out.set(k, (out.get(k) ?? 0) + n); return out; };
 const max = (a, b) => { const out = new Map(a); for (const [k, n] of b) out.set(k, Math.max(out.get(k) ?? 0, n)); return out; };
 const looped = (a) => new Map([...a].map(([k]) => [k, MANY]));
+const repeated = (a, n) => new Map([...a].map(([k, v]) => [k, v * n]));
+// How many rounds a loop from `start` to `end` makes, when both are written out as numbers.
+const literal = (e) => (e && e.kind === 'IntLit' ? e.value : e && e.kind === 'Unary' && e.op === '-' && e.operand.kind === 'IntLit' ? -e.operand.value : null);
+const rounds = (start, end) => { const a = literal(start), b = literal(end); return a === null || b === null || b - a > 100000n ? null : Number(b > a ? b - a : 0n); };
+const inLoop = (body, start, end) => { const n = rounds(start, end); return n === null ? looped(body) : repeated(body, n); };
 
 // tool name -> the most often `fn` can call it, counting every path.
 function callBounds(program) {
@@ -33,7 +39,7 @@ function callBounds(program) {
       let total = new Map();
       if (e.kind === 'Cond') return add(expr(e.cond), max(expr(e.then), expr(e.els)));
       if (e.kind === 'MatchExpr') return add(expr(e.scrut), e.arms.map((a) => expr(a.expr)).reduce(max, new Map()));
-      if (e.kind === 'Sum' || e.kind === 'Comp') return add(add(expr(e.start), expr(e.end)), looped(expr(e.body)));
+      if (e.kind === 'Sum' || e.kind === 'Comp') return add(add(expr(e.start), expr(e.end)), inLoop(expr(e.body), e.start, e.end));
       if (e.kind === 'New') { for (const fl of e.fields) total = add(total, expr(fl.expr)); return total; }
       for (const key of ['left', 'right', 'operand', 'base', 'index', 'cond', 'then', 'els', 'body']) if (e[key] && !Array.isArray(e[key])) total = add(total, expr(e[key]));
       for (const a of e.args ?? e.elems ?? []) total = add(total, expr(a));
@@ -48,7 +54,7 @@ function callBounds(program) {
       switch (s.kind) {
         case 'If': return add(expr(s.cond), max(block(s.then), block(s.els)));
         case 'While': return looped(add(expr(s.cond), block(s.body)));
-        case 'For': return add(add(expr(s.start), expr(s.end)), looped(block(s.body)));
+        case 'For': return add(add(expr(s.start), expr(s.end)), inLoop(block(s.body), s.start, s.end));
         case 'Match': return add(expr(s.scrut), s.arms.map((a) => block(a.body)).reduce(max, new Map()));
         case 'Let': return expr(s.init);
         case 'Assign': return add(expr(s.target), expr(s.value));
@@ -77,7 +83,8 @@ export function manifestOf(program) {
     const proven = Number.isFinite(counted);
     return {
       name: t.name,
-      signature: `${t.name}(${t.params.map((p) => `${p.name}: ${showType(p.ty)}`).join(', ')})${t.ret === 'Unit' ? '' : ` -> ${showType(t.ret)}`}`,
+      real: t.extern.tool.remote ?? t.name,
+      signature: `${t.extern.tool.remote ?? t.name}(${t.params.map((p) => `${p.name}: ${showType(p.ty)}`).join(', ')})${t.ret === 'Unit' ? '' : ` -> ${showType(t.ret)}`}`,
       // the smaller of what the declaration allows and what the code can reach
       calls: cap === null ? (proven ? counted : null) : (proven ? Math.min(cap, counted) : cap),
       // 'proven': the code has no way to call it more often. 'enforced': stopped at run time.
@@ -93,7 +100,7 @@ export function manifestOf(program) {
   const called = new Set();
   for (const f of program.fns) if (!f.extern) for (const st of f.body) walk(st, (n) => { if (n.kind === 'Call' && n.fn) called.add(n.fn); });
   return {
-    tools: tools.map((t) => ({ name: t.name, params: t.params.map((p) => ({ name: p.name, ty: p.ty })), ret: t.ret, max: t.extern.tool.max, totals: t.extern.tool.totals, rules: t.requires.map((c) => c.text) })),
+    tools: tools.map((t) => ({ name: t.name, real: t.extern.tool.remote ?? t.name, params: t.params.map((p) => ({ name: p.name, ty: p.ty })), ret: t.ret, max: t.extern.tool.max, totals: t.extern.tool.totals, rules: t.requires.map((c) => c.text) })),
     entries: entries.map((f) => {
       const counted = bounds(f) ?? new Map();
       return {

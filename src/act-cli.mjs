@@ -1,7 +1,7 @@
 // The commands for scripts that act through tools: plan, approve, act, replay, tools, gateway.
 import { existsSync, readFileSync } from 'node:fs';
 import { basename } from 'node:path';
-import { act, approve, approvedBy, bindTools, DEFAULT_LIMITS, entryOf, policyProblem, prepare, replay, showManifest } from './act.mjs';
+import { act, approve, approvedBy, bindTools, DEFAULT_LIMITS, entryOf, keygen, policyProblem, prepare, readApprovers, replay, showManifest, whoAmI } from './act.mjs';
 import { declarationOf, openTools } from './mcp-client.mjs';
 
 const out = (s) => process.stdout.write(`${s}\n`);
@@ -11,9 +11,19 @@ export async function runCommand(cmd, rest, flags) {
   const limits = { timeLimitMs: flags.timeLimit || DEFAULT_LIMITS.timeLimitMs, memoryLimitMb: flags.memory || DEFAULT_LIMITS.memoryLimitMb };
   let servers = null;
   try {
+    // An approvers file switches on signed approvals: named with --approvers, or found in this folder.
+    const approversFile = flags.approvers ?? (existsSync('avisoq.approvers.json') ? 'avisoq.approvers.json' : null);
+    const approvers = readApprovers(approversFile);
+    if (flags.approvers && !approvers) { err(`avisoq ${cmd}: cannot read the approvers file ${flags.approvers}`); return 66; }
+    if (cmd === 'keygen') {
+      const name = rest[0] ?? whoAmI();
+      const file = keygen(name, approversFile ?? 'avisoq.approvers.json');
+      out(`Made a key for '${name}'.\n  private key: ${file}   (keep it to yourself; approve uses it)\n  public key:  added to ${approversFile ?? 'avisoq.approvers.json'}\nFrom now on, in this folder only signed approvals from the people in that file count.`);
+      return 0;
+    }
     if (cmd === 'gateway') {
       const { gateway } = await import('./gateway.mjs');
-      return await gateway({ toolsFile: flags.tools, policyFile: flags.policy, dir: flags.dir ?? 'avisoq-scripts', limits, allow: flags.allow });
+      return await gateway({ toolsFile: flags.tools, policyFile: flags.policy, dir: flags.dir ?? 'avisoq-scripts', limits, allow: flags.allow, approversFile });
     }
     if (cmd === 'tools') {
       if (!flags.tools) { err('avisoq tools: name the tools file with --tools <file>'); return 64; }
@@ -45,17 +55,20 @@ export async function runCommand(cmd, rest, flags) {
     const text = showManifest(prepared.plan, entry, { file: basename(file), hash: prepared.hash, limits, notes });
 
     if (cmd === 'plan') {
-      if (flags.json) out(JSON.stringify({ hash: prepared.hash, entry, limits, approved: approvedBy(file, prepared, entry), ...prepared.plan.entries.find((e) => e.name === entry) }, null, 2));
-      else out(`${text}\n\n${approvedBy(file, prepared, entry) ?? 'Not approved yet: avisoq approve ' + file}`);
+      if (flags.json) out(JSON.stringify({ hash: prepared.hash, entry, limits, approved: approvedBy(file, prepared, entry, approvers), ...prepared.plan.entries.find((e) => e.name === entry) }, null, 2));
+      else out(`${text}\n\n${approvedBy(file, prepared, entry, approvers) ?? 'Not approved yet: avisoq approve ' + file}`);
       return 0;
     }
     if (cmd === 'approve') {
-      approve(file, prepared, entry);
-      out(`${text}\n\nApproved. Any change to the script or to what it can do needs a new approval.`);
+      const done = approve(file, prepared, entry, { notes, ...(flags.key ? { keyFile: flags.key } : {}) });
+      if (approvers && !done.signed) { err(`${text}\n\nThis folder only accepts signed approvals, and there is no key for '${whoAmI()}'. Make one with: avisoq keygen`); return 77; }
+      out(`${text}\n\nApproved${done.signed ? ' and signed' : ''}. Any change to the script or to what it can do needs a new approval.`);
       return 0;
     }
     // act
-    let why = approvedBy(file, prepared, entry);
+    const wrong = {};
+    let why = approvedBy(file, prepared, entry, approvers, wrong);
+    if (!why && wrong.reason) err(`The approval on file does not count: ${wrong.reason}.`);
     if (!why && flags.policy) {
       const problem = policyProblem(JSON.parse(readFileSync(flags.policy, 'utf8')), prepared.plan, entry);
       if (!problem) why = `allowed by the policy ${basename(flags.policy)}`;

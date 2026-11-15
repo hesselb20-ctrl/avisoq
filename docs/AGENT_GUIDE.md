@@ -357,10 +357,25 @@ fn handle(order: Int) -> Str uses tools {     // calling a tool needs "uses tool
 Put the work in a function with a name of your own (not `main`) that takes its inputs as
 parameters and returns the result; do not `print`, which is a capability of its own.
 
-Tools take and return `Int`, `Float`, `Bool` and `Str`. Parse JSON answers with `std/json`
-(`json_parse`, `json_get`, `json_int`, `json_str`, `json_at`, `json_len`). A tool call outside
-a loop is counted exactly; one inside a loop needs an `at most` to be bounded. If a tool
-fails, the script stops there.
+A tool that answers with JSON can return a struct, and the fields arrive typed (extra fields
+are ignored):
+
+```
+struct Order { id: Int, email: Str, refunded: Bool }
+tool lookup_order(order: Int) -> Result[Order, Str]     // Result: you handle the failure
+tool late_orders() -> [Int]
+
+match lookup_order(7) {
+  Ok(info) => { ... info.email ... }
+  Err(error) => { return "no such order: " + error }
+}
+```
+
+Without `Result`, a failing tool stops the script. A call refused for a limit always stops
+it. Tools take and return numbers, booleans, text, lists, structs and enums, not maps. A tool
+whose real name is not a valid name is declared as
+`tool create_issue(title: Str) -> Str as "create-issue"`. A tool call outside a loop, or in
+`for i in 0..3`, is counted exactly; in any other loop it needs an `at most` to be bounded.
 
 **Functions of the program that runs your code.** When the task says the host provides a
 function, declare it and call it; the function that calls it needs `uses host`:

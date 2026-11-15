@@ -41,7 +41,12 @@ export function codegen(program, opts = {}) {
   if (opts.budget) imp.tick = m.addImport('env', 'tick', [], []);
   // extern "host" functions are imports the embedding program fills in.
   const hostFns = program.fns.filter((f) => f.extern && f.extern.source === 'host');
-  for (const f of hostFns) f.hostImp = m.addImport('host', f.name, f.params.map((p) => wt(p.ty)), f.ret === 'Unit' ? [] : [wt(f.ret)]);
+  // A tool that returns Result[T, Str] hands back a T, and says through last_ok whether it worked.
+  for (const f of hostFns) f.hostImp = m.addImport('host', f.name, f.params.map((p) => wt(p.ty)), f.ret === 'Unit' ? [] : [wt(f.extern.fallible ?? f.ret)]);
+  if (hostFns.some((f) => f.extern.fallible)) {
+    imp.last_ok ??= m.addImport('rt', 'last_ok', [], [I32]);
+    imp.last_error = m.addImport('rt', 'last_error', [], [I32]);
+  }
   if (used.has('print')) {
     imp.print_i64 = m.addImport('io', 'print_i64', [I64], []);
     imp.print_f64 = m.addImport('io', 'print_f64', [F64], []);
@@ -760,7 +765,19 @@ export function codegen(program, opts = {}) {
     if (owner.extern && owner.hostImp !== undefined) {
       owner.paramSyms.forEach((p) => lget(p.idx));
       emit(CALL, ...uleb(owner.hostImp));
-      if (owner.ret !== 'Unit') lset(owner.resultSym.idx);
+      if (owner.extern.fallible) {
+        // build Ok(value) or Err(message): tag 0 is Ok, the payload sits at offset 8
+        const cls = fieldClass(owner.extern.fallible), held = addLocal(wt(owner.extern.fallible)), box = addLocal(I32);
+        lset(held);
+        emit(...i32c(16)); emit(CALL, ...uleb(alloc.index)); lset(box);
+        lget(box); emit(CALL, ...uleb(imp.last_ok), I32_EQZ, I64_EXTEND_U, I64_STORE, 3, 0);
+        emit(CALL, ...uleb(imp.last_ok), IF, VOID);
+        lget(box); lget(held); emit(STORE[cls], cls === 'i32' ? 2 : 3, 8);
+        emit(ELSE);
+        lget(box); emit(CALL, ...uleb(imp.last_error), I32_STORE, 2, 8);
+        emit(END);
+        lget(box); lset(owner.resultSym.idx);
+      } else if (owner.ret !== 'Unit') lset(owner.resultSym.idx);
       emit(BR, ...uleb(depth));
     } else if (owner.extern) fail(FAIL.EXTERN, owner, owner.name);
     block(owner.body);
@@ -801,7 +818,7 @@ export function codegen(program, opts = {}) {
 
   const meta = {
     sites,
-    host: hostFns.map((f) => ({ name: f.name, params: f.params.map((p) => p.ty), ret: f.ret, ...(f.extern.tool ? { tool: true } : {}) })),
+    host: hostFns.map((f) => ({ name: f.name, params: f.params.map((p) => p.ty), ret: f.extern.fallible ?? f.ret, ...(f.extern.fallible ? { fallible: true } : {}), ...(f.extern.tool ? { tool: true } : {}) })),
     ...(opts.exports ? { plan: manifestOf(program) } : {}),
     effects: program.main ? [...program.main.effectSet] : [],
     tests: program.tests.map((t) => ({ name: t.name, line: t.line })),

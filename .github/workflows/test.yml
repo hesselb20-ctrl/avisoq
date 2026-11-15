@@ -1,0 +1,34 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+      - name: Compiler, WebAssembly backend
+        run: node tests/run.mjs wasm
+      - name: Editor support and packages
+        run: node tests/ide.mjs && node tests/pkg.mjs
+      - name: Scripts, manifest, approval, gateway
+        run: node tests/act.mjs
+      - name: Attempts to get around the limits
+        run: node tests/attack.mjs
+      - name: Embedding, limits and tools
+        run: node tests/embed.mjs && node tests/mcp.mjs
+      - name: Documentation examples
+        run: node tests/docs.mjs
+      - name: Compiler, native backend
+        if: runner.os == 'Linux'
+        run: node tests/run.mjs native

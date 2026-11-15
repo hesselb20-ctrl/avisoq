@@ -2,7 +2,7 @@
 // to the caller. Shared by both backends (see src/embed.mjs).
 import { isMap } from './types.mjs';
 
-const plain = (t) => !isMap(t) && !t.startsWith('Fn[') && !t.includes('Map[') && !t.includes('Fn[');
+export const plain = (t) => !isMap(t) && !t.startsWith('Fn[') && !t.includes('Map[') && !t.includes('Fn[');
 const own = (f) => !/[\\/]std[\\/][a-z_]+\.avq$/.test(f.file ?? '');
 
 // Every function of the program's own files that takes and returns plain data.

@@ -4,6 +4,22 @@ Avisoq is an experimental preview. Until 1.0, any release may change the languag
 release below passed the full test suite on both backends on Windows; no other platform has
 been tested.
 
+## 0.17 (15 November 2026)
+
+- Tools take and return any plain data: lists, structs, tuples and enums as well as numbers,
+  booleans and text. A tool that answers with JSON can be declared to return a struct.
+- A tool declared `-> Result[T, Str]` gives its failure to the script as a value. Without
+  `Result` a failing tool still stops the script, and a refused call always does.
+- `tool create_issue(title: Str) -> Str as "create-issue"` for tools whose real name Avisoq
+  cannot use. A real tool can be declared once only, and policies match on the real name.
+- A loop whose ends are written as numbers is counted exactly in the manifest.
+- Signed approvals: `avisoq keygen` makes a key; with an approvers file present, only
+  approvals signed by someone listed in it count.
+- A script submitted through the gateway may import the standard library only.
+- `tests/attack.mjs`: 55 attempts to get around the limits, the manifest, the approval and
+  the log.
+- A workflow that runs the tests on Linux, macOS and Windows.
+
 ## 0.16 (15 November 2026)
 
 Avisoq is now aimed at one job: scripts that AI agents write to act through tools.

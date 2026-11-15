@@ -13,6 +13,7 @@ try {
   }
 } catch { /* the hint is optional */ }
 import { elemOf, isArr, isMap, mangle, mapParts, showType, substType, typeArgs, typeHead, unify, walk } from './types.mjs';
+import { plain as plainType } from './exports.mjs';
 
 export const EFFECTS = new Set(['io', 'time', 'fs', 'net', 'run', 'ffi', 'host', 'tools']);
 const BUILTIN_EFFECTS = { print: 'io', now_ms: 'time', read_file: 'fs', write_file: 'fs', file_exists: 'fs', http_get: 'net', http_post: 'net', run_command: 'run' };
@@ -279,7 +280,21 @@ export function check(program, diags) {
     currentFile = owner.file;
     if (!isTest && owner.extern) {
       // C code: only values C can take directly cross over, and there is no body to check.
-      const ok = (t) => ['Int', 'Float', 'Bool', 'Str'].includes(t);
+      // C takes four plain types. A host function or a tool takes and returns any plain data
+      // (no maps, no functions), and may return Result[T, Str] so that its failure can be handled.
+      const viaHost = owner.extern.source === 'host';
+      if (owner.extern.tool) {
+        // one declaration per real tool: a second name for it would carry a second set of limits
+        const real = owner.extern.tool.remote ?? owner.name;
+        const twin = program.fns.find((f) => f !== owner && f.extern && f.extern.tool && (f.extern.tool.remote ?? f.name) === real);
+        if (twin) err('E0803', `the tool '${real}' is declared twice, as '${twin.name}' and '${owner.name}'`, owner, 'declare each tool once; its limits apply to every call');
+      }
+      const ok = (t) => (viaHost ? plainType(t) : ['Int', 'Float', 'Bool', 'Str'].includes(t));
+      if (viaHost && typeHead(owner.ret) === 'Result' && owner.ret !== '?') {
+        const [okTy, errTy] = typeArgs(owner.ret);
+        if (errTy !== 'Str' || !plainType(okTy)) err('E0802', `${owner.extern.tool ? 'tool' : 'host function'} '${owner.name}' can return Result[T, Str] with plain data for T, not ${showType(owner.ret)}`, owner);
+        else owner.extern.fallible = okTy;
+      }
       for (const p of owner.params) {
         if (p.mut || (p.ty !== '?' && !ok(p.ty))) err('E0802', `extern function '${owner.name}' cannot take ${p.mut ? 'a mut parameter' : showType(p.ty)}`, p, 'an extern function takes Int, Float, Bool and Str; convert other values on the Avisoq side or in the C file');
       }

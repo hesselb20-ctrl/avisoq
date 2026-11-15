@@ -32,7 +32,17 @@ avisoq act refund_late_order.avq '[9]' --tools tools.json      # stopped: 2500 i
 ```
 
 Edit the script, even one number, and `act` refuses again until someone approves the new
-version. Open `shop-state.json` to see what was actually done.
+version.
+
+To make approvals something an agent cannot fake, sign them:
+
+```
+avisoq keygen                 # once: a private key in your home folder, your public key in avisoq.approvers.json
+avisoq approve refund_late_order.avq --tools tools.json     # now signed
+```
+
+From then on, in this folder, an approval file that is not signed by someone in
+`avisoq.approvers.json` is ignored. Open `shop-state.json` to see what was actually done.
 
 ## 3. Check what happened
 
@@ -87,8 +97,11 @@ in `avisoq-scripts/`.
 
 ## What to know before trusting it
 
-- Tool arguments and results are numbers, booleans and text. Structured data travels as JSON text.
-- A failed tool call stops the script; it cannot be caught and handled yet.
-- Every loop counts as unbounded, even `for i in 0..3`. Put an `at most` on tools called in loops.
-- Approval is a file next to the script. There are no users, signatures or roles behind it.
-- The limits are enforced by this runner, in one process. Nobody has tried to get around them yet.
+- Tools cannot take or return maps or functions.
+- A loop is counted exactly only when both ends are written as numbers (`for i in 0..3`). Put
+  an `at most` on tools called in any other loop.
+- Run `avisoq keygen` once and approvals are signed; from then on unsigned ones do not count in
+  this folder. Keep the private key (in your home folder) and `avisoq.approvers.json` where the
+  agent cannot write, or it could approve its own work.
+- The limits are enforced by this runner, in one process. The only attempts to get around them
+  so far are the author's own (`tests/attack.mjs`).

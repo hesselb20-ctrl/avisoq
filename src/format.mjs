@@ -229,7 +229,7 @@ export function format(src) {
         let head = `${d.private ? 'private ' : ''}fn ${d.name}${typeParams(d)}(${params})`;
         if (d.ret !== 'Unit') head += ` -> ${fmtType(d.ret)}`;
         if (d.extern && d.extern.tool) {
-          out.push(`tool ${head.replace(/^fn /, '')}`);
+          out.push(`tool ${head.replace(/^fn /, '')}${d.extern.tool.remote ? ` as ${quote(d.extern.tool.remote)}` : ''}`);
           if (d.extern.tool.max !== null) out.push(`  at most ${d.extern.tool.max}`);
           for (const x of d.extern.tool.totals) out.push(`  total ${x.param} at most ${x.max}`);
           for (const c of d.requires) out.push(`  requires ${expr(c.expr)}`);

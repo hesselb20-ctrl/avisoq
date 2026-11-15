@@ -10,9 +10,10 @@
 // new approval; the runner counts every tool call against the caps in the declarations and
 // refuses the call that would go over; and every call, its arguments and its answer are written
 // to a log that a replay can check.
-import { createHash } from 'node:crypto';
-import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { basename } from 'node:path';
+import { createPrivateKey, createPublicKey, generateKeyPairSync, sign, verify } from 'node:crypto';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { basename, dirname, join } from 'node:path';
 import { load, AvisoqError, jsonSafe } from './embed.mjs';
 import { showManifest } from './manifest.mjs';
 import { mismatch, openTools } from './mcp-client.mjs';
@@ -76,23 +77,57 @@ export function entryOf(plan, name, how = 'with --fn') {
 }
 
 // ---- approval: by a person (a file next to the script) or by a policy ----
+// An approval can be signed. `avisoq keygen` makes a key pair: the private key stays in the
+// approver's home folder, the public key goes into an approvers file. When an approvers file is
+// in use, only approvals signed by someone listed in it count, so whoever can write files next
+// to the script (an agent, for instance) cannot approve its own work.
 const approvalFile = (path) => `${path}.approval.json`;
+const signedText = (hash, entry, by, at) => `avisoq approval\n${hash}\n${entry}\n${by}\n${at}\n`;
+export const defaultKeyFile = (name) => join(process.env.AVISOQ_HOME ?? join(homedir(), '.avisoq'), 'keys', `${name}.key`);
+export const whoAmI = () => (process.env.AVISOQ_APPROVER ?? process.env.USERNAME ?? process.env.USER ?? 'someone').toLowerCase().replace(/[^a-z0-9_.-]+/g, '_');
 
-export function approve(path, prepared, entry, by = process.env.USERNAME ?? process.env.USER ?? 'someone') {
-  const text = showManifest(prepared.plan, entry, { file: basename(path), hash: prepared.hash, limits: prepared.limits });
-  const all = existsSync(approvalFile(path)) ? JSON.parse(readFileSync(approvalFile(path), 'utf8')) : {};
-  const kept = all.hash === prepared.hash ? all.entries ?? {} : {};
-  kept[entry] = { by, at: new Date().toISOString(), manifest: text };
-  writeFileSync(approvalFile(path), `${JSON.stringify({ hash: prepared.hash, entries: kept }, null, 1)}\n`);
-  return text;
+export function keygen(name, approversFile) {
+  const keyFile = defaultKeyFile(name);
+  if (existsSync(keyFile)) throw new AvisoqError(`${keyFile} already exists; remove it first if you really want a new key for '${name}'`, { kind: 'setup' });
+  const { publicKey, privateKey } = generateKeyPairSync('ed25519');
+  mkdirSync(dirname(keyFile), { recursive: true });
+  writeFileSync(keyFile, privateKey.export({ type: 'pkcs8', format: 'pem' }), { mode: 0o600 });
+  const list = existsSync(approversFile) ? JSON.parse(readFileSync(approversFile, 'utf8')) : { approvers: {} };
+  list.approvers[name] = publicKey.export({ type: 'spki', format: 'der' }).toString('base64');
+  writeFileSync(approversFile, `${JSON.stringify(list, null, 1)}\n`);
+  return keyFile;
 }
 
-export function approvedBy(path, prepared, entry) {
+export const readApprovers = (file) => (file && existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')).approvers ?? {} : null);
+
+export function approve(path, prepared, entry, { by = whoAmI(), keyFile = defaultKeyFile(by), notes = {} } = {}) {
+  const text = showManifest(prepared.plan, entry, { file: basename(path), hash: prepared.hash, limits: prepared.limits, notes });
+  const all = existsSync(approvalFile(path)) ? JSON.parse(readFileSync(approvalFile(path), 'utf8')) : {};
+  const kept = all.hash === prepared.hash ? all.entries ?? {} : {};
+  const at = new Date().toISOString();
+  kept[entry] = { by, at, manifest: text };
+  if (existsSync(keyFile)) kept[entry].signature = sign(null, Buffer.from(signedText(prepared.hash, entry, by, at)), createPrivateKey(readFileSync(keyFile))).toString('base64');
+  writeFileSync(approvalFile(path), `${JSON.stringify({ hash: prepared.hash, entries: kept }, null, 1)}\n`);
+  return { text, signed: !!kept[entry].signature };
+}
+
+// Who approved this exact script, or null. With `approvers` (name -> public key), only a valid
+// signature by one of them counts; `why` then says what was wrong with the approval on file.
+export function approvedBy(path, prepared, entry, approvers = null, why = {}) {
   if (!existsSync(approvalFile(path))) return null;
   try {
     const a = JSON.parse(readFileSync(approvalFile(path), 'utf8'));
-    return a.hash === prepared.hash && a.entries?.[entry] ? `approved by ${a.entries[entry].by} on ${a.entries[entry].at.slice(0, 10)}` : null;
-  } catch { return null; }
+    const e = a.hash === prepared.hash ? a.entries?.[entry] : null;
+    if (!e) { if (a.hash !== prepared.hash) why.reason = 'the script or its limits changed after it was approved'; return null; }
+    if (approvers) {
+      if (!e.signature) { why.reason = 'its approval is not signed, and this setup only accepts signed approvals'; return null; }
+      if (!approvers[e.by]) { why.reason = `'${e.by}' is not in the approvers file`; return null; }
+      const key = createPublicKey({ key: Buffer.from(approvers[e.by], 'base64'), format: 'der', type: 'spki' });
+      if (!verify(null, Buffer.from(signedText(a.hash, entry, e.by, e.at)), key, Buffer.from(e.signature, 'base64'))) { why.reason = `the signature on its approval is not ${e.by}'s`; return null; }
+      return `approved and signed by ${e.by} on ${e.at.slice(0, 10)}`;
+    }
+    return `approved by ${e.by} on ${e.at.slice(0, 10)}`;
+  } catch { why.reason = 'its approval file cannot be read'; return null; }
 }
 
 // A policy says what may run without asking a person:
@@ -104,8 +139,8 @@ export function policyProblem(policy, plan, entryName) {
   const allowed = policy.tools ?? {};
   const problems = [];
   for (const t of entry.tools) {
-    const rule = allowed[t.name];
-    if (!rule) { problems.push(`the policy does not allow the tool '${t.name}'`); continue; }
+    const rule = allowed[t.real];
+    if (!rule) { problems.push(`the policy does not allow the tool '${t.real}'`); continue; }
     if (rule.max !== undefined && (t.bound === 'unlimited' || t.calls > rule.max)) problems.push(`the policy allows '${t.name}' at most ${rule.max} time${rule.max === 1 ? '' : 's'} per run, and this script ${t.bound === 'unlimited' ? 'has no limit on it' : `allows ${t.calls}`}`);
     for (const [param, most] of Object.entries(rule.totals ?? {})) {
       const declared = t.totals.find((x) => x.param === param);
@@ -129,6 +164,13 @@ export function showPolicy(policy) {
 ${lines.join('\n') || '  (none)'}
 ${effects.length ? `It may also use: ${effects.join(', ')}.` : 'It may use nothing else: no printing, files or network.'}
 Anything beyond that is not run until a person approves it.`;
+}
+
+// A script that arrives from an agent may import the standard library and nothing else: a file
+// path in an import would make the compiler read that file. Returns the first such import, or null.
+export function importOutside(source) {
+  const m = /^[ \t]*import[ \t]+"(?!std\/[a-z_]+")([^"]*)"/m.exec(source);
+  return m ? m[1] : null;
 }
 
 // ---- running, with a log ----
@@ -155,20 +197,21 @@ export async function act(path, args, { source, entry, tools = {}, allow = [], l
 export function bindTools(plan, offered) {
   const tools = {}, notes = {};
   for (const decl of plan.tools) {
-    const t = offered.get(decl.name);
-    if (!t) throw new AvisoqError(`the script declares the tool '${decl.name}', which no server in the tools file offers (they offer: ${[...offered.keys()].join(', ') || 'nothing'})`, { kind: 'setup' });
+    const t = offered.get(decl.real);
+    if (!t) throw new AvisoqError(`the script declares the tool '${decl.real}', which no server in the tools file offers (they offer: ${[...offered.keys()].join(', ') || 'nothing'})`, { kind: 'setup' });
     const wrong = mismatch(decl, t);
     if (wrong) throw new AvisoqError(`the declaration of tool '${decl.name}' does not fit the server '${t.server}': ${wrong}`, { kind: 'setup' });
     notes[decl.name] = `[${t.server}${t.annotations.readOnlyHint ? ', only reads' : t.annotations.destructiveHint ? ', can destroy' : ''}]`;
+    // the type the script gets when the call works: T, or the T of Result[T, Str]
+    const want = decl.ret.startsWith('Result[') ? decl.ret.slice(7, decl.ret.lastIndexOf(',')) : decl.ret;
     tools[decl.name] = async (...args) => {
-      const text = await t.call(Object.fromEntries(decl.params.map((p, i) => [p.name, typeof args[i] === 'bigint' ? Number(args[i]) : args[i]])));
-      if (decl.ret === 'Str') return text;
-      if (decl.ret === 'Unit') return undefined;
+      const text = await t.call(Object.fromEntries(decl.params.map((p, i) => [p.name, jsonSafe(typeof args[i] === 'bigint' ? Number(args[i]) : args[i])])));
+      if (want === 'Str') return text;
+      if (want === 'Unit') return undefined;
+      // anything else is read from JSON: a number, a boolean, a list, or an object for a struct
       let v;
-      try { v = JSON.parse(text); } catch { v = undefined; }
-      if (decl.ret === 'Bool' && typeof v === 'boolean') return v;
-      if ((decl.ret === 'Int' && Number.isInteger(v)) || (decl.ret === 'Float' && typeof v === 'number')) return v;
-      throw Object.assign(new Error(`tool '${decl.name}' answered ${JSON.stringify(text.slice(0, 80))}, which is not ${decl.ret === 'Int' ? 'an Int' : `a ${decl.ret}`}`), { kind: 'tool' });
+      try { v = JSON.parse(text); } catch { throw Object.assign(new Error(`tool '${decl.name}' answered ${JSON.stringify(text.slice(0, 80))}, which is not JSON for ${want}`), { kind: 'tool' }); }
+      return v;
     };
   }
   return { tools, notes };

@@ -10,14 +10,16 @@ short script instead, and **what that script can do is known before it runs**: w
 can reach, how many times, and under which rules. That is what a person, or a policy, approves.
 
 ```
-tool lookup_order(order: Int) -> Str
+struct Order { id: Int, email: Str, days_late: Int, shipping_cents: Int, refunded: Bool }
+
+tool lookup_order(order: Int) -> Result[Order, Str]
 
 tool refund(order: Int, amount_cents: Int) -> Str
   at most 1
   total amount_cents at most 2000
   requires amount_cents > 0
 
-tool send_email(to: Str, subject: Str, body: Str) -> Str
+tool send_email(to: Str, subject: Str, body: Str) -> Result[Str, Str]
   at most 1
 
 fn handle(order: Int) -> Str uses tools
@@ -30,16 +32,16 @@ fn handle(order: Int) -> Str uses tools
 ```
 $ avisoq plan refund_late_order.avq --tools tools.json
 
-refund_late_order.avq: handle(order: Int) -> Str   [823f5803db24]
+refund_late_order.avq: handle(order: Int) -> Str   [3b33c0ce3c29]
 
 It can call:
-  lookup_order(order: Int) -> Str   [shop, only reads]
+  lookup_order(order: Int) -> Result[Order, Str]   [shop, only reads]
       at most once (the code cannot do more)
   refund(order: Int, amount_cents: Int) -> Str   [shop, can destroy]
       at most once (the code cannot do more)
       amount_cents adds up to at most 2000 over the whole run
       every call must satisfy: amount_cents > 0
-  send_email(to: Str, subject: Str, body: Str) -> Str   [shop]
+  send_email(to: Str, subject: Str, body: Str) -> Result[Str, Str]   [shop]
       at most once (the code cannot do more)
 
 It cannot print, read or write files, use the network, start programs, or call any other tool.
@@ -54,11 +56,17 @@ the runtime holds the script to it:
   A tool it does not declare cannot be called, and a tool the servers do not offer cannot be
   declared into being.
 - **Counted, and capped.** "At most once (the code cannot do more)" is a count of the call
-  sites; a call in a loop is "stopped if it tries more" and the call over the cap is refused
-  before it leaves. A `total` adds up one argument, such as money, over the whole run.
-- **Approval is tied to the script.** `avisoq approve` records agreement to exactly this code
-  and these limits. Change either and it will not run until someone agrees again. A policy
-  file can pre-approve scripts that stay inside set bounds, so routine work needs nobody.
+  sites, including loops whose length is written out; a call in any other loop is "stopped if
+  it tries more", and the call over the cap is refused before it leaves. A `total` adds up one
+  argument, such as money, over the whole run.
+- **Approval is tied to the script, and can be signed.** `avisoq approve` records agreement to
+  exactly this code and these limits. Change either and it will not run until someone agrees
+  again. After `avisoq keygen`, only approvals signed by the people in the approvers file
+  count, so an agent that can write files cannot approve its own work. A policy file can
+  pre-approve scripts that stay inside set bounds, so routine work needs nobody.
+- **Typed answers, and failures you can handle.** A tool that answers with JSON can return a
+  struct, and its fields arrive typed. A tool declared to return `Result[T, Str]` hands its
+  failure to the script as a value; a refused call always stops the script.
 - **Everything is logged and can be replayed.** Every call, its arguments and its answer go to
   a log, and `avisoq replay` reruns the script against that log without touching anything.
 - **It fails loudly.** Overflow, a bad index, a broken rule or a failed tool stop the script
@@ -80,10 +88,12 @@ by the author: a sign it works, not a measurement.
 Try it: [`examples/agent-actions`](examples/agent-actions/README.md) has a stand-in shop
 (orders, refunds, email) as an MCP server, a script, a policy, and the commands above.
 
-**What this is not, yet.** It is days old, written by one person with an AI coding agent, and
-has only been run on Windows. Nobody has tried to break it. Tools take and return numbers,
-booleans and text only. Treat it as a working design to try and to attack, not as a security
-product to rely on. See [Known limits](#known-limits).
+**What this is not, yet.** It is days old and written by one person with an AI coding agent.
+The only attempts to break it are the author's own: `tests/attack.mjs` tries 55 ways around
+the limits, the manifest, the approval and the log, and all are stopped, but an attack suite
+written by the builder shows what was thought of, not what was missed. Treat it as a working
+design to try and to attack, not as a security product to rely on. See
+[Known limits](#known-limits).
 
 Avisoq is also a complete small language underneath (types, contracts proven at compile time,
 a native backend, a standard library), and its functions can be
@@ -92,10 +102,10 @@ The rest of this page covers that.
 
 <img src=".github/assets/figure/scene.webp" width="100%" alt="Three beats: a mandelbrot benchmark computed on one thread with every check on in 112 ms against 108 ms for C++; the same loop written as a sum, spread over 8 threads and 8 lanes; and the result, 4.6 ms against 15 ms for C++ parallelised by hand with OpenMP.">
 
-Version 0.16. One front end, two backends (native machine code through GCC, and sandboxed
+Version 0.17. One front end, two backends (native machine code through GCC, and sandboxed
 WebAssembly), a standard library written in Avisoq, a formatter, a compile-time contract prover,
 a language server, a package manager and a differential fuzzer. The test suites pass on both
-backends: 384 compiler cases each, 57 for scripts and the gateway, 21 + 65 embedding, 41 limits and
+backends: 384 compiler cases each, 62 for scripts and the gateway, 55 attack attempts, 21 + 65 embedding, 41 limits and
 agent-tool, and 18 interop tests, plus 26 editor, 17 package and 10 sandbox tests.
 
 **Documentation:** [tutorial](docs/TUTORIAL.md) (fifteen minutes, every example tested) ·
@@ -492,11 +502,11 @@ on an idle machine with 8 logical cores (Zen 4, AVX-512). Ratios are relative to
   slower on long chains of additions and on dividing very large numbers.
 - **`std/json` reads numbers as Floats** and does not round them as exactly as a full JSON
   library; whole numbers up to 2^53 are exact.
-- **Scripts and tools are new.** Tool arguments and results are `Int`, `Float`, `Bool` and
-  `Str` (JSON travels as text); a failed tool call stops the script, it cannot be caught; the
-  call counts treat every loop as unbounded even when its length is fixed; approval is a file
-  next to the script, with no signatures or users behind it; and scripts run on the
-  WebAssembly route through Node only.
+- **Scripts and tools are new.** Tools cannot take or return maps or functions. A loop counts
+  exactly only when both ends are written as numbers. Signed approvals are as safe as the
+  private key and the approvers file: keep both where the agent cannot write. Without
+  `avisoq keygen`, an approval is an unsigned file that anything able to write next to the
+  script could forge. Scripts run on the WebAssembly route through Node only.
 - **The sandbox has soft spots.** On the WebAssembly route, maps live on the host side and are
   not counted by the memory limit (the time limit still stops a runaway). On the native route
   there is no virtual machine: the limits and the capability checks are the compiler's and

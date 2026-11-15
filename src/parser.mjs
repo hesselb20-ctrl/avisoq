@@ -174,6 +174,9 @@ export function parse(src) {
         const word = (w) => peek().kind === 'id' && peek().value === w;
         const count = (what) => { const k = peek(); if (k.kind !== 'int') fail(`${what} is followed by a whole number`, 'for example: at most 3'); next(); return Number(k.value); };
         const atMost = (what) => { if (!word('at')) fail(`expected 'at most' after ${what}`); next(); if (!word('most')) fail("expected 'most' after 'at'", 'write: at most 3'); next(); return count('at most'); };
+        // tool create_issue(title: Str) -> Str as "create-issue": the tool's own name, when it
+        // is not a name Avisoq allows
+        if (word('as')) { next(); ext.tool.remote = expect('str', undefined, 'as is followed by the tool\'s real name in quotes: as "create-issue"').value; }
         for (;;) {
           if (word('at')) { if (ext.tool.max !== null) fail('this tool already has an at most clause'); ext.tool.max = atMost('the tool'); }
           else if (word('total')) {

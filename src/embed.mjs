@@ -48,7 +48,7 @@ export async function load(path, { allow = [], source, native = false, portable 
     throw new AvisoqError(`${path}:${d.line}:${d.col}: error[${d.code}]: ${d.message}`, { kind: 'compile', diagnostics: compiled.diagnostics });
   }
   let printed = '';
-  const instance = await instantiate(compiled.wasm, compiled.meta, { allow, limits, host, waits, write: (s) => { printed += s; } });
+  const instance = await instantiate(compiled.wasm, compiled.meta, { allow, limits, host, waits, codec: { toRaw: (...a) => toRaw(...a), fromRaw: (...a) => fromRaw(...a) }, write: (s) => { printed += s; } });
   const ex = instance.exports;
   const { structs, enums } = compiled.meta.types;
   const enc = new TextEncoder(), dec = new TextDecoder();

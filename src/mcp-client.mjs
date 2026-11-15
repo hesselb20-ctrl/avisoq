@@ -80,25 +80,36 @@ export async function openTools(toolsFile) {
   return { tools, close: () => { for (const s of servers) s.close(); } };
 }
 
+const RESERVED = new Set(['fn', 'let', 'var', 'if', 'else', 'while', 'for', 'in', 'return', 'assert', 'requires', 'ensures', 'uses', 'test', 'true', 'false', 'and', 'or', 'not', 'mut', 'struct', 'enum', 'match', 'import', 'invariant', 'private', 'break', 'continue', 'then', 'extern', 'tool', 'main',
+  'print', 'len', 'array', 'float', 'int', 'sqrt', 'now_ms', 'str', 'substr', 'byte_at', 'put', 'get', 'get_or', 'has', 'keys', 'remove', 'copy', 'push', 'pop', 'chr', 'read_file', 'write_file', 'file_exists', 'http_get', 'http_post', 'bit_and', 'bit_or', 'bit_xor', 'shift_left', 'shift_right', 'run_command', 'sum']);
 const JSON_TO_AVISOQ = { integer: 'Int', number: 'Float', boolean: 'Bool', string: 'Str' };
 
 // The Avisoq declaration for a tool, or a comment saying why it cannot be declared.
 export function declarationOf(t) {
   const props = Object.entries(t.inputSchema.properties ?? {});
-  const odd = props.filter(([, s]) => !JSON_TO_AVISOQ[s.type]);
+  // lists of plain values are written out; an object needs a struct the script declares itself
+  const typeOf = (s) => JSON_TO_AVISOQ[s.type] ?? (s.type === 'array' && s.items && JSON_TO_AVISOQ[s.items.type] ? `[${JSON_TO_AVISOQ[s.items.type]}]` : null);
+  const odd = props.filter(([, s]) => !typeOf(s));
   const said = t.description ? `// ${t.description.replace(/\s+/g, ' ').trim()}\n` : '';
-  if (odd.length) return `${said}// (not usable from a script yet: ${odd.map(([n, s]) => `${n} is ${s.type ?? 'an unknown type'}`).join(', ')})\n// tool ${t.name}(...)`;
   const kind = t.annotations.readOnlyHint ? '   // only reads' : t.annotations.destructiveHint ? '   // changes or deletes things' : '';
-  return `${said}tool ${t.name}(${props.map(([n, s]) => `${n}: ${JSON_TO_AVISOQ[s.type]}`).join(', ')}) -> Str${kind}`;
+  const note = odd.length ? `\n// (${odd.map(([n, s]) => `${n} is ${s.type === 'object' ? 'an object: declare a struct with its fields and use that as the type' : s.type ?? 'of an unknown type'}`).join('; ')})` : '';
+  // a name Avisoq cannot use (create-issue, get, repo.list) gets a usable one, with the real one after `as`
+  const usable = /^[a-z_][a-z0-9_]*$/.test(t.name) && !RESERVED.has(t.name);
+  const local = usable ? t.name : `${t.name.replace(/[^A-Za-z0-9]+/g, '_').replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase().replace(/^_+|_+$/g, '').replace(/^([0-9])/, 't_$1') || 'tool'}${RESERVED.has(t.name) ? '_tool' : ''}`;
+  const alias = usable ? '' : ` as ${JSON.stringify(t.name)}`;
+  return `${said}tool ${local}(${props.map(([n, s]) => `${n}: ${typeOf(s) ?? 'YourStruct'}`).join(', ')}) -> Str${alias}${kind}${note}`;
 }
 
 // Does the script's declaration of a tool fit what the server offers? Returns a problem, or null.
 export function mismatch(declared, offered) {
   const props = offered.inputSchema.properties ?? {};
   const fits = { Int: ['integer', 'number'], Float: ['number'], Bool: ['boolean'], Str: ['string'] };
+  // a list is a JSON array; a struct, tuple or enum travels as a JSON object or array
+  const kinds = (ty) => fits[ty] ?? (ty.startsWith('[') ? ['array'] : ['object', 'array']);
   for (const p of declared.params) {
     if (!props[p.name]) return `the tool has no argument '${p.name}' (it takes ${Object.keys(props).join(', ') || 'none'})`;
-    if (!fits[p.ty] || !fits[p.ty].includes(props[p.name].type)) return `argument '${p.name}' is declared ${p.ty} but the tool takes ${props[p.name].type ?? 'another type'}`;
+    const offered1 = props[p.name].type;
+    if (offered1 !== undefined && !kinds(p.ty).includes(offered1)) return `argument '${p.name}' is declared ${p.ty} but the tool takes ${offered1}`;
   }
   const missing = (offered.inputSchema.required ?? []).filter((r) => !declared.params.some((p) => p.name === r));
   if (missing.length) return `the tool also needs ${missing.join(', ')}`;

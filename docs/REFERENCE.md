@@ -1,6 +1,6 @@
 # Avisoq language reference
 
-Version 0.16. For a guided introduction read the [tutorial](TUTORIAL.md) first. Code blocks
+Version 0.17. For a guided introduction read the [tutorial](TUTORIAL.md) first. Code blocks
 marked as Avisoq on this page are compiled by the test suite.
 
 ## Source files
@@ -321,8 +321,13 @@ tool refund(order: Int, amount_cents: Int) -> Str
   requires amount_cents > 0          // must hold on every call
 ```
 
-Arguments and results are `Int`, `Float`, `Bool` and `Str`. A function that calls a tool
-declares `uses tools`. `avisoq plan` shows what a script can reach; see the README.
+Arguments and results are any plain data: numbers, booleans, text, lists, structs, tuples
+and enums, but no maps or functions. A tool that answers with JSON can return a struct; fields
+the struct does not name are ignored, and a missing or mistyped field is a failure. Declared
+as `-> Result[T, Str]`, a tool's failure arrives as `Err(message)`; otherwise it stops the
+script. A refused call always stops it. `as "real-name"` after the signature names a tool
+whose own name is not a valid Avisoq name. A function that calls a tool declares `uses tools`.
+`avisoq plan` shows what a script can reach; see the README.
 
 `extern "host" fn unit_price(product: Str) -> Int` declares a function that the program
 embedding this code provides (`load(file, { host: { unit_price: ... } })` in JavaScript, or
@@ -347,7 +352,8 @@ Each call can be given a time limit and a memory limit (`timeLimitMs`, `memoryLi
 | `avisoq call file.avq name '[args]'` | calls one function and prints the result as JSON |
 | `avisoq serve file.avq` | answers function calls as JSON lines |
 | `avisoq plan script.avq` | what a script can do: tools, how often, rules (`--tools`, `--fn`, `--json`) |
-| `avisoq approve script.avq` | records agreement to exactly that |
+| `avisoq approve script.avq` | records agreement to exactly that, signed when you have a key |
+| `avisoq keygen [name]` | makes a signing key and adds it to `avisoq.approvers.json`; from then on only signed approvals count in that folder (`--approvers file` elsewhere) |
 | `avisoq act script.avq '[args]'` | runs an approved script (`--tools`, `--policy`, `--log`) |
 | `avisoq replay script.avq` | reruns the last logged run against its log |
 | `avisoq tools --tools file` | prints tool declarations for the servers in the file |
