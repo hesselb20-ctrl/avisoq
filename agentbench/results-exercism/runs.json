@@ -1,0 +1,65 @@
+[
+ {
+  "model": "sonnet",
+  "run": 1,
+  "language": "python",
+  "seconds": 129,
+  "ktokens": 129
+ },
+ {
+  "model": "sonnet",
+  "run": 1,
+  "language": "rust",
+  "seconds": 149,
+  "ktokens": 132
+ },
+ {
+  "model": "sonnet",
+  "run": 1,
+  "language": "avisoq",
+  "seconds": 149,
+  "ktokens": 140
+ },
+ {
+  "model": "haiku",
+  "run": 1,
+  "language": "python",
+  "seconds": 221,
+  "ktokens": 160
+ },
+ {
+  "model": "haiku",
+  "run": 1,
+  "language": "rust",
+  "seconds": 266,
+  "ktokens": 172
+ },
+ {
+  "model": "haiku",
+  "run": 1,
+  "language": "avisoq",
+  "seconds": 400,
+  "ktokens": 183
+ },
+ {
+  "model": "sonnet",
+  "run": 2,
+  "language": "python",
+  "seconds": 110,
+  "ktokens": 125
+ },
+ {
+  "model": "sonnet",
+  "run": 3,
+  "language": "rust",
+  "seconds": 116,
+  "ktokens": 127
+ },
+ {
+  "model": "sonnet",
+  "run": 3,
+  "language": "python",
+  "seconds": 117,
+  "ktokens": 126
+ }
+]

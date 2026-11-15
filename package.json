@@ -12,10 +12,10 @@
   "main": "src/index.mjs",
   "exports": { ".": "./src/index.mjs" },
   "bin": { "avisoq": "src/cli.mjs" },
-  "files": ["src", "std", "docs", "examples", "bindings", "README.md", "LICENSE"],
+  "files": ["src", "std", "docs", "examples", "bindings", "README.md", "CHANGELOG.md", "LICENSE"],
   "engines": { "node": ">=22" },
   "scripts": {
-    "test": "node tests/run.mjs wasm && node tests/ide.mjs && node tests/pkg.mjs && node tests/embed.mjs",
+    "test": "node tests/run.mjs wasm && node tests/ide.mjs && node tests/pkg.mjs && node tests/embed.mjs && node tests/docs.mjs",
     "test:native": "node tests/run.mjs native && node tests/sandbox.mjs && node tests/interop.mjs",
     "fuzz": "node tests/fuzz.mjs 200",
     "test:memory": "node tests/memory.mjs"

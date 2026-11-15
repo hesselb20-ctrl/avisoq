@@ -1,0 +1,4102 @@
+{
+ "source": "https://github.com/exercism/problem-specifications",
+ "licence": "MIT, copyright Exercism",
+ "commit": "84a96854db1bda581317164d3e6ac6aa01723182 2026-11-11",
+ "eligible": [
+  "line-up",
+  "scrabble-score",
+  "crypto-square",
+  "change",
+  "sum-of-multiples",
+  "largest-series-product",
+  "luhn",
+  "anagram",
+  "book-store",
+  "protein-translation",
+  "transpose",
+  "food-chain",
+  "wordy",
+  "pig-latin",
+  "prime-factors",
+  "meetup",
+  "isbn-verifier",
+  "connect",
+  "perfect-numbers",
+  "state-of-tic-tac-toe",
+  "twelve-days",
+  "roman-numerals",
+  "pangram",
+  "matching-brackets",
+  "bob",
+  "tournament",
+  "rectangles",
+  "say",
+  "acronym",
+  "leap",
+  "raindrops",
+  "rotational-cipher",
+  "markdown",
+  "sublist",
+  "house",
+  "secret-handshake",
+  "isogram",
+  "swift-scheduling",
+  "all-your-base",
+  "yacht",
+  "flower-field",
+  "grep",
+  "poker",
+  "ocr-numbers"
+ ],
+ "tasks": [
+  {
+   "id": "line_up",
+   "exercise": "line-up",
+   "params": [
+    [
+     "name",
+     "Str"
+    ],
+    [
+     "number",
+     "Int"
+    ]
+   ],
+   "ret": "Str",
+   "desc": "# Instructions\n\nGiven a name and a number, your task is to produce a sentence using that name and that number as an [ordinal numeral][ordinal-numeral].\nYaʻqūb expects to use numbers from 1 up to 999.\n\nRules:\n\n- Numbers ending in 1 (unless ending in 11) → `\"st\"`\n- Numbers ending in 2 (unless ending in 12) → `\"nd\"`\n- Numbers ending in 3 (unless ending in 13) → `\"rd\"`\n- All other numbers → `\"th\"`\n\nExamples:\n\n- `\"Mary\", 1` → `\"Mary, you are the 1st customer we serve today. Thank you!\"`\n- `\"John\", 12` → `\"John, you are the 12th customer we serve today. Thank you!\"`\n- `\"Dahir\", 162` → `\"Dahir, you are the 162nd customer we serve today. Thank you!\"`\n\n[ordinal-numeral]: https://en.wikipedia.org/wiki/Ordinal_numeral",
+   "examples": [
+    {
+     "args": [
+      "Gianna",
+      4
+     ],
+     "expected": "Gianna, you are the 4th customer we serve today. Thank you!"
+    },
+    {
+     "args": [
+      "Maarten",
+      9
+     ],
+     "expected": "Maarten, you are the 9th customer we serve today. Thank you!"
+    }
+   ],
+   "tests": [
+    {
+     "args": [
+      "Petronila",
+      5
+     ],
+     "expected": "Petronila, you are the 5th customer we serve today. Thank you!"
+    },
+    {
+     "args": [
+      "Attakullakulla",
+      6
+     ],
+     "expected": "Attakullakulla, you are the 6th customer we serve today. Thank you!"
+    },
+    {
+     "args": [
+      "Kate",
+      7
+     ],
+     "expected": "Kate, you are the 7th customer we serve today. Thank you!"
+    },
+    {
+     "args": [
+      "Maximiliano",
+      8
+     ],
+     "expected": "Maximiliano, you are the 8th customer we serve today. Thank you!"
+    },
+    {
+     "args": [
+      "Mary",
+      1
+     ],
+     "expected": "Mary, you are the 1st customer we serve today. Thank you!"
+    },
+    {
+     "args": [
+      "Haruto",
+      2
+     ],
+     "expected": "Haruto, you are the 2nd customer we serve today. Thank you!"
+    },
+    {
+     "args": [
+      "Henriette",
+      3
+     ],
+     "expected": "Henriette, you are the 3rd customer we serve today. Thank you!"
+    },
+    {
+     "args": [
+      "Alvarez",
+      10
+     ],
+     "expected": "Alvarez, you are the 10th customer we serve today. Thank you!"
+    },
+    {
+     "args": [
+      "Jacqueline",
+      11
+     ],
+     "expected": "Jacqueline, you are the 11th customer we serve today. Thank you!"
+    },
+    {
+     "args": [
+      "Juan",
+      12
+     ],
+     "expected": "Juan, you are the 12th customer we serve today. Thank you!"
+    },
+    {
+     "args": [
+      "Patricia",
+      13
+     ],
+     "expected": "Patricia, you are the 13th customer we serve today. Thank you!"
+    },
+    {
+     "args": [
+      "Washi",
+      21
+     ],
+     "expected": "Washi, you are the 21st customer we serve today. Thank you!"
+    },
+    {
+     "args": [
+      "Ingrid",
+      22
+     ],
+     "expected": "Ingrid, you are the 22nd customer we serve today. Thank you!"
+    },
+    {
+     "args": [
+      "Mario",
+      33
+     ],
+     "expected": "Mario, you are the 33rd customer we serve today. Thank you!"
+    },
+    {
+     "args": [
+      "Quentin",
+      52
+     ],
+     "expected": "Quentin, you are the 52nd customer we serve today. Thank you!"
+    },
+    {
+     "args": [
+      "Nayra",
+      62
+     ],
+     "expected": "Nayra, you are the 62nd customer we serve today. Thank you!"
+    },
+    {
+     "args": [
+      "Ugo",
+      72
+     ],
+     "expected": "Ugo, you are the 72nd customer we serve today. Thank you!"
+    },
+    {
+     "args": [
+      "Boris",
+      91
+     ],
+     "expected": "Boris, you are the 91st customer we serve today. Thank you!"
+    },
+    {
+     "args": [
+      "John",
+      100
+     ],
+     "expected": "John, you are the 100th customer we serve today. Thank you!"
+    },
+    {
+     "args": [
+      "Zeinab",
+      101
+     ],
+     "expected": "Zeinab, you are the 101st customer we serve today. Thank you!"
+    },
+    {
+     "args": [
+      "Knud",
+      112
+     ],
+     "expected": "Knud, you are the 112th customer we serve today. Thank you!"
+    },
+    {
+     "args": [
+      "Yma",
+      123
+     ],
+     "expected": "Yma, you are the 123rd customer we serve today. Thank you!"
+    },
+    {
+     "args": [
+      "Elias",
+      972
+     ],
+     "expected": "Elias, you are the 972nd customer we serve today. Thank you!"
+    }
+   ]
+  },
+  {
+   "id": "scrabble_score",
+   "exercise": "scrabble-score",
+   "params": [
+    [
+     "word",
+     "Str"
+    ]
+   ],
+   "ret": "Int",
+   "desc": "# Instructions\n\nYour task is to compute a word's Scrabble score by summing the values of its letters.\n\nThe letters are valued as follows:\n\n| Letter                       | Value |\n| ---------------------------- | ----- |\n| A, E, I, O, U, L, N, R, S, T | 1     |\n| D, G                         | 2     |\n| B, C, M, P                   | 3     |\n| F, H, V, W, Y                | 4     |\n| K                            | 5     |\n| J, X                         | 8     |\n| Q, Z                         | 10    |\n\nFor example, the word \"cabbage\" is worth 14 points:\n\n- 3 points for C\n- 1 point for A\n- 3 points for B\n- 3 points for B\n- 1 point for A\n- 2 points for G\n- 1 point for E",
+   "examples": [
+    {
+     "args": [
+      "a"
+     ],
+     "expected": 1
+    },
+    {
+     "args": [
+      "A"
+     ],
+     "expected": 1
+    }
+   ],
+   "tests": [
+    {
+     "args": [
+      "f"
+     ],
+     "expected": 4
+    },
+    {
+     "args": [
+      "at"
+     ],
+     "expected": 2
+    },
+    {
+     "args": [
+      "zoo"
+     ],
+     "expected": 12
+    },
+    {
+     "args": [
+      "street"
+     ],
+     "expected": 6
+    },
+    {
+     "args": [
+      "quirky"
+     ],
+     "expected": 22
+    },
+    {
+     "args": [
+      "OxyphenButazone"
+     ],
+     "expected": 41
+    },
+    {
+     "args": [
+      "pinata"
+     ],
+     "expected": 8
+    },
+    {
+     "args": [
+      ""
+     ],
+     "expected": 0
+    },
+    {
+     "args": [
+      "abcdefghijklmnopqrstuvwxyz"
+     ],
+     "expected": 87
+    }
+   ]
+  },
+  {
+   "id": "crypto_square",
+   "exercise": "crypto-square",
+   "params": [
+    [
+     "plaintext",
+     "Str"
+    ]
+   ],
+   "ret": "Str",
+   "desc": "# Instructions\n\nImplement the classic method for composing secret messages called a square code.\n\nGiven an English text, output the encoded version of that text.\n\nFirst, the input is normalized: the spaces and punctuation are removed from the English text and the message is down-cased.\n\nThen, the normalized characters are broken into rows.\nThese rows can be regarded as forming a rectangle when printed with intervening newlines.\n\nFor example, the sentence\n\n```text\n\"If man was meant to stay on the ground, god would have given us roots.\"\n```\n\nis normalized to:\n\n```text\n\"ifmanwasmeanttostayonthegroundgodwouldhavegivenusroots\"\n```\n\nThe plaintext should be organized into a rectangle as square as possible.\nThe size of the rectangle should be decided by the length of the message.\n\nIf `c` is the number of columns and `r` is the number of rows, then for the rectangle `r` x `c` find the smallest possible integer `c` such that:\n\n- `r * c >= length of message`,\n- and `c >= r`,\n- and `c - r <= 1`.\n\nOur normalized text is 54 characters long, dictating a rectangle with `c = 8` and `r = 7`:\n\n```text\n\"ifmanwas\"\n\"meanttos\"\n\"tayonthe\"\n\"groundgo\"\n\"dwouldha\"\n\"vegivenu\"\n\"sroots  \"\n```\n\nThe coded message is obtained by reading down the columns going left to right.\n\nThe message above is coded as:\n\n```text\n\"imtgdvsfearwermayoogoanouuiontnnlvtwttddesaohghnsseoau\"\n```\n\nOutput the encoded text in chunks that fill perfect rectangles `(r X c)`, with `c` chunks of `r` length, separated by spaces.\nFor phrases that are `n` characters short of the perfect rectangle, pad each of the last `n` chunks with a single trailing space.\n\n```text\n\"imtgdvs fearwer mayoogo anouuio ntnnlvt wttddes aohghn  sseoau \"\n```\n\nNotice that were we to stack these, we could visually decode the ciphertext back in to the original message:\n\n```text\n\"imtgdvs\"\n\"fearwer\"\n\"mayoogo\"\n\"anouuio\"\n\"ntnnlvt\"\n\"wttddes\"\n\"aohghn \"\n\"sseoau \"\n```",
+   "examples": [
+    {
+     "args": [
+      ""
+     ],
+     "expected": ""
+    },
+    {
+     "args": [
+      "... --- ..."
+     ],
+     "expected": ""
+    }
+   ],
+   "tests": [
+    {
+     "args": [
+      "A"
+     ],
+     "expected": "a"
+    },
+    {
+     "args": [
+      "  b "
+     ],
+     "expected": "b"
+    },
+    {
+     "args": [
+      "@1,%!"
+     ],
+     "expected": "1"
+    },
+    {
+     "args": [
+      "This is fun!"
+     ],
+     "expected": "tsf hiu isn"
+    },
+    {
+     "args": [
+      "Chill out."
+     ],
+     "expected": "clu hlt io "
+    },
+    {
+     "args": [
+      "If man was meant to stay on the ground, god would have given us roots."
+     ],
+     "expected": "imtgdvs fearwer mayoogo anouuio ntnnlvt wttddes aohghn  sseoau "
+    }
+   ]
+  },
+  {
+   "id": "change",
+   "exercise": "change",
+   "params": [
+    [
+     "coins",
+     "[Int]"
+    ],
+    [
+     "target",
+     "Int"
+    ]
+   ],
+   "ret": "[Int]",
+   "desc": "# Instructions\n\nDetermine the fewest number of coins to give a customer so that the sum of their values equals the correct amount of change.\n\n## Examples\n\n- An amount of 15 with available coin values [1, 5, 10, 25, 100] should return one coin of value 5 and one coin of value 10, or [5, 10].\n- An amount of 40 with available coin values [1, 5, 10, 25, 100] should return one coin of value 5, one coin of value 10, and one coin of value 25, or [5, 10, 25].",
+   "examples": [
+    {
+     "args": [
+      [
+       1,
+       5,
+       10,
+       25
+      ],
+      1
+     ],
+     "expected": [
+      1
+     ]
+    },
+    {
+     "args": [
+      [
+       1,
+       5,
+       10,
+       25,
+       100
+      ],
+      25
+     ],
+     "expected": [
+      25
+     ]
+    }
+   ],
+   "tests": [
+    {
+     "args": [
+      [
+       1,
+       5,
+       10,
+       25,
+       100
+      ],
+      15
+     ],
+     "expected": [
+      5,
+      10
+     ]
+    },
+    {
+     "args": [
+      [
+       1,
+       4,
+       15,
+       20,
+       50
+      ],
+      23
+     ],
+     "expected": [
+      4,
+      4,
+      15
+     ]
+    },
+    {
+     "args": [
+      [
+       1,
+       5,
+       10,
+       21,
+       25
+      ],
+      63
+     ],
+     "expected": [
+      21,
+      21,
+      21
+     ]
+    },
+    {
+     "args": [
+      [
+       1,
+       2,
+       5,
+       10,
+       20,
+       50,
+       100
+      ],
+      999
+     ],
+     "expected": [
+      2,
+      2,
+      5,
+      20,
+      20,
+      50,
+      100,
+      100,
+      100,
+      100,
+      100,
+      100,
+      100,
+      100,
+      100
+     ]
+    },
+    {
+     "args": [
+      [
+       2,
+       5,
+       10,
+       20,
+       50
+      ],
+      21
+     ],
+     "expected": [
+      2,
+      2,
+      2,
+      5,
+      10
+     ]
+    },
+    {
+     "args": [
+      [
+       4,
+       5
+      ],
+      27
+     ],
+     "expected": [
+      4,
+      4,
+      4,
+      5,
+      5,
+      5
+     ]
+    },
+    {
+     "args": [
+      [
+       1,
+       10,
+       11
+      ],
+      20
+     ],
+     "expected": [
+      10,
+      10
+     ]
+    },
+    {
+     "args": [
+      [
+       1,
+       5,
+       10,
+       21,
+       25
+      ],
+      0
+     ],
+     "expected": []
+    }
+   ]
+  },
+  {
+   "id": "sum_of_multiples",
+   "exercise": "sum-of-multiples",
+   "params": [
+    [
+     "factors",
+     "[Int]"
+    ],
+    [
+     "limit",
+     "Int"
+    ]
+   ],
+   "ret": "Int",
+   "desc": "# Instructions\n\nYour task is to write the code that calculates the energy points that get awarded to players when they complete a level.\n\nThe points awarded depend on two things:\n\n- The level (a number) that the player completed.\n- The base value of each magical item collected by the player during that level.\n\nThe energy points are awarded according to the following rules:\n\n1. For each magical item, take the base value and find all the multiples of that value that are less than the level number.\n2. Combine the sets of numbers.\n3. Remove any duplicates.\n4. Calculate the sum of all the numbers that are left.\n\nLet's look at an example:\n\n**The player completed level 20 and found two magical items with base values of 3 and 5.**\n\nTo calculate the energy points earned by the player, we need to find all the unique multiples of these base values that are less than level 20.\n\n- Multiples of 3 less than 20: `{3, 6, 9, 12, 15, 18}`\n- Multiples of 5 less than 20: `{5, 10, 15}`\n- Combine the sets and remove duplicates: `{3, 5, 6, 9, 10, 12, 15, 18}`\n- Sum the unique multiples: `3 + 5 + 6 + 9 + 10 + 12 + 15 + 18 = 78`\n- Therefore, the player earns **78** energy points for completing level 20 and finding the two magical items with base values of 3 and 5.",
+   "examples": [
+    {
+     "args": [
+      [
+       3,
+       5
+      ],
+      1
+     ],
+     "expected": 0
+    },
+    {
+     "args": [
+      [
+       3,
+       5
+      ],
+      4
+     ],
+     "expected": 3
+    }
+   ],
+   "tests": [
+    {
+     "args": [
+      [
+       3
+      ],
+      7
+     ],
+     "expected": 9
+    },
+    {
+     "args": [
+      [
+       3,
+       5
+      ],
+      10
+     ],
+     "expected": 23
+    },
+    {
+     "args": [
+      [
+       3,
+       5
+      ],
+      100
+     ],
+     "expected": 2318
+    },
+    {
+     "args": [
+      [
+       3,
+       5
+      ],
+      1000
+     ],
+     "expected": 233168
+    },
+    {
+     "args": [
+      [
+       7,
+       13,
+       17
+      ],
+      20
+     ],
+     "expected": 51
+    },
+    {
+     "args": [
+      [
+       4,
+       6
+      ],
+      15
+     ],
+     "expected": 30
+    },
+    {
+     "args": [
+      [
+       5,
+       6,
+       8
+      ],
+      150
+     ],
+     "expected": 4419
+    },
+    {
+     "args": [
+      [
+       5,
+       25
+      ],
+      51
+     ],
+     "expected": 275
+    },
+    {
+     "args": [
+      [
+       43,
+       47
+      ],
+      10000
+     ],
+     "expected": 2203160
+    },
+    {
+     "args": [
+      [
+       1
+      ],
+      100
+     ],
+     "expected": 4950
+    },
+    {
+     "args": [
+      [],
+      10000
+     ],
+     "expected": 0
+    },
+    {
+     "args": [
+      [
+       0
+      ],
+      1
+     ],
+     "expected": 0
+    },
+    {
+     "args": [
+      [
+       3,
+       0
+      ],
+      4
+     ],
+     "expected": 3
+    },
+    {
+     "args": [
+      [
+       2,
+       3,
+       5,
+       7,
+       11
+      ],
+      10000
+     ],
+     "expected": 39614537
+    }
+   ]
+  },
+  {
+   "id": "largest_series_product",
+   "exercise": "largest-series-product",
+   "params": [
+    [
+     "digits",
+     "Str"
+    ],
+    [
+     "span",
+     "Int"
+    ]
+   ],
+   "ret": "Int",
+   "desc": "# Instructions\n\nYour task is to look for patterns in the long sequence of digits in the encrypted signal.\n\nThe technique you're going to use here is called the largest series product.\n\nLet's define a few terms, first.\n\n- **input**: the sequence of digits that you need to analyze\n- **series**: a sequence of adjacent digits (those that are next to each other) that is contained within the input\n- **span**: how many digits long each series is\n- **product**: what you get when you multiply numbers together\n\nLet's work through an example, with the input `\"63915\"`.\n\n- To form a series, take adjacent digits in the original input.\n- If you are working with a span of `3`, there will be three possible series:\n  - `\"639\"`\n  - `\"391\"`\n  - `\"915\"`\n- Then we need to calculate the product of each series:\n  - The product of the series `\"639\"` is 162 (`6 × 3 × 9 = 162`)\n  - The product of the series `\"391\"` is 27 (`3 × 9 × 1 = 27`)\n  - The product of the series `\"915\"` is 45 (`9 × 1 × 5 = 45`)\n- 162 is bigger than both 27 and 45, so the largest series product of `\"63915\"` is from the series `\"639\"`.\n  So the answer is **162**.",
+   "examples": [
+    {
+     "args": [
+      "29",
+      2
+     ],
+     "expected": 18
+    },
+    {
+     "args": [
+      "0123456789",
+      2
+     ],
+     "expected": 72
+    }
+   ],
+   "tests": [
+    {
+     "args": [
+      "576802143",
+      2
+     ],
+     "expected": 48
+    },
+    {
+     "args": [
+      "0123456789",
+      3
+     ],
+     "expected": 504
+    },
+    {
+     "args": [
+      "1027839564",
+      3
+     ],
+     "expected": 270
+    },
+    {
+     "args": [
+      "0123456789",
+      5
+     ],
+     "expected": 15120
+    },
+    {
+     "args": [
+      "73167176531330624919225119674426574742355349194934",
+      6
+     ],
+     "expected": 23520
+    },
+    {
+     "args": [
+      "0000",
+      2
+     ],
+     "expected": 0
+    },
+    {
+     "args": [
+      "99099",
+      3
+     ],
+     "expected": 0
+    },
+    {
+     "args": [
+      "",
+      0
+     ],
+     "expected": 1
+    },
+    {
+     "args": [
+      "123",
+      0
+     ],
+     "expected": 1
+    }
+   ]
+  },
+  {
+   "id": "luhn",
+   "exercise": "luhn",
+   "params": [
+    [
+     "value",
+     "Str"
+    ]
+   ],
+   "ret": "Bool",
+   "desc": "# Instructions\n\nDetermine whether a number is valid according to the [Luhn formula][luhn].\n\nThe number will be provided as a string.\n\n## Validating a number\n\nStrings of length 1 or less are not valid.\nSpaces are allowed in the input, but they should be stripped before checking.\nAll other non-digit characters are disallowed.\n\n## Examples\n\n### Valid credit card number\n\nThe number to be checked is `4539 3195 0343 6467`.\n\nThe first step of the Luhn algorithm is to start at the end of the number and double every second digit, beginning with the second digit from the right and moving left.\n\n```text\n4539 3195 0343 6467\n↑ ↑  ↑ ↑  ↑ ↑  ↑ ↑  (double these)\n```\n\nIf the result of doubling a digit is greater than 9, we subtract 9 from that result.\nWe end up with:\n\n```text\n8569 6195 0383 3437\n```\n\nFinally, we sum all digits.\nIf the sum is evenly divisible by 10, the original number is valid.\n\n```text\n8 + 5 + 6 + 9 + 6 + 1 + 9 + 5 + 0 + 3 + 8 + 3 + 3 + 4 + 3 + 7 = 80\n```\n\n80 is evenly divisible by 10, so number `4539 3195 0343 6467` is valid!\n\n### Invalid Canadian SIN\n\nThe number to be checked is `066 123 478`.\n\nWe start at the end of the number and double every second digit, beginning with the second digit from the right and moving left.\n\n```text\n066 123 478\n ↑  ↑ ↑  ↑  (double these)\n```\n\nIf the result of doubling a digit is greater than 9, we subtract 9 from that result.\nWe end up with:\n\n```text\n036 226 458\n```\n\nWe sum the digits:\n\n```text\n0 + 3 + 6 + 2 + 2 + 6 + 4 + 5 + 8 = 36\n```\n\n36 is not evenly divisible by 10, so number `066 123 478` is not valid!\n\n[luhn]: https://en.wikipedia.org/wiki/Luhn_algorithm",
+   "examples": [
+    {
+     "args": [
+      "1"
+     ],
+     "expected": false
+    },
+    {
+     "args": [
+      "0"
+     ],
+     "expected": false
+    }
+   ],
+   "tests": [
+    {
+     "args": [
+      "059"
+     ],
+     "expected": true
+    },
+    {
+     "args": [
+      "59"
+     ],
+     "expected": true
+    },
+    {
+     "args": [
+      "055 444 285"
+     ],
+     "expected": true
+    },
+    {
+     "args": [
+      "055 444 286"
+     ],
+     "expected": false
+    },
+    {
+     "args": [
+      "8273 1232 7352 0569"
+     ],
+     "expected": false
+    },
+    {
+     "args": [
+      "1 2345 6789 1234 5678 9012"
+     ],
+     "expected": false
+    },
+    {
+     "args": [
+      "1 2345 6789 1234 5678 9013"
+     ],
+     "expected": false
+    },
+    {
+     "args": [
+      "095 245 88"
+     ],
+     "expected": true
+    },
+    {
+     "args": [
+      "234 567 891 234"
+     ],
+     "expected": true
+    },
+    {
+     "args": [
+      "059a"
+     ],
+     "expected": false
+    },
+    {
+     "args": [
+      "055-444-285"
+     ],
+     "expected": false
+    },
+    {
+     "args": [
+      "055# 444$ 285"
+     ],
+     "expected": false
+    },
+    {
+     "args": [
+      " 0"
+     ],
+     "expected": false
+    },
+    {
+     "args": [
+      "0000 0"
+     ],
+     "expected": true
+    },
+    {
+     "args": [
+      "091"
+     ],
+     "expected": true
+    },
+    {
+     "args": [
+      "9999999999 9999999999 9999999999 9999999999"
+     ],
+     "expected": true
+    },
+    {
+     "args": [
+      "109"
+     ],
+     "expected": true
+    },
+    {
+     "args": [
+      "055b 444 285"
+     ],
+     "expected": false
+    },
+    {
+     "args": [
+      ":9"
+     ],
+     "expected": false
+    },
+    {
+     "args": [
+      "59%59"
+     ],
+     "expected": false
+    }
+   ]
+  },
+  {
+   "id": "anagram",
+   "exercise": "anagram",
+   "params": [
+    [
+     "subject",
+     "Str"
+    ],
+    [
+     "candidates",
+     "[Str]"
+    ]
+   ],
+   "ret": "[Str]",
+   "desc": "# Instructions\n\nGiven a target word and one or more candidate words, your task is to find the candidates that are anagrams of the target.\n\nAn anagram is a rearrangement of letters to form a new word: for example `\"owns\"` is an anagram of `\"snow\"`.\nA word is _not_ its own anagram: for example, `\"stop\"` is not an anagram of `\"stop\"`.\n\nThe target word and candidate words are made up of one or more ASCII alphabetic characters (`A`-`Z` and `a`-`z`).\nLowercase and uppercase characters are equivalent: for example, `\"PoTS\"` is an anagram of `\"sTOp\"`, but `\"StoP\"` is not an anagram of `\"sTOp\"`.\nThe words you need to find should be taken from the candidate words, using the same letter case.\n\nGiven the target `\"stone\"` and the candidate words `\"stone\"`, `\"tones\"`, `\"banana\"`, `\"tons\"`, `\"notes\"`, and `\"Seton\"`, the anagram words you need to find are `\"tones\"`, `\"notes\"`, and `\"Seton\"`.",
+   "examples": [
+    {
+     "args": [
+      "diaper",
+      [
+       "hello",
+       "world",
+       "zombies",
+       "pants"
+      ]
+     ],
+     "expected": []
+    },
+    {
+     "args": [
+      "solemn",
+      [
+       "lemons",
+       "cherry",
+       "melons"
+      ]
+     ],
+     "expected": [
+      "lemons",
+      "melons"
+     ]
+    }
+   ],
+   "tests": [
+    {
+     "args": [
+      "good",
+      [
+       "dog",
+       "goody"
+      ]
+     ],
+     "expected": []
+    },
+    {
+     "args": [
+      "listen",
+      [
+       "enlists",
+       "google",
+       "inlets",
+       "banana"
+      ]
+     ],
+     "expected": [
+      "inlets"
+     ]
+    },
+    {
+     "args": [
+      "allergy",
+      [
+       "gallery",
+       "ballerina",
+       "regally",
+       "clergy",
+       "largely",
+       "leading"
+      ]
+     ],
+     "expected": [
+      "gallery",
+      "regally",
+      "largely"
+     ]
+    },
+    {
+     "args": [
+      "nose",
+      [
+       "Eons",
+       "ONES"
+      ]
+     ],
+     "expected": [
+      "Eons",
+      "ONES"
+     ]
+    },
+    {
+     "args": [
+      "mass",
+      [
+       "last"
+      ]
+     ],
+     "expected": []
+    },
+    {
+     "args": [
+      "Orchestra",
+      [
+       "cashregister",
+       "Carthorse",
+       "radishes"
+      ]
+     ],
+     "expected": [
+      "Carthorse"
+     ]
+    },
+    {
+     "args": [
+      "Orchestra",
+      [
+       "cashregister",
+       "carthorse",
+       "radishes"
+      ]
+     ],
+     "expected": [
+      "carthorse"
+     ]
+    },
+    {
+     "args": [
+      "orchestra",
+      [
+       "cashregister",
+       "Carthorse",
+       "radishes"
+      ]
+     ],
+     "expected": [
+      "Carthorse"
+     ]
+    },
+    {
+     "args": [
+      "go",
+      [
+       "goGoGO"
+      ]
+     ],
+     "expected": []
+    },
+    {
+     "args": [
+      "tapper",
+      [
+       "patter"
+      ]
+     ],
+     "expected": []
+    },
+    {
+     "args": [
+      "BANANA",
+      [
+       "BANANA"
+      ]
+     ],
+     "expected": []
+    },
+    {
+     "args": [
+      "BANANA",
+      [
+       "Banana"
+      ]
+     ],
+     "expected": []
+    },
+    {
+     "args": [
+      "BANANA",
+      [
+       "banana"
+      ]
+     ],
+     "expected": []
+    },
+    {
+     "args": [
+      "LISTEN",
+      [
+       "LISTEN",
+       "Silent"
+      ]
+     ],
+     "expected": [
+      "Silent"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "book_store",
+   "exercise": "book-store",
+   "params": [
+    [
+     "basket",
+     "[Int]"
+    ]
+   ],
+   "ret": "Int",
+   "desc": "# Instructions\n\nTo try and encourage more sales of different books from a popular 5 book series, a bookshop has decided to offer discounts on multiple book purchases.\n\nOne copy of any of the five books costs $8.\n\nIf, however, you buy two different books, you get a 5% discount on those two books.\n\nIf you buy 3 different books, you get a 10% discount.\n\nIf you buy 4 different books, you get a 20% discount.\n\nIf you buy all 5, you get a 25% discount.\n\nNote that if you buy four books, of which 3 are different titles, you get a 10% discount on the 3 that form part of a set, but the fourth book still costs $8.\n\nYour mission is to write code to calculate the price of any conceivable shopping basket (containing only books of the same series), giving as big a discount as possible.\n\nFor example, how much does this basket of books cost?\n\n- 2 copies of the first book\n- 2 copies of the second book\n- 2 copies of the third book\n- 1 copy of the fourth book\n- 1 copy of the fifth book\n\nOne way of grouping these 8 books is:\n\n- 1 group of 5 (1st, 2nd,3rd, 4th, 5th)\n- 1 group of 3 (1st, 2nd, 3rd)\n\nThis would give a total of:\n\n- 5 books at a 25% discount\n- 3 books at a 10% discount\n\nResulting in:\n\n- 5 × (100% - 25%) × $8 = 5 × $6.00 = $30.00, plus\n- 3 × (100% - 10%) × $8 = 3 × $7.20 = $21.60\n\nWhich equals $51.60.\n\nHowever, a different way to group these 8 books is:\n\n- 1 group of 4 books (1st, 2nd, 3rd, 4th)\n- 1 group of 4 books (1st, 2nd, 3rd, 5th)\n\nThis would give a total of:\n\n- 4 books at a 20% discount\n- 4 books at a 20% discount\n\nResulting in:\n\n- 4 × (100% - 20%) × $8 = 4 × $6.40 = $25.60, plus\n- 4 × (100% - 20%) × $8 = 4 × $6.40 = $25.60\n\nWhich equals $51.20.\n\nAnd $51.20 is the price with the biggest discount.",
+   "examples": [
+    {
+     "args": [
+      [
+       1
+      ]
+     ],
+     "expected": 800
+    },
+    {
+     "args": [
+      [
+       2,
+       2
+      ]
+     ],
+     "expected": 1600
+    }
+   ],
+   "tests": [
+    {
+     "args": [
+      []
+     ],
+     "expected": 0
+    },
+    {
+     "args": [
+      [
+       1,
+       2
+      ]
+     ],
+     "expected": 1520
+    },
+    {
+     "args": [
+      [
+       1,
+       2,
+       3
+      ]
+     ],
+     "expected": 2160
+    },
+    {
+     "args": [
+      [
+       1,
+       2,
+       3,
+       4
+      ]
+     ],
+     "expected": 2560
+    },
+    {
+     "args": [
+      [
+       1,
+       2,
+       3,
+       4,
+       5
+      ]
+     ],
+     "expected": 3000
+    },
+    {
+     "args": [
+      [
+       1,
+       1,
+       2,
+       2,
+       3,
+       3,
+       4,
+       5
+      ]
+     ],
+     "expected": 5120
+    },
+    {
+     "args": [
+      [
+       1,
+       1,
+       2,
+       3,
+       4,
+       4,
+       5,
+       5
+      ]
+     ],
+     "expected": 5120
+    },
+    {
+     "args": [
+      [
+       1,
+       1,
+       2,
+       2,
+       3,
+       4
+      ]
+     ],
+     "expected": 4080
+    },
+    {
+     "args": [
+      [
+       1,
+       1,
+       2,
+       2,
+       3,
+       3,
+       4,
+       4,
+       5
+      ]
+     ],
+     "expected": 5560
+    },
+    {
+     "args": [
+      [
+       1,
+       1,
+       2,
+       2,
+       3,
+       3,
+       4,
+       4,
+       5,
+       5
+      ]
+     ],
+     "expected": 6000
+    },
+    {
+     "args": [
+      [
+       1,
+       1,
+       2,
+       2,
+       3,
+       3,
+       4,
+       4,
+       5,
+       5,
+       1
+      ]
+     ],
+     "expected": 6800
+    },
+    {
+     "args": [
+      [
+       1,
+       1,
+       2,
+       2,
+       3,
+       3,
+       4,
+       4,
+       5,
+       5,
+       1,
+       2
+      ]
+     ],
+     "expected": 7520
+    },
+    {
+     "args": [
+      [
+       1,
+       1,
+       2,
+       2,
+       3,
+       3,
+       4,
+       5,
+       1,
+       1,
+       2,
+       2,
+       3,
+       3,
+       4,
+       5
+      ]
+     ],
+     "expected": 10240
+    },
+    {
+     "args": [
+      [
+       1,
+       1,
+       1,
+       1,
+       1,
+       1,
+       2,
+       2,
+       2,
+       2,
+       2,
+       2,
+       3,
+       3,
+       3,
+       3,
+       3,
+       3,
+       4,
+       4,
+       5,
+       5
+      ]
+     ],
+     "expected": 14560
+    },
+    {
+     "args": [
+      [
+       1,
+       1,
+       2,
+       3,
+       4
+      ]
+     ],
+     "expected": 3360
+    },
+    {
+     "args": [
+      [
+       1,
+       2,
+       2,
+       3,
+       3,
+       3,
+       4,
+       4,
+       4,
+       4,
+       5,
+       5,
+       5,
+       5,
+       5
+      ]
+     ],
+     "expected": 10000
+    }
+   ]
+  },
+  {
+   "id": "protein_translation",
+   "exercise": "protein-translation",
+   "params": [
+    [
+     "strand",
+     "Str"
+    ]
+   ],
+   "ret": "[Str]",
+   "desc": "# Instructions\n\nYour job is to translate RNA sequences into proteins.\n\nRNA strands are made up of three-nucleotide sequences called **codons**.\nEach codon translates to an **amino acid**.\nWhen joined together, those amino acids make a protein.\n\nIn the real world, there are 64 codons, which in turn correspond to 20 amino acids.\nHowever, for this exercise, you’ll only use a few of the possible 64.\nThey are listed below:\n\n| Codon              | Amino Acid    |\n| ------------------ | ------------- |\n| AUG                | Methionine    |\n| UUU, UUC           | Phenylalanine |\n| UUA, UUG           | Leucine       |\n| UCU, UCC, UCA, UCG | Serine        |\n| UAU, UAC           | Tyrosine      |\n| UGU, UGC           | Cysteine      |\n| UGG                | Tryptophan    |\n| UAA, UAG, UGA      | STOP          |\n\nFor example, the RNA string “AUGUUUUCU” has three codons: “AUG”, “UUU” and “UCU”.\nThese map to Methionine, Phenylalanine, and Serine.\n\n## “STOP” Codons\n\nYou’ll note from the table above that there are three **“STOP” codons**.\nIf you encounter any of these codons, ignore the rest of the sequence — the protein is complete.\n\nFor example, “AUGUUUUCUUAAAUG” contains a STOP codon (“UAA”).\nOnce we reach that point, we stop processing.\nWe therefore only consider the part before it (i.e. “AUGUUUUCU”), not any further codons after it (i.e. “AUG”).\n\nLearn more about [protein translation on Wikipedia][protein-translation].\n\n[protein-translation]: https://en.wikipedia.org/wiki/Translation_(biology)",
+   "examples": [
+    {
+     "args": [
+      ""
+     ],
+     "expected": []
+    },
+    {
+     "args": [
+      "AUG"
+     ],
+     "expected": [
+      "Methionine"
+     ]
+    }
+   ],
+   "tests": [
+    {
+     "args": [
+      "UUU"
+     ],
+     "expected": [
+      "Phenylalanine"
+     ]
+    },
+    {
+     "args": [
+      "UUC"
+     ],
+     "expected": [
+      "Phenylalanine"
+     ]
+    },
+    {
+     "args": [
+      "UUA"
+     ],
+     "expected": [
+      "Leucine"
+     ]
+    },
+    {
+     "args": [
+      "UUG"
+     ],
+     "expected": [
+      "Leucine"
+     ]
+    },
+    {
+     "args": [
+      "UCU"
+     ],
+     "expected": [
+      "Serine"
+     ]
+    },
+    {
+     "args": [
+      "UCC"
+     ],
+     "expected": [
+      "Serine"
+     ]
+    },
+    {
+     "args": [
+      "UCA"
+     ],
+     "expected": [
+      "Serine"
+     ]
+    },
+    {
+     "args": [
+      "UCG"
+     ],
+     "expected": [
+      "Serine"
+     ]
+    },
+    {
+     "args": [
+      "UAU"
+     ],
+     "expected": [
+      "Tyrosine"
+     ]
+    },
+    {
+     "args": [
+      "UAC"
+     ],
+     "expected": [
+      "Tyrosine"
+     ]
+    },
+    {
+     "args": [
+      "UGU"
+     ],
+     "expected": [
+      "Cysteine"
+     ]
+    },
+    {
+     "args": [
+      "UGC"
+     ],
+     "expected": [
+      "Cysteine"
+     ]
+    },
+    {
+     "args": [
+      "UGG"
+     ],
+     "expected": [
+      "Tryptophan"
+     ]
+    },
+    {
+     "args": [
+      "UAA"
+     ],
+     "expected": []
+    },
+    {
+     "args": [
+      "UAG"
+     ],
+     "expected": []
+    },
+    {
+     "args": [
+      "UGA"
+     ],
+     "expected": []
+    },
+    {
+     "args": [
+      "UUUUUU"
+     ],
+     "expected": [
+      "Phenylalanine",
+      "Phenylalanine"
+     ]
+    },
+    {
+     "args": [
+      "UUAUUG"
+     ],
+     "expected": [
+      "Leucine",
+      "Leucine"
+     ]
+    },
+    {
+     "args": [
+      "AUGUUUUGG"
+     ],
+     "expected": [
+      "Methionine",
+      "Phenylalanine",
+      "Tryptophan"
+     ]
+    },
+    {
+     "args": [
+      "UAGUGG"
+     ],
+     "expected": []
+    },
+    {
+     "args": [
+      "UGGUAG"
+     ],
+     "expected": [
+      "Tryptophan"
+     ]
+    },
+    {
+     "args": [
+      "AUGUUUUAA"
+     ],
+     "expected": [
+      "Methionine",
+      "Phenylalanine"
+     ]
+    },
+    {
+     "args": [
+      "UGGUAGUGG"
+     ],
+     "expected": [
+      "Tryptophan"
+     ]
+    },
+    {
+     "args": [
+      "UGGUGUUAUUAAUGGUUU"
+     ],
+     "expected": [
+      "Tryptophan",
+      "Cysteine",
+      "Tyrosine"
+     ]
+    },
+    {
+     "args": [
+      "AUGAUG"
+     ],
+     "expected": [
+      "Methionine",
+      "Methionine"
+     ]
+    },
+    {
+     "args": [
+      "UUCUUCUAAUGGU"
+     ],
+     "expected": [
+      "Phenylalanine",
+      "Phenylalanine"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "transpose",
+   "exercise": "transpose",
+   "params": [
+    [
+     "lines",
+     "[Str]"
+    ]
+   ],
+   "ret": "[Str]",
+   "desc": "# Instructions\n\nGiven an input text output it transposed.\n\nRoughly explained, the transpose of a matrix:\n\n```text\nABC\nDEF\n```\n\nis given by:\n\n```text\nAD\nBE\nCF\n```\n\nRows become columns and columns become rows.\nSee [transpose][].\n\nIf the input has rows of different lengths, this is to be solved as follows:\n\n- Pad to the left with spaces.\n- Don't pad to the right.\n\nTherefore, transposing this matrix:\n\n```text\nABC\nDE\n```\n\nresults in:\n\n```text\nAD\nBE\nC\n```\n\nAnd transposing:\n\n```text\nAB\nDEF\n```\n\nresults in:\n\n```text\nAD\nBE\n F\n```\n\nIn general, all characters from the input should also be present in the transposed output.\nThat means that if a column in the input text contains only spaces on its bottom-most row(s), the corresponding output row should contain the spaces in its right-most column(s).\n\n[transpose]: https://en.wikipedia.org/wiki/Transpose",
+   "examples": [
+    {
+     "args": [
+      []
+     ],
+     "expected": []
+    },
+    {
+     "args": [
+      [
+       "A1"
+      ]
+     ],
+     "expected": [
+      "A",
+      "1"
+     ]
+    }
+   ],
+   "tests": [
+    {
+     "args": [
+      [
+       "A",
+       "1"
+      ]
+     ],
+     "expected": [
+      "A1"
+     ]
+    },
+    {
+     "args": [
+      [
+       "ABC",
+       "123"
+      ]
+     ],
+     "expected": [
+      "A1",
+      "B2",
+      "C3"
+     ]
+    },
+    {
+     "args": [
+      [
+       "Single line."
+      ]
+     ],
+     "expected": [
+      "S",
+      "i",
+      "n",
+      "g",
+      "l",
+      "e",
+      " ",
+      "l",
+      "i",
+      "n",
+      "e",
+      "."
+     ]
+    },
+    {
+     "args": [
+      [
+       "The fourth line.",
+       "The fifth line."
+      ]
+     ],
+     "expected": [
+      "TT",
+      "hh",
+      "ee",
+      "  ",
+      "ff",
+      "oi",
+      "uf",
+      "rt",
+      "th",
+      "h ",
+      " l",
+      "li",
+      "in",
+      "ne",
+      "e.",
+      "."
+     ]
+    },
+    {
+     "args": [
+      [
+       "The first line.",
+       "The second line."
+      ]
+     ],
+     "expected": [
+      "TT",
+      "hh",
+      "ee",
+      "  ",
+      "fs",
+      "ie",
+      "rc",
+      "so",
+      "tn",
+      " d",
+      "l ",
+      "il",
+      "ni",
+      "en",
+      ".e",
+      " ."
+     ]
+    },
+    {
+     "args": [
+      [
+       "The longest line.",
+       "A long line.",
+       "A longer line.",
+       "A line."
+      ]
+     ],
+     "expected": [
+      "TAAA",
+      "h   ",
+      "elll",
+      " ooi",
+      "lnnn",
+      "ogge",
+      "n e.",
+      "glr",
+      "ei ",
+      "snl",
+      "tei",
+      " .n",
+      "l e",
+      "i .",
+      "n",
+      "e",
+      "."
+     ]
+    },
+    {
+     "args": [
+      [
+       "HEART",
+       "EMBER",
+       "ABUSE",
+       "RESIN",
+       "TREND"
+      ]
+     ],
+     "expected": [
+      "HEART",
+      "EMBER",
+      "ABUSE",
+      "RESIN",
+      "TREND"
+     ]
+    },
+    {
+     "args": [
+      [
+       "FRACTURE",
+       "OUTLINED",
+       "BLOOMING",
+       "SEPTETTE"
+      ]
+     ],
+     "expected": [
+      "FOBS",
+      "RULE",
+      "ATOP",
+      "CLOT",
+      "TIME",
+      "UNIT",
+      "RENT",
+      "EDGE"
+     ]
+    },
+    {
+     "args": [
+      [
+       "T",
+       "EE",
+       "AAA",
+       "SSSS",
+       "EEEEE",
+       "RRRRRR"
+      ]
+     ],
+     "expected": [
+      "TEASER",
+      " EASER",
+      "  ASER",
+      "   SER",
+      "    ER",
+      "     R"
+     ]
+    },
+    {
+     "args": [
+      [
+       "11",
+       "2",
+       "3333",
+       "444",
+       "555555",
+       "66666"
+      ]
+     ],
+     "expected": [
+      "123456",
+      "1 3456",
+      "  3456",
+      "  3 56",
+      "    56",
+      "    5"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "food_chain",
+   "exercise": "food-chain",
+   "params": [
+    [
+     "start_verse",
+     "Int"
+    ],
+    [
+     "end_verse",
+     "Int"
+    ]
+   ],
+   "ret": "[Str]",
+   "desc": "# Instructions\n\nGenerate the lyrics of the song 'I Know an Old Lady Who Swallowed a Fly'.\n\nWhile you could copy/paste the lyrics, or read them from a file, this problem is much more interesting if you approach it algorithmically.\n\nThis is a [cumulative song][cumulative-song] of unknown origin.\n\nThis is one of many common variants.\n\n```text\nI know an old lady who swallowed a fly.\nI don't know why she swallowed the fly. Perhaps she'll die.\n\nI know an old lady who swallowed a spider.\nIt wriggled and jiggled and tickled inside her.\nShe swallowed the spider to catch the fly.\nI don't know why she swallowed the fly. Perhaps she'll die.\n\nI know an old lady who swallowed a bird.\nHow absurd to swallow a bird!\nShe swallowed the bird to catch the spider that wriggled and jiggled and tickled inside her.\nShe swallowed the spider to catch the fly.\nI don't know why she swallowed the fly. Perhaps she'll die.\n\nI know an old lady who swallowed a cat.\nImagine that, to swallow a cat!\nShe swallowed the cat to catch the bird.\nShe swallowed the bird to catch the spider that wriggled and jiggled and tickled inside her.\nShe swallowed the spider to catch the fly.\nI don't know why she swallowed the fly. Perhaps she'll die.\n\nI know an old lady who swallowed a dog.\nWhat a hog, to swallow a dog!\nShe swallowed the dog to catch the cat.\nShe swallowed the cat to catch the bird.\nShe swallowed the bird to catch the spider that wriggled and jiggled and tickled inside her.\nShe swallowed the spider to catch the fly.\nI don't know why she swallowed the fly. Perhaps she'll die.\n\nI know an old lady who swallowed a goat.\nJust opened her throat and swallowed a goat!\nShe swallowed the goat to catch the dog.\nShe swallowed the dog to catch the cat.\nShe swallowed the cat to catch the bird.\nShe swallowed the bird to catch the spider that wriggled and jiggled and tickled inside her.\nShe swallowed the spider to catch the fly.\nI don't know why she swallowed the fly. Perhaps she'll die.\n\nI know an old lady who swallowed a cow.\nI don't know how she swallowed a cow!\nShe swallowed the cow to catch the goat.\nShe swallowed the goat to catch the dog.\nShe swallowed the dog to catch the cat.\nShe swallowed the cat to catch the bird.\nShe swallowed the bird to catch the spider that wriggled and jiggled and tickled inside her.\nShe swallowed the spider to catch the fly.\nI don't know why she swallowed the fly. Perhaps she'll die.\n\nI know an old lady who swallowed a horse.\nShe's dead, of course!\n```\n\n[cumulative-song]: https://en.wikipedia.org/wiki/Cumulative_song",
+   "examples": [
+    {
+     "args": [
+      1,
+      1
+     ],
+     "expected": [
+      "I know an old lady who swallowed a fly.",
+      "I don't know why she swallowed the fly. Perhaps she'll die."
+     ]
+    },
+    {
+     "args": [
+      2,
+      2
+     ],
+     "expected": [
+      "I know an old lady who swallowed a spider.",
+      "It wriggled and jiggled and tickled inside her.",
+      "She swallowed the spider to catch the fly.",
+      "I don't know why she swallowed the fly. Perhaps she'll die."
+     ]
+    }
+   ],
+   "tests": [
+    {
+     "args": [
+      3,
+      3
+     ],
+     "expected": [
+      "I know an old lady who swallowed a bird.",
+      "How absurd to swallow a bird!",
+      "She swallowed the bird to catch the spider that wriggled and jiggled and tickled inside her.",
+      "She swallowed the spider to catch the fly.",
+      "I don't know why she swallowed the fly. Perhaps she'll die."
+     ]
+    },
+    {
+     "args": [
+      4,
+      4
+     ],
+     "expected": [
+      "I know an old lady who swallowed a cat.",
+      "Imagine that, to swallow a cat!",
+      "She swallowed the cat to catch the bird.",
+      "She swallowed the bird to catch the spider that wriggled and jiggled and tickled inside her.",
+      "She swallowed the spider to catch the fly.",
+      "I don't know why she swallowed the fly. Perhaps she'll die."
+     ]
+    },
+    {
+     "args": [
+      5,
+      5
+     ],
+     "expected": [
+      "I know an old lady who swallowed a dog.",
+      "What a hog, to swallow a dog!",
+      "She swallowed the dog to catch the cat.",
+      "She swallowed the cat to catch the bird.",
+      "She swallowed the bird to catch the spider that wriggled and jiggled and tickled inside her.",
+      "She swallowed the spider to catch the fly.",
+      "I don't know why she swallowed the fly. Perhaps she'll die."
+     ]
+    },
+    {
+     "args": [
+      6,
+      6
+     ],
+     "expected": [
+      "I know an old lady who swallowed a goat.",
+      "Just opened her throat and swallowed a goat!",
+      "She swallowed the goat to catch the dog.",
+      "She swallowed the dog to catch the cat.",
+      "She swallowed the cat to catch the bird.",
+      "She swallowed the bird to catch the spider that wriggled and jiggled and tickled inside her.",
+      "She swallowed the spider to catch the fly.",
+      "I don't know why she swallowed the fly. Perhaps she'll die."
+     ]
+    },
+    {
+     "args": [
+      7,
+      7
+     ],
+     "expected": [
+      "I know an old lady who swallowed a cow.",
+      "I don't know how she swallowed a cow!",
+      "She swallowed the cow to catch the goat.",
+      "She swallowed the goat to catch the dog.",
+      "She swallowed the dog to catch the cat.",
+      "She swallowed the cat to catch the bird.",
+      "She swallowed the bird to catch the spider that wriggled and jiggled and tickled inside her.",
+      "She swallowed the spider to catch the fly.",
+      "I don't know why she swallowed the fly. Perhaps she'll die."
+     ]
+    },
+    {
+     "args": [
+      8,
+      8
+     ],
+     "expected": [
+      "I know an old lady who swallowed a horse.",
+      "She's dead, of course!"
+     ]
+    },
+    {
+     "args": [
+      1,
+      3
+     ],
+     "expected": [
+      "I know an old lady who swallowed a fly.",
+      "I don't know why she swallowed the fly. Perhaps she'll die.",
+      "",
+      "I know an old lady who swallowed a spider.",
+      "It wriggled and jiggled and tickled inside her.",
+      "She swallowed the spider to catch the fly.",
+      "I don't know why she swallowed the fly. Perhaps she'll die.",
+      "",
+      "I know an old lady who swallowed a bird.",
+      "How absurd to swallow a bird!",
+      "She swallowed the bird to catch the spider that wriggled and jiggled and tickled inside her.",
+      "She swallowed the spider to catch the fly.",
+      "I don't know why she swallowed the fly. Perhaps she'll die."
+     ]
+    },
+    {
+     "args": [
+      1,
+      8
+     ],
+     "expected": [
+      "I know an old lady who swallowed a fly.",
+      "I don't know why she swallowed the fly. Perhaps she'll die.",
+      "",
+      "I know an old lady who swallowed a spider.",
+      "It wriggled and jiggled and tickled inside her.",
+      "She swallowed the spider to catch the fly.",
+      "I don't know why she swallowed the fly. Perhaps she'll die.",
+      "",
+      "I know an old lady who swallowed a bird.",
+      "How absurd to swallow a bird!",
+      "She swallowed the bird to catch the spider that wriggled and jiggled and tickled inside her.",
+      "She swallowed the spider to catch the fly.",
+      "I don't know why she swallowed the fly. Perhaps she'll die.",
+      "",
+      "I know an old lady who swallowed a cat.",
+      "Imagine that, to swallow a cat!",
+      "She swallowed the cat to catch the bird.",
+      "She swallowed the bird to catch the spider that wriggled and jiggled and tickled inside her.",
+      "She swallowed the spider to catch the fly.",
+      "I don't know why she swallowed the fly. Perhaps she'll die.",
+      "",
+      "I know an old lady who swallowed a dog.",
+      "What a hog, to swallow a dog!",
+      "She swallowed the dog to catch the cat.",
+      "She swallowed the cat to catch the bird.",
+      "She swallowed the bird to catch the spider that wriggled and jiggled and tickled inside her.",
+      "She swallowed the spider to catch the fly.",
+      "I don't know why she swallowed the fly. Perhaps she'll die.",
+      "",
+      "I know an old lady who swallowed a goat.",
+      "Just opened her throat and swallowed a goat!",
+      "She swallowed the goat to catch the dog.",
+      "She swallowed the dog to catch the cat.",
+      "She swallowed the cat to catch the bird.",
+      "She swallowed the bird to catch the spider that wriggled and jiggled and tickled inside her.",
+      "She swallowed the spider to catch the fly.",
+      "I don't know why she swallowed the fly. Perhaps she'll die.",
+      "",
+      "I know an old lady who swallowed a cow.",
+      "I don't know how she swallowed a cow!",
+      "She swallowed the cow to catch the goat.",
+      "She swallowed the goat to catch the dog.",
+      "She swallowed the dog to catch the cat.",
+      "She swallowed the cat to catch the bird.",
+      "She swallowed the bird to catch the spider that wriggled and jiggled and tickled inside her.",
+      "She swallowed the spider to catch the fly.",
+      "I don't know why she swallowed the fly. Perhaps she'll die.",
+      "",
+      "I know an old lady who swallowed a horse.",
+      "She's dead, of course!"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "wordy",
+   "exercise": "wordy",
+   "params": [
+    [
+     "question",
+     "Str"
+    ]
+   ],
+   "ret": "Int",
+   "desc": "# Instructions\n\nParse and evaluate simple math word problems returning the answer as an integer.\n\n## Iteration 0 — Numbers\n\nProblems with no operations simply evaluate to the number given.\n\n> What is 5?\n\nEvaluates to 5.\n\n## Iteration 1 — Addition\n\nAdd two numbers together.\n\n> What is 5 plus 13?\n\nEvaluates to 18.\n\nHandle large numbers and negative numbers.\n\n## Iteration 2 — Subtraction, Multiplication and Division\n\nNow, perform the other three operations.\n\n> What is 7 minus 5?\n\n2\n\n> What is 6 multiplied by 4?\n\n24\n\n> What is 25 divided by 5?\n\n5\n\n## Iteration 3 — Multiple Operations\n\nHandle a set of operations, in sequence.\n\nSince these are verbal word problems, evaluate the expression from left-to-right, _ignoring the typical order of operations._\n\n> What is 5 plus 13 plus 6?\n\n24\n\n> What is 3 plus 2 multiplied by 3?\n\n15 (i.e. not 9)\n\n## Iteration 4 — Errors\n\nThe parser should reject:\n\n- Unsupported operations (\"What is 52 cubed?\")\n- Non-math questions (\"Who is the President of the United States\")\n- Word problems with invalid syntax (\"What is 1 plus plus 2?\")",
+   "examples": [
+    {
+     "args": [
+      "What is 5?"
+     ],
+     "expected": 5
+    },
+    {
+     "args": [
+      "What is 0?"
+     ],
+     "expected": 0
+    }
+   ],
+   "tests": [
+    {
+     "args": [
+      "What is -123?"
+     ],
+     "expected": -123
+    },
+    {
+     "args": [
+      "What is 1 plus 1?"
+     ],
+     "expected": 2
+    },
+    {
+     "args": [
+      "What is 0 plus 2?"
+     ],
+     "expected": 2
+    },
+    {
+     "args": [
+      "What is 3 plus 0?"
+     ],
+     "expected": 3
+    },
+    {
+     "args": [
+      "What is 53 plus 2?"
+     ],
+     "expected": 55
+    },
+    {
+     "args": [
+      "What is -1 plus -10?"
+     ],
+     "expected": -11
+    },
+    {
+     "args": [
+      "What is 123 plus 45678?"
+     ],
+     "expected": 45801
+    },
+    {
+     "args": [
+      "What is 4 minus -12?"
+     ],
+     "expected": 16
+    },
+    {
+     "args": [
+      "What is -3 multiplied by 25?"
+     ],
+     "expected": -75
+    },
+    {
+     "args": [
+      "What is 33 divided by -3?"
+     ],
+     "expected": -11
+    },
+    {
+     "args": [
+      "What is 1 plus 1 plus 1?"
+     ],
+     "expected": 3
+    },
+    {
+     "args": [
+      "What is 1 plus 5 minus -2?"
+     ],
+     "expected": 8
+    },
+    {
+     "args": [
+      "What is 20 minus 4 minus 13?"
+     ],
+     "expected": 3
+    },
+    {
+     "args": [
+      "What is 17 minus 6 plus 3?"
+     ],
+     "expected": 14
+    },
+    {
+     "args": [
+      "What is 2 multiplied by -2 multiplied by 3?"
+     ],
+     "expected": -12
+    },
+    {
+     "args": [
+      "What is -3 plus 7 multiplied by -2?"
+     ],
+     "expected": -8
+    },
+    {
+     "args": [
+      "What is -12 divided by 2 divided by -3?"
+     ],
+     "expected": 2
+    }
+   ]
+  },
+  {
+   "id": "pig_latin",
+   "exercise": "pig-latin",
+   "params": [
+    [
+     "phrase",
+     "Str"
+    ]
+   ],
+   "ret": "Str",
+   "desc": "# Instructions\n\nYour task is to translate text from English to Pig Latin.\nThe translation is defined using four rules, which look at the pattern of vowels and consonants at the beginning of a word.\nThese rules look at each word's use of vowels and consonants:\n\n- vowels: the letters `a`, `e`, `i`, `o`, and `u`\n- consonants: the other 21 letters of the English alphabet\n\n## Rule 1\n\nIf a word begins with a vowel, or starts with `\"xr\"` or `\"yt\"`, add an `\"ay\"` sound to the end of the word.\n\nFor example:\n\n- `\"apple\"` -> `\"appleay\"` (starts with vowel)\n- `\"xray\"` -> `\"xrayay\"` (starts with `\"xr\"`)\n- `\"yttria\"` -> `\"yttriaay\"` (starts with `\"yt\"`)\n\n## Rule 2\n\nIf a word begins with one or more consonants, first move those consonants to the end of the word and then add an `\"ay\"` sound to the end of the word.\n\nFor example:\n\n- `\"pig\"` -> `\"igp\"` -> `\"igpay\"` (starts with single consonant)\n- `\"chair\"` -> `\"airch\"` -> `\"airchay\"` (starts with multiple consonants)\n- `\"thrush\"` -> `\"ushthr\"` -> `\"ushthray\"` (starts with multiple consonants)\n\n## Rule 3\n\nIf a word starts with zero or more consonants followed by `\"qu\"`, first move those consonants (if any) and the `\"qu\"` part to the end of the word, and then add an `\"ay\"` sound to the end of the word.\n\nFor example:\n\n- `\"quick\"` -> `\"ickqu\"` -> `\"ickquay\"` (starts with `\"qu\"`, no preceding consonants)\n- `\"square\"` -> `\"aresqu\"` -> `\"aresquay\"` (starts with one consonant followed by `\"qu`\")\n\n## Rule 4\n\nIf a word starts with one or more consonants followed by `\"y\"`, first move the consonants preceding the `\"y\"`to the end of the word, and then add an `\"ay\"` sound to the end of the word.\n\nSome examples:\n\n- `\"my\"` -> `\"ym\"` -> `\"ymay\"` (starts with single consonant followed by `\"y\"`)\n- `\"rhythm\"` -> `\"ythmrh\"` -> `\"ythmrhay\"` (starts with multiple consonants followed by `\"y\"`)",
+   "examples": [
+    {
+     "args": [
+      "apple"
+     ],
+     "expected": "appleay"
+    },
+    {
+     "args": [
+      "ear"
+     ],
+     "expected": "earay"
+    }
+   ],
+   "tests": [
+    {
+     "args": [
+      "igloo"
+     ],
+     "expected": "iglooay"
+    },
+    {
+     "args": [
+      "object"
+     ],
+     "expected": "objectay"
+    },
+    {
+     "args": [
+      "under"
+     ],
+     "expected": "underay"
+    },
+    {
+     "args": [
+      "equal"
+     ],
+     "expected": "equalay"
+    },
+    {
+     "args": [
+      "pig"
+     ],
+     "expected": "igpay"
+    },
+    {
+     "args": [
+      "koala"
+     ],
+     "expected": "oalakay"
+    },
+    {
+     "args": [
+      "xenon"
+     ],
+     "expected": "enonxay"
+    },
+    {
+     "args": [
+      "qat"
+     ],
+     "expected": "atqay"
+    },
+    {
+     "args": [
+      "liquid"
+     ],
+     "expected": "iquidlay"
+    },
+    {
+     "args": [
+      "chair"
+     ],
+     "expected": "airchay"
+    },
+    {
+     "args": [
+      "queen"
+     ],
+     "expected": "eenquay"
+    },
+    {
+     "args": [
+      "square"
+     ],
+     "expected": "aresquay"
+    },
+    {
+     "args": [
+      "therapy"
+     ],
+     "expected": "erapythay"
+    },
+    {
+     "args": [
+      "thrush"
+     ],
+     "expected": "ushthray"
+    },
+    {
+     "args": [
+      "school"
+     ],
+     "expected": "oolschay"
+    },
+    {
+     "args": [
+      "yttria"
+     ],
+     "expected": "yttriaay"
+    },
+    {
+     "args": [
+      "xray"
+     ],
+     "expected": "xrayay"
+    },
+    {
+     "args": [
+      "yellow"
+     ],
+     "expected": "ellowyay"
+    },
+    {
+     "args": [
+      "rhythm"
+     ],
+     "expected": "ythmrhay"
+    },
+    {
+     "args": [
+      "my"
+     ],
+     "expected": "ymay"
+    },
+    {
+     "args": [
+      "why do squids enjoy xrays"
+     ],
+     "expected": "ywhay oday idssquay enjoyay xraysay"
+    }
+   ]
+  },
+  {
+   "id": "prime_factors",
+   "exercise": "prime-factors",
+   "params": [
+    [
+     "value",
+     "Int"
+    ]
+   ],
+   "ret": "[Int]",
+   "desc": "# Instructions\n\nCompute the prime factors of a given natural number.\n\nA prime number is only evenly divisible by itself and 1.\n\nNote that 1 is not a prime number.\n\n## Example\n\nWhat are the prime factors of 60?\n\n- Our first divisor is 2.\n  2 goes into 60, leaving 30.\n- 2 goes into 30, leaving 15.\n  - 2 doesn't go cleanly into 15.\n    So let's move on to our next divisor, 3.\n- 3 goes cleanly into 15, leaving 5.\n  - 3 does not go cleanly into 5.\n    The next possible factor is 4.\n  - 4 does not go cleanly into 5.\n    The next possible factor is 5.\n- 5 does go cleanly into 5.\n- We're left only with 1, so now, we're done.\n\nOur successful divisors in that computation represent the list of prime factors of 60: 2, 2, 3, and 5.\n\nYou can check this yourself:\n\n```text\n2 * 2 * 3 * 5\n= 4 * 15\n= 60\n```\n\nSuccess!",
+   "examples": [
+    {
+     "args": [
+      1
+     ],
+     "expected": []
+    },
+    {
+     "args": [
+      2
+     ],
+     "expected": [
+      2
+     ]
+    }
+   ],
+   "tests": [
+    {
+     "args": [
+      3
+     ],
+     "expected": [
+      3
+     ]
+    },
+    {
+     "args": [
+      9
+     ],
+     "expected": [
+      3,
+      3
+     ]
+    },
+    {
+     "args": [
+      4
+     ],
+     "expected": [
+      2,
+      2
+     ]
+    },
+    {
+     "args": [
+      8
+     ],
+     "expected": [
+      2,
+      2,
+      2
+     ]
+    },
+    {
+     "args": [
+      27
+     ],
+     "expected": [
+      3,
+      3,
+      3
+     ]
+    },
+    {
+     "args": [
+      625
+     ],
+     "expected": [
+      5,
+      5,
+      5,
+      5
+     ]
+    },
+    {
+     "args": [
+      6
+     ],
+     "expected": [
+      2,
+      3
+     ]
+    },
+    {
+     "args": [
+      12
+     ],
+     "expected": [
+      2,
+      2,
+      3
+     ]
+    },
+    {
+     "args": [
+      901255
+     ],
+     "expected": [
+      5,
+      17,
+      23,
+      461
+     ]
+    },
+    {
+     "args": [
+      93819012551
+     ],
+     "expected": [
+      11,
+      9539,
+      894119
+     ]
+    }
+   ]
+  },
+  {
+   "id": "meetup",
+   "exercise": "meetup",
+   "params": [
+    [
+     "year",
+     "Int"
+    ],
+    [
+     "month",
+     "Int"
+    ],
+    [
+     "week",
+     "Str"
+    ],
+    [
+     "dayofweek",
+     "Str"
+    ]
+   ],
+   "ret": "Str",
+   "desc": "# Instructions\n\nYour task is to find the exact date of a meetup, given a month, year, weekday and week.\n\nThere are six week values to consider: `first`, `second`, `third`, `fourth`, `last`, `teenth`.\n\nFor example, you might be asked to find the date for the meetup on the first Monday in January 2018 (January 1, 2018).\n\nSimilarly, you might be asked to find:\n\n- the third Tuesday of August 2019 (August 20, 2019)\n- the teenth Wednesday of May 2020 (May 13, 2020)\n- the fourth Sunday of July 2021 (July 25, 2021)\n- the last Thursday of November 2022 (November 24, 2022)\n- the teenth Saturday of August 1953 (August 15, 1953)\n\n## Teenth\n\nThe teenth week refers to the seven days in a month that end in '-teenth' (13th, 14th, 15th, 16th, 17th, 18th and 19th).\n\nIf asked to find the teenth Saturday of August, 1953, we check its calendar:\n\n```plaintext\n    August 1953\nSu Mo Tu We Th Fr Sa\n                   1\n 2  3  4  5  6  7  8\n 9 10 11 12 13 14 15\n16 17 18 19 20 21 22\n23 24 25 26 27 28 29\n30 31\n```\n\nFrom this we find that the teenth Saturday is August 15, 1953.",
+   "examples": [
+    {
+     "args": [
+      2013,
+      5,
+      "teenth",
+      "Monday"
+     ],
+     "expected": "2013-05-13"
+    },
+    {
+     "args": [
+      2013,
+      8,
+      "teenth",
+      "Monday"
+     ],
+     "expected": "2013-08-19"
+    }
+   ],
+   "tests": [
+    {
+     "args": [
+      2013,
+      9,
+      "teenth",
+      "Monday"
+     ],
+     "expected": "2013-09-16"
+    },
+    {
+     "args": [
+      2013,
+      3,
+      "teenth",
+      "Tuesday"
+     ],
+     "expected": "2013-03-19"
+    },
+    {
+     "args": [
+      2013,
+      4,
+      "teenth",
+      "Tuesday"
+     ],
+     "expected": "2013-04-16"
+    },
+    {
+     "args": [
+      2013,
+      8,
+      "teenth",
+      "Tuesday"
+     ],
+     "expected": "2013-08-13"
+    },
+    {
+     "args": [
+      2013,
+      1,
+      "teenth",
+      "Wednesday"
+     ],
+     "expected": "2013-01-16"
+    },
+    {
+     "args": [
+      2013,
+      2,
+      "teenth",
+      "Wednesday"
+     ],
+     "expected": "2013-02-13"
+    },
+    {
+     "args": [
+      2013,
+      6,
+      "teenth",
+      "Wednesday"
+     ],
+     "expected": "2013-06-19"
+    },
+    {
+     "args": [
+      2013,
+      5,
+      "teenth",
+      "Thursday"
+     ],
+     "expected": "2013-05-16"
+    },
+    {
+     "args": [
+      2013,
+      6,
+      "teenth",
+      "Thursday"
+     ],
+     "expected": "2013-06-13"
+    },
+    {
+     "args": [
+      2013,
+      9,
+      "teenth",
+      "Thursday"
+     ],
+     "expected": "2013-09-19"
+    },
+    {
+     "args": [
+      2013,
+      4,
+      "teenth",
+      "Friday"
+     ],
+     "expected": "2013-04-19"
+    },
+    {
+     "args": [
+      2013,
+      8,
+      "teenth",
+      "Friday"
+     ],
+     "expected": "2013-08-16"
+    },
+    {
+     "args": [
+      2013,
+      9,
+      "teenth",
+      "Friday"
+     ],
+     "expected": "2013-09-13"
+    },
+    {
+     "args": [
+      2013,
+      2,
+      "teenth",
+      "Saturday"
+     ],
+     "expected": "2013-02-16"
+    },
+    {
+     "args": [
+      2013,
+      4,
+      "teenth",
+      "Saturday"
+     ],
+     "expected": "2013-04-13"
+    },
+    {
+     "args": [
+      2013,
+      10,
+      "teenth",
+      "Saturday"
+     ],
+     "expected": "2013-10-19"
+    },
+    {
+     "args": [
+      2013,
+      5,
+      "teenth",
+      "Sunday"
+     ],
+     "expected": "2013-05-19"
+    },
+    {
+     "args": [
+      2013,
+      6,
+      "teenth",
+      "Sunday"
+     ],
+     "expected": "2013-06-16"
+    },
+    {
+     "args": [
+      2013,
+      10,
+      "teenth",
+      "Sunday"
+     ],
+     "expected": "2013-10-13"
+    },
+    {
+     "args": [
+      2013,
+      3,
+      "first",
+      "Monday"
+     ],
+     "expected": "2013-03-04"
+    },
+    {
+     "args": [
+      2013,
+      4,
+      "first",
+      "Monday"
+     ],
+     "expected": "2013-04-01"
+    },
+    {
+     "args": [
+      2013,
+      5,
+      "first",
+      "Tuesday"
+     ],
+     "expected": "2013-05-07"
+    },
+    {
+     "args": [
+      2013,
+      6,
+      "first",
+      "Tuesday"
+     ],
+     "expected": "2013-06-04"
+    },
+    {
+     "args": [
+      2013,
+      7,
+      "first",
+      "Wednesday"
+     ],
+     "expected": "2013-07-03"
+    },
+    {
+     "args": [
+      2013,
+      8,
+      "first",
+      "Wednesday"
+     ],
+     "expected": "2013-08-07"
+    },
+    {
+     "args": [
+      2013,
+      9,
+      "first",
+      "Thursday"
+     ],
+     "expected": "2013-09-05"
+    },
+    {
+     "args": [
+      2013,
+      10,
+      "first",
+      "Thursday"
+     ],
+     "expected": "2013-10-03"
+    },
+    {
+     "args": [
+      2013,
+      11,
+      "first",
+      "Friday"
+     ],
+     "expected": "2013-11-01"
+    },
+    {
+     "args": [
+      2013,
+      12,
+      "first",
+      "Friday"
+     ],
+     "expected": "2013-12-06"
+    },
+    {
+     "args": [
+      2013,
+      1,
+      "first",
+      "Saturday"
+     ],
+     "expected": "2013-01-05"
+    },
+    {
+     "args": [
+      2013,
+      2,
+      "first",
+      "Saturday"
+     ],
+     "expected": "2013-02-02"
+    },
+    {
+     "args": [
+      2013,
+      3,
+      "first",
+      "Sunday"
+     ],
+     "expected": "2013-03-03"
+    },
+    {
+     "args": [
+      2013,
+      4,
+      "first",
+      "Sunday"
+     ],
+     "expected": "2013-04-07"
+    },
+    {
+     "args": [
+      2013,
+      3,
+      "second",
+      "Monday"
+     ],
+     "expected": "2013-03-11"
+    },
+    {
+     "args": [
+      2013,
+      4,
+      "second",
+      "Monday"
+     ],
+     "expected": "2013-04-08"
+    },
+    {
+     "args": [
+      2013,
+      5,
+      "second",
+      "Tuesday"
+     ],
+     "expected": "2013-05-14"
+    },
+    {
+     "args": [
+      2013,
+      6,
+      "second",
+      "Tuesday"
+     ],
+     "expected": "2013-06-11"
+    },
+    {
+     "args": [
+      2013,
+      7,
+      "second",
+      "Wednesday"
+     ],
+     "expected": "2013-07-10"
+    },
+    {
+     "args": [
+      2013,
+      8,
+      "second",
+      "Wednesday"
+     ],
+     "expected": "2013-08-14"
+    },
+    {
+     "args": [
+      2013,
+      9,
+      "second",
+      "Thursday"
+     ],
+     "expected": "2013-09-12"
+    },
+    {
+     "args": [
+      2013,
+      10,
+      "second",
+      "Thursday"
+     ],
+     "expected": "2013-10-10"
+    },
+    {
+     "args": [
+      2013,
+      11,
+      "second",
+      "Friday"
+     ],
+     "expected": "2013-11-08"
+    },
+    {
+     "args": [
+      2013,
+      12,
+      "second",
+      "Friday"
+     ],
+     "expected": "2013-12-13"
+    },
+    {
+     "args": [
+      2013,
+      1,
+      "second",
+      "Saturday"
+     ],
+     "expected": "2013-01-12"
+    },
+    {
+     "args": [
+      2013,
+      2,
+      "second",
+      "Saturday"
+     ],
+     "expected": "2013-02-09"
+    },
+    {
+     "args": [
+      2013,
+      3,
+      "second",
+      "Sunday"
+     ],
+     "expected": "2013-03-10"
+    },
+    {
+     "args": [
+      2013,
+      4,
+      "second",
+      "Sunday"
+     ],
+     "expected": "2013-04-14"
+    },
+    {
+     "args": [
+      2013,
+      3,
+      "third",
+      "Monday"
+     ],
+     "expected": "2013-03-18"
+    },
+    {
+     "args": [
+      2013,
+      4,
+      "third",
+      "Monday"
+     ],
+     "expected": "2013-04-15"
+    },
+    {
+     "args": [
+      2013,
+      5,
+      "third",
+      "Tuesday"
+     ],
+     "expected": "2013-05-21"
+    },
+    {
+     "args": [
+      2013,
+      6,
+      "third",
+      "Tuesday"
+     ],
+     "expected": "2013-06-18"
+    },
+    {
+     "args": [
+      2013,
+      7,
+      "third",
+      "Wednesday"
+     ],
+     "expected": "2013-07-17"
+    },
+    {
+     "args": [
+      2013,
+      8,
+      "third",
+      "Wednesday"
+     ],
+     "expected": "2013-08-21"
+    },
+    {
+     "args": [
+      2013,
+      9,
+      "third",
+      "Thursday"
+     ],
+     "expected": "2013-09-19"
+    },
+    {
+     "args": [
+      2013,
+      10,
+      "third",
+      "Thursday"
+     ],
+     "expected": "2013-10-17"
+    },
+    {
+     "args": [
+      2013,
+      11,
+      "third",
+      "Friday"
+     ],
+     "expected": "2013-11-15"
+    },
+    {
+     "args": [
+      2013,
+      12,
+      "third",
+      "Friday"
+     ],
+     "expected": "2013-12-20"
+    },
+    {
+     "args": [
+      2013,
+      1,
+      "third",
+      "Saturday"
+     ],
+     "expected": "2013-01-19"
+    },
+    {
+     "args": [
+      2013,
+      2,
+      "third",
+      "Saturday"
+     ],
+     "expected": "2013-02-16"
+    },
+    {
+     "args": [
+      2013,
+      3,
+      "third",
+      "Sunday"
+     ],
+     "expected": "2013-03-17"
+    },
+    {
+     "args": [
+      2013,
+      4,
+      "third",
+      "Sunday"
+     ],
+     "expected": "2013-04-21"
+    },
+    {
+     "args": [
+      2013,
+      3,
+      "fourth",
+      "Monday"
+     ],
+     "expected": "2013-03-25"
+    },
+    {
+     "args": [
+      2013,
+      4,
+      "fourth",
+      "Monday"
+     ],
+     "expected": "2013-04-22"
+    },
+    {
+     "args": [
+      2013,
+      5,
+      "fourth",
+      "Tuesday"
+     ],
+     "expected": "2013-05-28"
+    },
+    {
+     "args": [
+      2013,
+      6,
+      "fourth",
+      "Tuesday"
+     ],
+     "expected": "2013-06-25"
+    },
+    {
+     "args": [
+      2013,
+      7,
+      "fourth",
+      "Wednesday"
+     ],
+     "expected": "2013-07-24"
+    },
+    {
+     "args": [
+      2013,
+      8,
+      "fourth",
+      "Wednesday"
+     ],
+     "expected": "2013-08-28"
+    },
+    {
+     "args": [
+      2013,
+      9,
+      "fourth",
+      "Thursday"
+     ],
+     "expected": "2013-09-26"
+    },
+    {
+     "args": [
+      2013,
+      10,
+      "fourth",
+      "Thursday"
+     ],
+     "expected": "2013-10-24"
+    },
+    {
+     "args": [
+      2013,
+      11,
+      "fourth",
+      "Friday"
+     ],
+     "expected": "2013-11-22"
+    },
+    {
+     "args": [
+      2013,
+      12,
+      "fourth",
+      "Friday"
+     ],
+     "expected": "2013-12-27"
+    },
+    {
+     "args": [
+      2013,
+      1,
+      "fourth",
+      "Saturday"
+     ],
+     "expected": "2013-01-26"
+    },
+    {
+     "args": [
+      2013,
+      2,
+      "fourth",
+      "Saturday"
+     ],
+     "expected": "2013-02-23"
+    },
+    {
+     "args": [
+      2013,
+      3,
+      "fourth",
+      "Sunday"
+     ],
+     "expected": "2013-03-24"
+    },
+    {
+     "args": [
+      2013,
+      4,
+      "fourth",
+      "Sunday"
+     ],
+     "expected": "2013-04-28"
+    },
+    {
+     "args": [
+      2013,
+      3,
+      "last",
+      "Monday"
+     ],
+     "expected": "2013-03-25"
+    },
+    {
+     "args": [
+      2013,
+      4,
+      "last",
+      "Monday"
+     ],
+     "expected": "2013-04-29"
+    },
+    {
+     "args": [
+      2013,
+      5,
+      "last",
+      "Tuesday"
+     ],
+     "expected": "2013-05-28"
+    },
+    {
+     "args": [
+      2013,
+      6,
+      "last",
+      "Tuesday"
+     ],
+     "expected": "2013-06-25"
+    },
+    {
+     "args": [
+      2013,
+      7,
+      "last",
+      "Wednesday"
+     ],
+     "expected": "2013-07-31"
+    },
+    {
+     "args": [
+      2013,
+      8,
+      "last",
+      "Wednesday"
+     ],
+     "expected": "2013-08-28"
+    },
+    {
+     "args": [
+      2013,
+      9,
+      "last",
+      "Thursday"
+     ],
+     "expected": "2013-09-26"
+    },
+    {
+     "args": [
+      2013,
+      10,
+      "last",
+      "Thursday"
+     ],
+     "expected": "2013-10-31"
+    },
+    {
+     "args": [
+      2013,
+      11,
+      "last",
+      "Friday"
+     ],
+     "expected": "2013-11-29"
+    },
+    {
+     "args": [
+      2013,
+      12,
+      "last",
+      "Friday"
+     ],
+     "expected": "2013-12-27"
+    },
+    {
+     "args": [
+      2013,
+      1,
+      "last",
+      "Saturday"
+     ],
+     "expected": "2013-01-26"
+    },
+    {
+     "args": [
+      2013,
+      2,
+      "last",
+      "Saturday"
+     ],
+     "expected": "2013-02-23"
+    },
+    {
+     "args": [
+      2013,
+      3,
+      "last",
+      "Sunday"
+     ],
+     "expected": "2013-03-31"
+    },
+    {
+     "args": [
+      2013,
+      4,
+      "last",
+      "Sunday"
+     ],
+     "expected": "2013-04-28"
+    },
+    {
+     "args": [
+      2012,
+      2,
+      "last",
+      "Wednesday"
+     ],
+     "expected": "2012-02-29"
+    },
+    {
+     "args": [
+      2014,
+      12,
+      "last",
+      "Wednesday"
+     ],
+     "expected": "2014-12-31"
+    },
+    {
+     "args": [
+      2015,
+      2,
+      "last",
+      "Sunday"
+     ],
+     "expected": "2015-02-22"
+    },
+    {
+     "args": [
+      2012,
+      12,
+      "first",
+      "Friday"
+     ],
+     "expected": "2012-12-07"
+    }
+   ]
+  },
+  {
+   "id": "isbn_verifier",
+   "exercise": "isbn-verifier",
+   "params": [
+    [
+     "isbn",
+     "Str"
+    ]
+   ],
+   "ret": "Bool",
+   "desc": "# Instructions\n\nThe [ISBN-10 verification process][isbn-verification] is used to validate book identification numbers.\nThese normally contain dashes and look like: `3-598-21508-8`\n\n## ISBN\n\nThe ISBN-10 format is 9 digits (0 to 9) plus one check character (either a digit or an X only).\nIn the case the check character is an X, this represents the value '10'.\nThese may be communicated with or without hyphens, and can be checked for their validity by the following formula:\n\n```text\n(d₁ * 10 + d₂ * 9 + d₃ * 8 + d₄ * 7 + d₅ * 6 + d₆ * 5 + d₇ * 4 + d₈ * 3 + d₉ * 2 + d₁₀ * 1) mod 11 == 0\n```\n\nIf the result is 0, then it is a valid ISBN-10, otherwise it is invalid.\n\n## Example\n\nLet's take the ISBN-10 `3-598-21508-8`.\nWe plug it in to the formula, and get:\n\n```text\n(3 * 10 + 5 * 9 + 9 * 8 + 8 * 7 + 2 * 6 + 1 * 5 + 5 * 4 + 0 * 3 + 8 * 2 + 8 * 1) mod 11 == 0\n```\n\nSince the result is 0, this proves that our ISBN is valid.\n\n## Task\n\nGiven a string the program should check if the provided string is a valid ISBN-10.\nPutting this into place requires some thinking about preprocessing/parsing of the string prior to calculating the check digit for the ISBN.\n\nThe program should be able to verify ISBN-10 both with and without separating dashes.\n\n## Caveats\n\nConverting from strings to numbers can be tricky in certain languages.\nNow, it's even trickier since the check digit of an ISBN-10 may be 'X' (representing '10').\nFor instance `3-598-21507-X` is a valid ISBN-10.\n\n[isbn-verification]: https://en.wikipedia.org/wiki/International_Standard_Book_Number",
+   "examples": [
+    {
+     "args": [
+      "3-598-21508-8"
+     ],
+     "expected": true
+    },
+    {
+     "args": [
+      "3-598-21508-9"
+     ],
+     "expected": false
+    }
+   ],
+   "tests": [
+    {
+     "args": [
+      "3-598-21507-X"
+     ],
+     "expected": true
+    },
+    {
+     "args": [
+      "3-598-21507-A"
+     ],
+     "expected": false
+    },
+    {
+     "args": [
+      "4-598-21507-B"
+     ],
+     "expected": false
+    },
+    {
+     "args": [
+      "3-598-P1581-X"
+     ],
+     "expected": false
+    },
+    {
+     "args": [
+      "3-598-2X507-9"
+     ],
+     "expected": false
+    },
+    {
+     "args": [
+      "3-598-21508-96"
+     ],
+     "expected": false
+    },
+    {
+     "args": [
+      "3-598-2X507-5"
+     ],
+     "expected": false
+    },
+    {
+     "args": [
+      "3598215088"
+     ],
+     "expected": true
+    },
+    {
+     "args": [
+      "359821507X"
+     ],
+     "expected": true
+    },
+    {
+     "args": [
+      "359821507"
+     ],
+     "expected": false
+    },
+    {
+     "args": [
+      "3598215078X"
+     ],
+     "expected": false
+    },
+    {
+     "args": [
+      "00"
+     ],
+     "expected": false
+    },
+    {
+     "args": [
+      "3-598-21507"
+     ],
+     "expected": false
+    },
+    {
+     "args": [
+      "3-598-21515-X"
+     ],
+     "expected": false
+    },
+    {
+     "args": [
+      ""
+     ],
+     "expected": false
+    },
+    {
+     "args": [
+      "134456729"
+     ],
+     "expected": false
+    },
+    {
+     "args": [
+      "3132P34035"
+     ],
+     "expected": false
+    },
+    {
+     "args": [
+      "3598P215088"
+     ],
+     "expected": false
+    },
+    {
+     "args": [
+      "98245726788"
+     ],
+     "expected": false
+    }
+   ]
+  },
+  {
+   "id": "connect",
+   "exercise": "connect",
+   "params": [
+    [
+     "board",
+     "[Str]"
+    ]
+   ],
+   "ret": "Str",
+   "desc": "# Instructions\n\nCompute the result for a game of Hex / Polygon.\n\nThe abstract boardgame known as [Hex][hex] / Polygon / CON-TAC-TIX is quite simple in rules, though complex in practice.\nTwo players place stones on a parallelogram with hexagonal fields.\nThe player to connect his/her stones to the opposite side first wins.\nThe four sides of the parallelogram are divided between the two players (i.e. one player gets assigned a side and the side directly opposite it and the other player gets assigned the two other sides).\n\nYour goal is to build a program that given a simple representation of a board computes the winner (or lack thereof).\nNote that all games need not be \"fair\".\n(For example, players may have mismatched piece counts or the game's board might have a different width and height.)\n\nThe boards look like this:\n\n```text\n. O . X .\n . X X O .\n  O O O X .\n   . X O X O\n    X O O O X\n```\n\n\"Player `O`\" plays from top to bottom, \"Player `X`\" plays from left to right.\nIn the above example `O` has made a connection from left to right but nobody has won since `O` didn't connect top and bottom.\n\n[hex]: https://en.wikipedia.org/wiki/Hex_%28board_game%29",
+   "examples": [
+    {
+     "args": [
+      [
+       ". . . . .",
+       " . . . . .",
+       "  . . . . .",
+       "   . . . . .",
+       "    . . . . ."
+      ]
+     ],
+     "expected": ""
+    },
+    {
+     "args": [
+      [
+       "X"
+      ]
+     ],
+     "expected": "X"
+    }
+   ],
+   "tests": [
+    {
+     "args": [
+      [
+       "O"
+      ]
+     ],
+     "expected": "O"
+    },
+    {
+     "args": [
+      [
+       "O O O X",
+       " X . . X",
+       "  X . . X",
+       "   X O O O"
+      ]
+     ],
+     "expected": ""
+    },
+    {
+     "args": [
+      [
+       "X O . .",
+       " O X X X",
+       "  O X O .",
+       "   . O X .",
+       "    X X O O"
+      ]
+     ],
+     "expected": ""
+    },
+    {
+     "args": [
+      [
+       "X . . .",
+       " . X O .",
+       "  O . X O",
+       "   . O . X",
+       "    . . O ."
+      ]
+     ],
+     "expected": ""
+    },
+    {
+     "args": [
+      [
+       ". O . .",
+       " O X X X",
+       "  O X O .",
+       "   X X O X",
+       "    . O X ."
+      ]
+     ],
+     "expected": "X"
+    },
+    {
+     "args": [
+      [
+       ". . X .",
+       " X X . .",
+       "  . X X X",
+       "   O O O O"
+      ]
+     ],
+     "expected": "X"
+    },
+    {
+     "args": [
+      [
+       ". . X X",
+       " X X . .",
+       "  . X X .",
+       "   O O O O"
+      ]
+     ],
+     "expected": "X"
+    },
+    {
+     "args": [
+      [
+       ". O . .",
+       " O X X X",
+       "  O O O .",
+       "   X X O X",
+       "    . O X ."
+      ]
+     ],
+     "expected": "O"
+    },
+    {
+     "args": [
+      [
+       ". X X . .",
+       " X . X . X",
+       "  . X . X .",
+       "   . X X . .",
+       "    O O O O O"
+      ]
+     ],
+     "expected": "X"
+    },
+    {
+     "args": [
+      [
+       "O X X X X X X X X",
+       " O X O O O O O O O",
+       "  O X O X X X X X O",
+       "   O X O X O O O X O",
+       "    O X O X X X O X O",
+       "     O X O O O X O X O",
+       "      O X X X X X O X O",
+       "       O O O O O O O X O",
+       "        X X X X X X X X O"
+      ]
+     ],
+     "expected": "X"
+    }
+   ]
+  },
+  {
+   "id": "perfect_numbers",
+   "exercise": "perfect-numbers",
+   "params": [
+    [
+     "number",
+     "Int"
+    ]
+   ],
+   "ret": "Str",
+   "desc": "# Instructions\n\nDetermine if a number is perfect, abundant, or deficient based on Nicomachus' (60 - 120 CE) classification scheme for positive integers.\n\nThe Greek mathematician [Nicomachus][nicomachus] devised a classification scheme for positive integers, identifying each as belonging uniquely to the categories of [perfect](#perfect), [abundant](#abundant), or [deficient](#deficient) based on their [aliquot sum][aliquot-sum].\nThe _aliquot sum_ is defined as the sum of the factors of a number not including the number itself.\nFor example, the aliquot sum of `15` is `1 + 3 + 5 = 9`.\n\n## Perfect\n\nA number is perfect when it equals its aliquot sum.\nFor example:\n\n- `6` is a perfect number because `1 + 2 + 3 = 6`\n- `28` is a perfect number because `1 + 2 + 4 + 7 + 14 = 28`\n\n## Abundant\n\nA number is abundant when it is less than its aliquot sum.\nFor example:\n\n- `12` is an abundant number because `1 + 2 + 3 + 4 + 6 = 16`\n- `24` is an abundant number because `1 + 2 + 3 + 4 + 6 + 8 + 12 = 36`\n\n## Deficient\n\nA number is deficient when it is greater than its aliquot sum.\nFor example:\n\n- `8` is a deficient number because `1 + 2 + 4 = 7`\n- Prime numbers are deficient\n\n## Task\n\nImplement a way to determine whether a given number is [perfect](#perfect).\nDepending on your language track, you may also need to implement a way to determine whether a given number is [abundant](#abundant) or [deficient](#deficient).\n\n[nicomachus]: https://en.wikipedia.org/wiki/Nicomachus\n[aliquot-sum]: https://en.wikipedia.org/wiki/Aliquot_sum",
+   "examples": [
+    {
+     "args": [
+      6
+     ],
+     "expected": "perfect"
+    },
+    {
+     "args": [
+      28
+     ],
+     "expected": "perfect"
+    }
+   ],
+   "tests": [
+    {
+     "args": [
+      33550336
+     ],
+     "expected": "perfect"
+    },
+    {
+     "args": [
+      12
+     ],
+     "expected": "abundant"
+    },
+    {
+     "args": [
+      30
+     ],
+     "expected": "abundant"
+    },
+    {
+     "args": [
+      33550335
+     ],
+     "expected": "abundant"
+    },
+    {
+     "args": [
+      196
+     ],
+     "expected": "abundant"
+    },
+    {
+     "args": [
+      2
+     ],
+     "expected": "deficient"
+    },
+    {
+     "args": [
+      4
+     ],
+     "expected": "deficient"
+    },
+    {
+     "args": [
+      32
+     ],
+     "expected": "deficient"
+    },
+    {
+     "args": [
+      33550337
+     ],
+     "expected": "deficient"
+    },
+    {
+     "args": [
+      1
+     ],
+     "expected": "deficient"
+    }
+   ]
+  },
+  {
+   "id": "state_of_tic_tac_toe",
+   "exercise": "state-of-tic-tac-toe",
+   "params": [
+    [
+     "board",
+     "[Str]"
+    ]
+   ],
+   "ret": "Str",
+   "desc": "# Instructions\n\nIn this exercise, you're going to implement a program that determines the state of a [tic-tac-toe][] game.\n(_You may also know the game as \"noughts and crosses\" or \"Xs and Os\"._)\n\nThe game is played on a 3×3 grid.\nPlayers take turns to place `X`s and `O`s on the grid.\nThe game ends when one player has won by placing three of marks in a row, column, or along a diagonal of the grid, or when the entire grid is filled up.\n\nIn this exercise, we will assume that `X` starts.\n\nIt's your job to determine which state a given game is in.\n\nThere are 3 potential game states:\n\n- The game is **ongoing**.\n- The game ended in a **draw**.\n- The game ended in a **win**.\n\nIf the given board is invalid, throw an appropriate error.\n\nIf a board meets the following conditions, it is invalid:\n\n- The given board cannot be reached when turns are taken in the correct order (remember that `X` starts).\n- The game was played after it already ended.\n\n## Examples\n\n### Ongoing game\n\n```text\n   |   |\n X |   |\n___|___|___\n   |   |\n   | X | O\n___|___|___\n   |   |\n O | X |\n   |   |\n```\n\n### Draw\n\n```text\n   |   |\n X | O | X\n___|___|___\n   |   |\n X | X | O\n___|___|___\n   |   |\n O | X | O\n   |   |\n```\n\n### Win\n\n```text\n   |   |\n X | X | X\n___|___|___\n   |   |\n   | O | O\n___|___|___\n   |   |\n   |   |\n   |   |\n```\n\n### Invalid\n\n#### Wrong turn order\n\n```text\n   |   |\n O | O | X\n___|___|___\n   |   |\n   |   |\n___|___|___\n   |   |\n   |   |\n   |   |\n```\n\n#### Continued playing after win\n\n```text\n   |   |\n X | X | X\n___|___|___\n   |   |\n O | O | O\n___|___|___\n   |   |\n   |   |\n   |   |\n```\n\n[tic-tac-toe]: https://en.wikipedia.org/wiki/Tic-tac-toe",
+   "examples": [
+    {
+     "args": [
+      [
+       "XOO",
+       "X  ",
+       "X  "
+      ]
+     ],
+     "expected": "win"
+    },
+    {
+     "args": [
+      [
+       "OXO",
+       " X ",
+       " X "
+      ]
+     ],
+     "expected": "win"
+    }
+   ],
+   "tests": [
+    {
+     "args": [
+      [
+       "OOX",
+       "  X",
+       "  X"
+      ]
+     ],
+     "expected": "win"
+    },
+    {
+     "args": [
+      [
+       "OXX",
+       "OX ",
+       "O  "
+      ]
+     ],
+     "expected": "win"
+    },
+    {
+     "args": [
+      [
+       "XOX",
+       " OX",
+       " O "
+      ]
+     ],
+     "expected": "win"
+    },
+    {
+     "args": [
+      [
+       "XXO",
+       " XO",
+       "  O"
+      ]
+     ],
+     "expected": "win"
+    },
+    {
+     "args": [
+      [
+       "XXX",
+       "XOO",
+       "O  "
+      ]
+     ],
+     "expected": "win"
+    },
+    {
+     "args": [
+      [
+       "O  ",
+       "XXX",
+       " O "
+      ]
+     ],
+     "expected": "win"
+    },
+    {
+     "args": [
+      [
+       " OO",
+       "O X",
+       "XXX"
+      ]
+     ],
+     "expected": "win"
+    },
+    {
+     "args": [
+      [
+       "OOO",
+       "XXO",
+       "XX "
+      ]
+     ],
+     "expected": "win"
+    },
+    {
+     "args": [
+      [
+       "XX ",
+       "OOO",
+       "X  "
+      ]
+     ],
+     "expected": "win"
+    },
+    {
+     "args": [
+      [
+       "XOX",
+       " XX",
+       "OOO"
+      ]
+     ],
+     "expected": "win"
+    },
+    {
+     "args": [
+      [
+       "XOO",
+       " X ",
+       "  X"
+      ]
+     ],
+     "expected": "win"
+    },
+    {
+     "args": [
+      [
+       "O X",
+       "OX ",
+       "X  "
+      ]
+     ],
+     "expected": "win"
+    },
+    {
+     "args": [
+      [
+       "OXX",
+       "OOX",
+       "X O"
+      ]
+     ],
+     "expected": "win"
+    },
+    {
+     "args": [
+      [
+       "  O",
+       " OX",
+       "OXX"
+      ]
+     ],
+     "expected": "win"
+    },
+    {
+     "args": [
+      [
+       "XXX",
+       "XOO",
+       "XOO"
+      ]
+     ],
+     "expected": "win"
+    },
+    {
+     "args": [
+      [
+       "XOX",
+       "OXO",
+       "XOX"
+      ]
+     ],
+     "expected": "win"
+    },
+    {
+     "args": [
+      [
+       "XOX",
+       "XXO",
+       "OXO"
+      ]
+     ],
+     "expected": "draw"
+    },
+    {
+     "args": [
+      [
+       "XXO",
+       "OXX",
+       "XOO"
+      ]
+     ],
+     "expected": "draw"
+    },
+    {
+     "args": [
+      [
+       "   ",
+       "X  ",
+       "   "
+      ]
+     ],
+     "expected": "ongoing"
+    },
+    {
+     "args": [
+      [
+       "O  ",
+       " X ",
+       "   "
+      ]
+     ],
+     "expected": "ongoing"
+    },
+    {
+     "args": [
+      [
+       "X  ",
+       " XO",
+       "OX "
+      ]
+     ],
+     "expected": "ongoing"
+    }
+   ]
+  }
+ ]
+}

@@ -18,7 +18,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { delimiter, dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { findGcc } from '../src/compiler.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -30,9 +30,9 @@ const { TASKS } = await import(set ? `./tasks-${set}.mjs` : './tasks.mjs');
 const work = join(here, workName);
 const cli = join(here, '..', 'src', 'cli.mjs');
 const LANGS = {
-  avisoq: { ext: 'avq', name: 'Avisoq', types: { Int: 'Int', Bool: 'Bool', Str: 'Str', '[Int]': '[Int]' } },
-  python: { ext: 'py', name: 'Python', types: { Int: 'int', Bool: 'bool', Str: 'str', '[Int]': 'list[int]' } },
-  rust: { ext: 'rs', name: 'Rust', types: { Int: 'i64', Bool: 'bool', Str: '&str', '[Int]': '&[i64]' }, rets: { Int: 'i64', Bool: 'bool', Str: 'String', '[Int]': 'Vec<i64>' } },
+  avisoq: { ext: 'avq', name: 'Avisoq', types: { Int: 'Int', Bool: 'Bool', Str: 'Str', '[Int]': '[Int]', '[Str]': '[Str]' } },
+  python: { ext: 'py', name: 'Python', types: { Int: 'int', Bool: 'bool', Str: 'str', '[Int]': 'list[int]', '[Str]': 'list[str]' } },
+  rust: { ext: 'rs', name: 'Rust', types: { Int: 'i64', Bool: 'bool', Str: '&str', '[Int]': '&[i64]', '[Str]': '&[&str]' }, rets: { Int: 'i64', Bool: 'bool', Str: 'String', '[Int]': 'Vec<i64>', '[Str]': 'Vec<String>' } },
 };
 const gcc = findGcc();
 const env = { ...process.env, PATH: [gcc && gcc !== 'gcc' ? dirname(gcc) : '', join(homedir(), '.cargo', 'bin'), process.env.PATH].join(delimiter) };
@@ -44,7 +44,12 @@ const signature = (lang, t) => {
   return `pub fn ${t.id}(${ps}) -> ${L.rets[t.ret]}`;
 };
 
-function literal(lang, v) {
+function literal(lang, v, ty) {
+  if (Array.isArray(v) && (ty === '[Str]' || (v.length > 0 && typeof v[0] === 'string'))) {
+    const items = v.map((x) => JSON.stringify(x)).join(', ');
+    if (lang === 'rust') return v.length ? `&vec![${items}]` : '&Vec::<&str>::new()';
+    return `[${items}]`;
+  }
   if (Array.isArray(v)) {
     if (lang === 'rust') return v.length ? `&vec![${v.map((x) => `${x}i64`).join(', ')}]` : '&Vec::<i64>::new()';
     return `[${v.join(', ')}]`;
@@ -55,8 +60,11 @@ function literal(lang, v) {
   if (String(v) === '-9223372036854775808') return lang === 'python' ? String(v) : lang === 'rust' ? 'i64::MIN' : '(-9223372036854775807 - 1)';
   return String(v);
 }
-const render = (v) => (Array.isArray(v) ? v.join(',') : String(v));
-const call = (lang, t, args) => `${t.id}(${args.map((a) => literal(lang, a)).join(', ')})`;
+// Arrays of strings are printed with a separator character that cannot occur in the strings.
+const SEP = String.fromCharCode(31);
+const render = (v) => (Array.isArray(v) ? v.join(v.length && typeof v[0] === 'string' ? SEP : ',') : String(v));
+const call = (lang, t, args) => `${t.id}(${args.map((a, i) => literal(lang, a, t.params[i]?.[1])).join(', ')})`;
+const shown = (v) => (Array.isArray(v) ? `[${v.map((x) => JSON.stringify(x)).join(', ')}]` : JSON.stringify(v));
 
 function prepare() {
   for (const [lang, L] of Object.entries(LANGS)) {
@@ -65,7 +73,11 @@ function prepare() {
       + 'Each file must define the function with exactly the signature shown. It may define helper functions and import from the standard library. '
       + `${lang === 'avisoq' ? 'It must not define `main`. ' : lang === 'rust' ? 'It must not define `main` and must use only the standard library (no crates). ' : 'It must not print anything or run code at import time. '}`
       + 'The function is tested against hidden inputs, including edge cases, so follow the statement exactly.\n\n';
-    for (const t of TASKS) md += `## ${t.id}\n\n${t.desc}\n\n\`\`\`\n${signature(lang, t)}\n\`\`\`\n\n`;
+    for (const t of TASKS) {
+      md += `## ${t.id}\n\n${t.desc}\n\n\`\`\`\n${signature(lang, t)}\n\`\`\`\n\n`;
+      // tasks from an outside source come with two of their test cases as examples
+      if (t.examples) md += `Write the function \`${t.id}\` with the signature above. Examples (the other test cases are hidden):\n\n${t.examples.map((x) => `- \`${t.id}(${x.args.map(shown).join(', ')})\` gives \`${shown(x.expected)}\``).join('\n')}\n\n`;
+    }
     writeFileSync(join(work, lang, 'TASKS.md'), md);
   }
   console.log(`wrote task sheets for ${TASKS.length} tasks in ${work}`);
@@ -74,8 +86,10 @@ function prepare() {
 const run = (bin, args, opts = {}) => spawnSync(bin, args, { encoding: 'utf8', timeout: 20000, env, ...opts });
 const clip = (s, n = 1200) => { const t = (s ?? '').trim(); return t.length > n ? `${t.slice(0, n)}\n... (cut)` : t; };
 
-// Returns { state, detail } for one solution.
-function gradeOne(lang, t, tmp) {
+// Returns { state, detail } for one solution. `only` grades against other inputs than the
+// hidden tests (local-model.mjs uses it to try the visible examples).
+export function gradeOne(lang, t0, tmp, only = null) {
+  const t = only ? { ...t0, tests: only.map((c) => c.args), ref: (...args) => only.find((c) => JSON.stringify(c.args) === JSON.stringify(args)).expected } : t0;
   const L = LANGS[lang];
   const file = join(work, lang, 'solutions', `${t.id}.${L.ext}`);
   if (!existsSync(file)) return { state: 'compile', detail: 'no solution file was written' };
@@ -84,8 +98,9 @@ function gradeOne(lang, t, tmp) {
   const outcomes = []; // per test: { ok, kind: 'pass' | 'wrong' | 'error', got, error }
 
   if (lang === 'avisoq') {
-    const show = t.ret === '[Int]' ? '\nfn bench_show(xs: [Int]) -> Str {\n  var bench_out = ""\n  for bench_i in 0..len(xs) {\n    if bench_i > 0 { bench_out = bench_out + "," }\n    bench_out = bench_out + str(xs[bench_i])\n  }\n  return bench_out\n}\n' : '';
-    const program = (args) => `${src}\n${show}\nfn main() uses io {\n  print(${t.ret === '[Int]' ? `bench_show(${call(lang, t, args)})` : call(lang, t, args)})\n}\n`;
+    const show = t.ret === '[Int]' ? '\nfn bench_show(xs: [Int]) -> Str {\n  var bench_out = ""\n  for bench_i in 0..len(xs) {\n    if bench_i > 0 { bench_out = bench_out + "," }\n    bench_out = bench_out + str(xs[bench_i])\n  }\n  return bench_out\n}\n'
+      : t.ret === '[Str]' ? '\nfn bench_show(xs: [Str]) -> Str {\n  var bench_out = ""\n  for bench_i in 0..len(xs) {\n    if bench_i > 0 { bench_out = bench_out + chr(31) }\n    bench_out = bench_out + xs[bench_i]\n  }\n  return bench_out\n}\n' : '';
+    const program = (args) => `${src}\n${show}\nfn main() uses io {\n  print(${t.ret === '[Int]' || t.ret === '[Str]' ? `bench_show(${call(lang, t, args)})` : call(lang, t, args)})\n}\n`;
     const probe = join(tmp, `${t.id}.avq`);
     writeFileSync(probe, program(t.tests[0]));
     const c = run(process.execPath, [cli, 'check', probe, '--json']);
@@ -104,7 +119,7 @@ function gradeOne(lang, t, tmp) {
       else outcomes.push({ kind: j.stdout === `${expected[i]}\n` ? 'pass' : 'wrong', got: j.stdout.replace(/\n$/, '') });
     });
   } else if (lang === 'python') {
-    const fmt = t.ret === '[Int]' ? '",".join(str(x) for x in r)' : t.ret === 'Bool' ? '("true" if r else "false")' : 'str(r)';
+    const fmt = t.ret === '[Int]' ? '",".join(str(x) for x in r)' : t.ret === '[Str]' ? 'chr(31).join(r)' : t.ret === 'Bool' ? '("true" if r else "false")' : 'str(r)';
     const driver = `${src}\n\nif __name__ == "__main__":\n    import sys\n    _tests = [${t.tests.map((a) => `lambda: ${call(lang, t, a)}`).join(', ')}]\n    r = _tests[int(sys.argv[1])]()\n    sys.stdout.write(${fmt} + "\\n")\n`;
     const probe = join(tmp, `${t.id}.py`);
     writeFileSync(probe, driver);
@@ -116,7 +131,7 @@ function gradeOne(lang, t, tmp) {
       else outcomes.push({ kind: r.stdout.replace(/\r/g, '') === `${expected[i]}\n` ? 'pass' : 'wrong', got: r.stdout.trim() });
     });
   } else {
-    const fmt = t.ret === '[Int]' ? 'r.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(",")' : 'r.to_string()';
+    const fmt = t.ret === '[Int]' ? 'r.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(",")' : t.ret === '[Str]' ? 'r.join("\\u{1f}")' : 'r.to_string()';
     const arms = t.tests.map((a, i) => `        ${i} => { let r = ${call(lang, t, a)}; ${fmt} }`).join('\n');
     const driver = `${src}\n\nfn main() {\n    let bench_t: usize = std::env::args().nth(1).unwrap().parse().unwrap();\n    let bench_out: String = match bench_t {\n${arms}\n        _ => unreachable!(),\n    };\n    println!("{}", bench_out);\n}\n`;
     const probe = join(tmp, `${t.id}.rs`), exe = join(tmp, `${t.id}.exe`);
@@ -176,8 +191,10 @@ function report() {
   for (let r = 1; existsSync(join(work, `results-round${r}.json`)); r++) summary(JSON.parse(readFileSync(join(work, `results-round${r}.json`), 'utf8')), `Round ${r}`);
 }
 
-const [cmd, arg] = process.argv.slice(2).filter((a, i, all) => !a.startsWith('--') && !(all[i - 1] ?? '').startsWith('--'));
+export { LANGS, TASKS, signature, work, shown };
+const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+const [cmd, arg] = !isMain ? [] : process.argv.slice(2).filter((a, i, all) => !a.startsWith('--') && !(all[i - 1] ?? '').startsWith('--'));
 if (cmd === 'prepare') prepare();
 else if (cmd === 'grade') grade(Number(arg ?? 1));
 else if (cmd === 'report') report();
-else console.log('usage: node agentbench/run.mjs prepare | grade <round> | report');
+else if (isMain) console.log('usage: node agentbench/run.mjs prepare | grade <round> | report');

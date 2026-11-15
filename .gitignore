@@ -8,3 +8,4 @@ node_modules/
 agentbench/work-hard/
 agentbench/work-expert/
 *.dll
+agentbench/work-exercism/

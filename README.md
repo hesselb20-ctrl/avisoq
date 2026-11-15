@@ -37,6 +37,10 @@ fn main() uses io, fs {
 }
 ```
 
+**Documentation:** [tutorial](docs/TUTORIAL.md) (fifteen minutes, every example tested) ·
+[language reference](docs/REFERENCE.md) · [changelog](CHANGELOG.md) ·
+[guide for AI models](docs/AGENT_GUIDE.md)
+
 ## Install and use
 
 Requires Node 22 or newer.
