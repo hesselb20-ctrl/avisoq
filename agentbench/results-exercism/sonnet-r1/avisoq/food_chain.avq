@@ -1,0 +1,50 @@
+fn animal(i: Int) -> Str {
+  if i == 0 { return "fly" }
+  if i == 1 { return "spider" }
+  if i == 2 { return "bird" }
+  if i == 3 { return "cat" }
+  if i == 4 { return "dog" }
+  if i == 5 { return "goat" }
+  if i == 6 { return "cow" }
+  return "horse"
+}
+
+fn remark(i: Int) -> Str {
+  if i == 1 { return "It wriggled and jiggled and tickled inside her." }
+  if i == 2 { return "How absurd to swallow a bird!" }
+  if i == 3 { return "Imagine that, to swallow a cat!" }
+  if i == 4 { return "What a hog, to swallow a dog!" }
+  if i == 5 { return "Just opened her throat and swallowed a goat!" }
+  return "I don't know how she swallowed a cow!"
+}
+
+fn food_chain(start_verse: Int, end_verse: Int) -> [Str] {
+  var out: [Str] = []
+  for v in start_verse..end_verse + 1 {
+    let i = v - 1
+    if v > start_verse { push(out, "") }
+    push(out, "I know an old lady who swallowed a " + animal(i) + ".")
+    if i == 7 {
+      push(out, "She's dead, of course!")
+      continue
+    }
+    if i > 0 { push(out, remark(i)) }
+    var k = i
+    while k >= 1 {
+      var line = "She swallowed the " + animal(k) + " to catch the " + animal(k - 1)
+      if k - 1 == 1 { line += " that wriggled and jiggled and tickled inside her" }
+      push(out, line + ".")
+      k -= 1
+    }
+    push(out, "I don't know why she swallowed the fly. Perhaps she'll die.")
+  }
+  return out
+}
+
+test "food_chain" {
+  assert food_chain(1, 1) == ["I know an old lady who swallowed a fly.", "I don't know why she swallowed the fly. Perhaps she'll die."]
+  assert food_chain(2, 2) == ["I know an old lady who swallowed a spider.", "It wriggled and jiggled and tickled inside her.", "She swallowed the spider to catch the fly.", "I don't know why she swallowed the fly. Perhaps she'll die."]
+  assert food_chain(3, 3)[2] == "She swallowed the bird to catch the spider that wriggled and jiggled and tickled inside her."
+  assert food_chain(8, 8) == ["I know an old lady who swallowed a horse.", "She's dead, of course!"]
+  assert food_chain(1, 2)[2] == ""
+}

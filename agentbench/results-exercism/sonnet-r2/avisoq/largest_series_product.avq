@@ -1,0 +1,21 @@
+fn largest_series_product(digits: Str, span: Int) -> Int {
+  assert span >= 0
+  assert span <= len(digits)
+  for b in digits { assert b >= '0' and b <= '9' }
+  var best = 0
+  for start in 0..len(digits) - span + 1 {
+    var prod = 1
+    for k in 0..span { prod *= digits[start + k] - '0' }
+    if prod > best { best = prod }
+  }
+  return best
+}
+
+test "basic" {
+  assert largest_series_product("29", 2) == 18
+  assert largest_series_product("0123456789", 2) == 72
+  assert largest_series_product("63915", 3) == 162
+  assert largest_series_product("", 0) == 1
+  assert largest_series_product("123", 0) == 1
+  assert largest_series_product("0000", 2) == 0
+}

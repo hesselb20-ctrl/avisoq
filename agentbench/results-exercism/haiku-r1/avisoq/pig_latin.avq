@@ -1,0 +1,63 @@
+import "std/strings"
+
+fn is_vowel(c: Int) -> Bool {
+  return c == 'a' or c == 'e' or c == 'i' or c == 'o' or c == 'u'
+}
+
+fn translate_word(w: Str) -> Str {
+  let n = len(w)
+  if n == 0 {
+    return w
+  }
+  // Rule 1: vowel start, or "xr" / "yt".
+  if is_vowel(w[0]) or starts_with(w, "xr") or starts_with(w, "yt") {
+    return w + "ay"
+  }
+  // Rule 3: consonants, then "qu".
+  var j = 0
+  while j + 1 < n and not is_vowel(w[j]) {
+    if w[j] == 'q' and w[j + 1] == 'u' {
+      return substr(w, j + 2, n) + substr(w, 0, j + 2) + "ay"
+    }
+    j += 1
+  }
+  // Rule 4: one or more consonants, then "y".
+  var k = 0
+  while k < n and not is_vowel(w[k]) and w[k] != 'y' {
+    k += 1
+  }
+  if k > 0 and k < n and w[k] == 'y' {
+    return substr(w, k, n) + substr(w, 0, k) + "ay"
+  }
+  // Rule 2: leading consonants move to the end.
+  var m = 0
+  while m < n and not is_vowel(w[m]) {
+    m += 1
+  }
+  return substr(w, m, n) + substr(w, 0, m) + "ay"
+}
+
+fn pig_latin(phrase: Str) -> Str {
+  let words = split(phrase, " ")
+  var out: [Str] = []
+  for w in words {
+    push(out, translate_word(w))
+  }
+  return join(out, " ")
+}
+
+test "examples" {
+  assert pig_latin("apple") == "appleay"
+  assert pig_latin("ear") == "earay"
+  assert pig_latin("xray") == "xrayay"
+  assert pig_latin("yttria") == "yttriaay"
+  assert pig_latin("pig") == "igpay"
+  assert pig_latin("chair") == "airchay"
+  assert pig_latin("thrush") == "ushthray"
+  assert pig_latin("quick") == "ickquay"
+  assert pig_latin("square") == "aresquay"
+  assert pig_latin("my") == "ymay"
+  assert pig_latin("rhythm") == "ythmrhay"
+  assert pig_latin("yellow") == "ellowyay"
+  assert pig_latin("a whole phrase") == "aay olewhay asephray"
+}

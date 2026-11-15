@@ -1,0 +1,51 @@
+fn animal_name(n: Int) -> Str {
+  if n == 1 { return "fly" }
+  if n == 2 { return "spider" }
+  if n == 3 { return "bird" }
+  if n == 4 { return "cat" }
+  if n == 5 { return "dog" }
+  if n == 6 { return "goat" }
+  if n == 7 { return "cow" }
+  return "horse"
+}
+
+// The line that follows the first line of verse n (verse 1 has none).
+fn comment_line(n: Int) -> Str {
+  if n == 2 { return "It wriggled and jiggled and tickled inside her." }
+  if n == 3 { return "How absurd to swallow a bird!" }
+  if n == 4 { return "Imagine that, to swallow a cat!" }
+  if n == 5 { return "What a hog, to swallow a dog!" }
+  if n == 6 { return "Just opened her throat and swallowed a goat!" }
+  if n == 7 { return "I don't know how she swallowed a cow!" }
+  return "She's dead, of course!"
+}
+
+fn verse_lines(n: Int, out: mut [Str]) {
+  push(out, "I know an old lady who swallowed a " + animal_name(n) + ".")
+  if n == 8 {
+    push(out, comment_line(8))
+    return
+  }
+  if n > 1 { push(out, comment_line(n)) }
+  var m = n
+  while m > 1 {
+    if m == 3 {
+      push(out, "She swallowed the bird to catch the spider that wriggled and jiggled and tickled inside her.")
+    } else {
+      push(out, "She swallowed the " + animal_name(m) + " to catch the " + animal_name(m - 1) + ".")
+    }
+    m = m - 1
+  }
+  push(out, "I don't know why she swallowed the fly. Perhaps she'll die.")
+}
+
+// Lines of verses start_verse to end_verse, with an empty line between verses.
+fn food_chain(start_verse: Int, end_verse: Int) -> [Str] {
+  var out: [Str] = []
+  let stop = end_verse + 1
+  for n in start_verse..stop {
+    if n > start_verse { push(out, "") }
+    verse_lines(n, out)
+  }
+  return out
+}

@@ -1,0 +1,38 @@
+// Nicomachus' classification from the aliquot sum. Returns "" for numbers below 1.
+fn perfect_numbers(number: Int) -> Str {
+  if number < 1 {
+    return ""
+  }
+  var total = 0
+  var i = 1
+  while i * i <= number {
+    if number % i == 0 {
+      let j = number / i
+      if i != number {
+        total += i
+      }
+      if j != i and j != number {
+        total += j
+      }
+    }
+    i += 1
+  }
+  if total == number {
+    return "perfect"
+  }
+  if total > number {
+    return "abundant"
+  }
+  return "deficient"
+}
+
+test "examples" {
+  assert perfect_numbers(6) == "perfect"
+  assert perfect_numbers(28) == "perfect"
+  assert perfect_numbers(12) == "abundant"
+  assert perfect_numbers(24) == "abundant"
+  assert perfect_numbers(8) == "deficient"
+  assert perfect_numbers(1) == "deficient"
+  assert perfect_numbers(2) == "deficient"
+  assert perfect_numbers(15) == "deficient"
+}

@@ -1,0 +1,35 @@
+// Output row j holds column j of every input line. A line that is too short contributes a space
+// in the middle of the row, but no trailing spaces are added after the last real character.
+fn transpose(lines: [Str]) -> [Str] {
+  var width = 0
+  for line in lines {
+    if len(line) > width { width = len(line) }
+  }
+  var out: [Str] = []
+  for j in 0..width {
+    var last = -1
+    for i in 0..len(lines) {
+      if j < len(lines[i]) { last = i }
+    }
+    let stop = last + 1
+    var row = ""
+    for i in 0..stop {
+      if j < len(lines[i]) {
+        row += substr(lines[i], j, j + 1)
+      } else {
+        row += " "
+      }
+    }
+    push(out, row)
+  }
+  return out
+}
+
+test "examples" {
+  assert transpose([]) == []
+  assert transpose(["A1"]) == ["A", "1"]
+  assert transpose(["ABC", "DE"]) == ["AD", "BE", "C"]
+  assert transpose(["AB", "DEF"]) == ["AD", "BE", " F"]
+  assert transpose(["The", "quick", "fox"]) == ["Tqf", "huo", "eix", " c", " k"]
+  assert transpose(["", "A"]) == [" A"]
+}

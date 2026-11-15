@@ -9,7 +9,8 @@
 // The hidden test cases are never used here: grade afterwards with run.mjs.
 //
 //   node agentbench/local-model.mjs --lang avisoq --set exercism --work work-exercism/qwen-r1 [--base http://127.0.0.1:8080] [--tries 3]
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { request } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -35,22 +36,31 @@ const taskText = (t) => `${t.desc}\n\nWrite the function with exactly this signa
 
 async function ask(messages) {
   const started = Date.now();
-  const r = await fetch(`${base}/v1/chat/completions`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ messages, temperature: 0.2, max_tokens: 8000 }),
-    signal: AbortSignal.timeout(900000),
+  // node:http and not fetch: fetch's WebAssembly HTTP parser crashes V8 in some Node 26 builds.
+  const body = JSON.stringify({ messages, temperature: 0.2, max_tokens: 8000 });
+  const j = await new Promise((resolve, reject) => {
+    const req = request(`${base}/v1/chat/completions`, { method: 'POST', headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body) }, timeout: 900000 }, (res) => {
+      let text = '';
+      res.setEncoding('utf8');
+      res.on('data', (d) => { text += d; });
+      res.on('end', () => { if (res.statusCode !== 200) reject(new Error(`model server answered ${res.statusCode}`)); else { try { resolve(JSON.parse(text)); } catch (e) { reject(e); } } });
+    });
+    req.on('timeout', () => req.destroy(new Error('model server timed out')));
+    req.on('error', reject);
+    req.end(body);
   });
-  if (!r.ok) throw new Error(`model server answered ${r.status}`);
-  const j = await r.json();
   return { text: j.choices[0].message.content ?? '', tokens: j.usage?.completion_tokens ?? 0, ms: Date.now() - started };
 }
 const code = (text) => { const blocks = [...text.matchAll(/```[a-zA-Z0-9_+-]*\n([\s\S]*?)```/g)]; return (blocks.length ? blocks[blocks.length - 1][1] : text).replace(/\r/g, ''); };
 
 mkdirSync(join(work, lang, 'solutions'), { recursive: true });
 const tmp = mkdtempSync(join(tmpdir(), 'localmodel-'));
-const log = { model: flag('model', 'local'), lang, tries, tasks: [] };
+// A run that was interrupted picks up where it stopped.
+const logFile = join(work, lang, 'local-model-log.json');
+const log = existsSync(logFile) ? JSON.parse(readFileSync(logFile, 'utf8')) : { model: flag('model', 'local'), lang, tries, tasks: [] };
 for (const t of TASKS) {
+  if (log.tasks.some((x) => x.id === t.id && !x.error)) continue;
+  log.tasks = log.tasks.filter((x) => x.id !== t.id);
   const file = join(work, lang, 'solutions', `${t.id}.${L.ext}`);
   const messages = [{ role: 'system', content: system }, { role: 'user', content: taskText(t) }];
   const entry = { id: t.id, attempts: 0, tokens: 0, ms: 0, examples: 'fail' };
@@ -65,10 +75,11 @@ for (const t of TASKS) {
     messages.push({ role: 'assistant', content: answer.text }, { role: 'user', content: `${what}:\n\n${check.detail}\n\nReply with the corrected complete file in one fenced code block.` });
   }
   log.tasks.push(entry);
+  writeFileSync(logFile, `${JSON.stringify(log, null, 1)}\n`);
   process.stderr.write(`${lang.padEnd(7)} ${t.id.padEnd(24)} examples ${entry.examples} after ${entry.attempts} attempt${entry.attempts === 1 ? '' : 's'} (${Math.round(entry.ms / 1000)} s)${entry.error ? ` ${entry.error}` : ''}\n`);
 }
 rmSync(tmp, { recursive: true, force: true });
 log.seconds = Math.round(log.tasks.reduce((n, x) => n + x.ms, 0) / 1000);
 log.tokens = log.tasks.reduce((n, x) => n + x.tokens, 0);
-writeFileSync(join(work, lang, 'local-model-log.json'), `${JSON.stringify(log, null, 1)}\n`);
+writeFileSync(logFile, `${JSON.stringify(log, null, 1)}\n`);
 console.log(`${lang}: ${log.tasks.filter((x) => x.examples === 'pass').length} of ${TASKS.length} pass their examples; ${log.seconds} s of model time, ${log.tokens} tokens written`);

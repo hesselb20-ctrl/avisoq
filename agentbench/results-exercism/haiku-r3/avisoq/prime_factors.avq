@@ -1,0 +1,15 @@
+// Prime factors in ascending order by trial division. Uses d <= n / d so that no product overflows.
+fn prime_factors(value: Int) -> [Int] {
+  var factors: [Int] = []
+  var rest = value
+  var d = 2
+  while d <= rest / d {
+    while rest % d == 0 {
+      push(factors, d)
+      rest = rest / d
+    }
+    d += 1
+  }
+  if rest > 1 { push(factors, rest) }
+  return factors
+}

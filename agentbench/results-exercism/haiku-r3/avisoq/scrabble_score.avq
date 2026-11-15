@@ -1,0 +1,23 @@
+fn upper_byte(b: Int) -> Int {
+  if b >= 'a' and b <= 'z' { return b - 32 }
+  return b
+}
+
+fn letter_value(b: Int) -> Int {
+  if b == 'A' or b == 'E' or b == 'I' or b == 'O' or b == 'U' or b == 'L' or b == 'N' or b == 'R' or b == 'S' or b == 'T' { return 1 }
+  if b == 'D' or b == 'G' { return 2 }
+  if b == 'B' or b == 'C' or b == 'M' or b == 'P' { return 3 }
+  if b == 'F' or b == 'H' or b == 'V' or b == 'W' or b == 'Y' { return 4 }
+  if b == 'K' { return 5 }
+  if b == 'J' or b == 'X' { return 8 }
+  if b == 'Q' or b == 'Z' { return 10 }
+  return 0
+}
+
+fn scrabble_score(word: Str) -> Int {
+  var total = 0
+  for i in 0..len(word) {
+    total += letter_value(upper_byte(word[i]))
+  }
+  return total
+}

@@ -1,0 +1,30 @@
+import "std/strings"
+
+fn letter_value(b: Int) -> Int {
+  let c = if b >= 'A' and b <= 'Z' then b + 32 else b
+  let s = chr(c)
+  if contains("aeioulnrst", s) { return 1 }
+  if contains("dg", s) { return 2 }
+  if contains("bcmp", s) { return 3 }
+  if contains("fhvwy", s) { return 4 }
+  if s == "k" { return 5 }
+  if contains("jx", s) { return 8 }
+  if contains("qz", s) { return 10 }
+  return 0
+}
+
+fn scrabble_score(word: Str) -> Int {
+  var total = 0
+  for b in word {
+    total += letter_value(b)
+  }
+  return total
+}
+
+test "scrabble" {
+  assert scrabble_score("a") == 1
+  assert scrabble_score("A") == 1
+  assert scrabble_score("") == 0
+  assert scrabble_score("cabbage") == 14
+  assert scrabble_score("OxyphenButazone") == 41
+}

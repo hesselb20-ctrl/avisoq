@@ -1,0 +1,56 @@
+import "std/strings"
+
+fn wordy(question: Str) -> Int {
+  assert starts_with(question, "What is")
+  assert ends_with(question, "?")
+  let body = trim(question[7..len(question) - 1])
+  assert len(body) > 0
+  let tokens = split(body, " ")
+  var pos = 0
+  var acc = 0
+  match parse_int(tokens[0]) {
+    Some(value) => { acc = value }
+    None => { assert false }
+  }
+  pos = 1
+  while pos < len(tokens) {
+    let word = tokens[pos]
+    var op = 0
+    pos += 1
+    if word == "plus" { op = 1 }
+    else if word == "minus" { op = 2 }
+    else if word == "multiplied" {
+      assert pos < len(tokens) and tokens[pos] == "by"
+      pos += 1
+      op = 3
+    } else if word == "divided" {
+      assert pos < len(tokens) and tokens[pos] == "by"
+      pos += 1
+      op = 4
+    }
+    assert op != 0
+    assert pos < len(tokens)
+    var operand = 0
+    match parse_int(tokens[pos]) {
+      Some(value) => { operand = value }
+      None => { assert false }
+    }
+    pos += 1
+    if op == 1 { acc = acc + operand }
+    else if op == 2 { acc = acc - operand }
+    else if op == 3 { acc = acc * operand }
+    else { acc = acc / operand }
+  }
+  return acc
+}
+
+test "basic" {
+  assert wordy("What is 5?") == 5
+  assert wordy("What is 0?") == 0
+  assert wordy("What is 5 plus 13?") == 18
+  assert wordy("What is -3 plus 7 multiplied by -2?") == -8
+  assert wordy("What is 3 plus 2 multiplied by 3?") == 15
+  assert wordy("What is 25 divided by 5?") == 5
+  assert wordy("What is 7 minus 5 minus 1?") == 1
+  assert wordy("What is 5 plus 13 plus 6?") == 24
+}

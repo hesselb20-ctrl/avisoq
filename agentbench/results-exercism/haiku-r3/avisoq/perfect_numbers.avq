@@ -1,0 +1,22 @@
+// Sum of the proper divisors of n (divisors smaller than n).
+fn aliquot_sum(n: Int) -> Int {
+  var total = 0
+  var d = 1
+  while d <= n / d {
+    if n % d == 0 {
+      if d < n { total += d }
+      let other = n / d
+      if other != d and other < n { total += other }
+    }
+    d += 1
+  }
+  return total
+}
+
+fn perfect_numbers(number: Int) -> Str {
+  if number <= 0 { assert false }
+  let s = aliquot_sum(number)
+  if s == number { return "perfect" }
+  if s > number { return "abundant" }
+  return "deficient"
+}

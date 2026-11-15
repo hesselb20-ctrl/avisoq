@@ -61,5 +61,68 @@
   "language": "python",
   "seconds": 117,
   "ktokens": 126
+ },
+ {
+  "model": "sonnet",
+  "run": 2,
+  "language": "rust",
+  "seconds": 161,
+  "ktokens": 133
+ },
+ {
+  "model": "sonnet",
+  "run": 3,
+  "language": "avisoq",
+  "seconds": 169,
+  "ktokens": 142
+ },
+ {
+  "model": "sonnet",
+  "run": 2,
+  "language": "avisoq",
+  "seconds": 172,
+  "ktokens": 147
+ },
+ {
+  "model": "haiku",
+  "run": 3,
+  "language": "python",
+  "seconds": 192,
+  "ktokens": 148
+ },
+ {
+  "model": "haiku",
+  "run": 2,
+  "language": "python",
+  "seconds": 216,
+  "ktokens": 153
+ },
+ {
+  "model": "haiku",
+  "run": 2,
+  "language": "rust",
+  "seconds": 227,
+  "ktokens": 159
+ },
+ {
+  "model": "haiku",
+  "run": 3,
+  "language": "rust",
+  "seconds": 257,
+  "ktokens": 164
+ },
+ {
+  "model": "haiku",
+  "run": 2,
+  "language": "avisoq",
+  "seconds": 279,
+  "ktokens": 183
+ },
+ {
+  "model": "haiku",
+  "run": 3,
+  "language": "avisoq",
+  "seconds": 318,
+  "ktokens": 193
  }
 ]

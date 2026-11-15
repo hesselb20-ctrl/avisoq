@@ -1,0 +1,32 @@
+import "std/arrays"
+
+// Fewest coins that sum to target (dynamic programming). Result is sorted ascending.
+// Returns [] when the target is 0 or cannot be made.
+fn change(coins: [Int], target: Int) -> [Int] {
+  if target <= 0 { return [] }
+  let top = target + 1
+  let inf = top
+  var best: [Int] = array(top, inf)
+  var pick: [Int] = array(top, 0)
+  best[0] = 0
+  for amount in 1..top {
+    for k in 0..len(coins) {
+      let coin = coins[k]
+      if coin > 0 and coin <= amount {
+        if best[amount - coin] + 1 < best[amount] {
+          best[amount] = best[amount - coin] + 1
+          pick[amount] = coin
+        }
+      }
+    }
+  }
+  if best[target] >= inf { return [] }
+  var result: [Int] = []
+  var rest = target
+  while rest > 0 {
+    push(result, pick[rest])
+    rest = rest - pick[rest]
+  }
+  sort(result)
+  return result
+}

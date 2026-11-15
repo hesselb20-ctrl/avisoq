@@ -1,0 +1,30 @@
+fn divisible_by_any(n: Int, factors: [Int]) -> Bool {
+  for i in 0..len(factors) {
+    let f = factors[i]
+    if f > 0 and n % f == 0 {
+      return true
+    }
+  }
+  return false
+}
+
+fn sum_of_multiples(factors: [Int], limit: Int) -> Int {
+  var total = 0
+  var n = 1
+  while n < limit {
+    if divisible_by_any(n, factors) {
+      total += n
+    }
+    n += 1
+  }
+  return total
+}
+
+test "examples" {
+  assert sum_of_multiples([3, 5], 1) == 0
+  assert sum_of_multiples([3, 5], 4) == 3
+  assert sum_of_multiples([3, 5], 7) == 14
+  assert sum_of_multiples([3, 5], 20) == 78
+  assert sum_of_multiples([], 100) == 0
+  assert sum_of_multiples([4, 6], 15) == 30
+}

@@ -1,0 +1,39 @@
+import "std/strings"
+
+fn crypto_square(plaintext: Str) -> Str {
+  var norm = ""
+  for b in plaintext {
+    if is_alnum(b) {
+      let c = if b >= 'A' and b <= 'Z' then b + 32 else b
+      norm += chr(c)
+    }
+  }
+  let n = len(norm)
+  if n == 0 { return "" }
+  var cols = 1
+  while cols * cols < n { cols += 1 }
+  var rows = cols
+  if (cols - 1) * cols >= n { rows = cols - 1 }
+  var out = ""
+  for j in 0..cols {
+    if j > 0 { out += " " }
+    for i in 0..rows {
+      let idx = i * cols + j
+      if idx < n {
+        out += chr(norm[idx])
+      } else {
+        out += " "
+      }
+    }
+  }
+  return out
+}
+
+test "basic" {
+  assert crypto_square("") == ""
+  assert crypto_square("... --- ...") == ""
+  assert crypto_square("A") == "a"
+  assert crypto_square("This is a test.") == "tie hss iat st "
+  assert crypto_square("If man was meant to stay on the ground, god would have given us roots.") == "imtgdvs fearwer mayoogo anouuio ntnnlvt wttddes aohghn  sseoau "
+  assert crypto_square("Chill out.") == "clu hlt io "
+}

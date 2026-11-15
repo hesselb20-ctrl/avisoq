@@ -1,0 +1,61 @@
+import "std/strings"
+
+// The number token at position i; stops the program if it is not a whole number.
+fn number_at(tokens: [Str], i: Int) -> Int {
+  assert i < len(tokens)
+  match parse_int(tokens[i]) {
+    Some(value) => { return value }
+    None => { assert false }
+  }
+  return 0
+}
+
+fn wordy(question: Str) -> Int {
+  let head = "What is "
+  assert starts_with(question, head)
+  assert ends_with(question, "?")
+  let body = substr(question, len(head), len(question) - 1)
+  var tokens: [Str] = []
+  for part in split(body, " ") {
+    if part != "" { push(tokens, part) }
+  }
+  assert len(tokens) > 0
+  var total = number_at(tokens, 0)
+  var i = 1
+  while i < len(tokens) {
+    let op = tokens[i]
+    if op == "plus" {
+      total = total + number_at(tokens, i + 1)
+      i += 2
+    } else if op == "minus" {
+      total = total - number_at(tokens, i + 1)
+      i += 2
+    } else if op == "multiplied" {
+      assert i + 1 < len(tokens)
+      assert tokens[i + 1] == "by"
+      total = total * number_at(tokens, i + 2)
+      i += 3
+    } else if op == "divided" {
+      assert i + 1 < len(tokens)
+      assert tokens[i + 1] == "by"
+      total = total / number_at(tokens, i + 2)
+      i += 3
+    } else {
+      assert false
+    }
+  }
+  return total
+}
+
+test "examples" {
+  assert wordy("What is 5?") == 5
+  assert wordy("What is 0?") == 0
+  assert wordy("What is 5 plus 13?") == 18
+  assert wordy("What is 7 minus 5?") == 2
+  assert wordy("What is 6 multiplied by 4?") == 24
+  assert wordy("What is 25 divided by 5?") == 5
+  assert wordy("What is 5 plus 13 plus 6?") == 24
+  assert wordy("What is 3 plus 2 multiplied by 3?") == 15
+  assert wordy("What is -3 plus 7?") == 4
+  assert wordy("What is 2 minus 10?") == -8
+}

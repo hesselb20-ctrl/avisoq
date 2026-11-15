@@ -1,0 +1,25 @@
+import "std/arrays"
+import "std/strings"
+
+// The sorted bytes of a word: two words are anagrams when these match.
+fn letter_key(s: Str) -> [Int] {
+  var bytes: [Int] = []
+  for i in 0..len(s) {
+    push(bytes, s[i])
+  }
+  sort(bytes)
+  return bytes
+}
+
+fn anagram(subject: Str, candidates: [Str]) -> [Str] {
+  let base = to_lower(subject)
+  let base_key = letter_key(base)
+  var found: [Str] = []
+  for i in 0..len(candidates) {
+    let cand = to_lower(candidates[i])
+    if cand != base and letter_key(cand) == base_key {
+      push(found, candidates[i])
+    }
+  }
+  return found
+}

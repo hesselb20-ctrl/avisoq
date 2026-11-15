@@ -1,0 +1,15 @@
+fn divides_any(factors: [Int], n: Int) -> Bool {
+  for i in 0..len(factors) {
+    if factors[i] > 0 and n % factors[i] == 0 { return true }
+  }
+  return false
+}
+
+// Sum of the distinct positive multiples of the factors that are less than limit.
+fn sum_of_multiples(factors: [Int], limit: Int) -> Int {
+  var total = 0
+  for n in 1..limit {
+    if divides_any(factors, n) { total += n }
+  }
+  return total
+}

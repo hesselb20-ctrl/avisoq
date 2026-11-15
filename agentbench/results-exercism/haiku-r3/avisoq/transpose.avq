@@ -1,0 +1,26 @@
+// Output row k is input column k. Missing characters before a present one become spaces;
+// missing characters at the end of a row are dropped (no right padding).
+fn transpose(lines: [Str]) -> [Str] {
+  var width = 0
+  for j in 0..len(lines) {
+    if len(lines[j]) > width { width = len(lines[j]) }
+  }
+  var out: [Str] = []
+  for k in 0..width {
+    var last = -1
+    for j in 0..len(lines) {
+      if len(lines[j]) > k { last = j }
+    }
+    let stop = last + 1
+    var row = ""
+    for j in 0..stop {
+      if len(lines[j]) > k {
+        row += chr(byte_at(lines[j], k))
+      } else {
+        row += " "
+      }
+    }
+    push(out, row)
+  }
+  return out
+}

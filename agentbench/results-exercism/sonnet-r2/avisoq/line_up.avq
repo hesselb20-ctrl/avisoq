@@ -1,0 +1,19 @@
+fn line_up(name: Str, number: Int) -> Str {
+  let last = number % 10
+  let last2 = number % 100
+  var suffix = "th"
+  if last2 < 11 or last2 > 13 {
+    if last == 1 { suffix = "st" }
+    else if last == 2 { suffix = "nd" }
+    else if last == 3 { suffix = "rd" }
+  }
+  return name + ", you are the " + str(number) + suffix + " customer we serve today. Thank you!"
+}
+
+test "basic" {
+  assert line_up("Mary", 1) == "Mary, you are the 1st customer we serve today. Thank you!"
+  assert line_up("John", 12) == "John, you are the 12th customer we serve today. Thank you!"
+  assert line_up("Dahir", 162) == "Dahir, you are the 162nd customer we serve today. Thank you!"
+  assert line_up("A", 113) == "A, you are the 113th customer we serve today. Thank you!"
+  assert line_up("A", 23) == "A, you are the 23rd customer we serve today. Thank you!"
+}

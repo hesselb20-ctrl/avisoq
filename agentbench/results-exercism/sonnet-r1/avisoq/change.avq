@@ -1,0 +1,38 @@
+import "std/arrays"
+
+fn change(coins: [Int], target: Int) -> [Int] {
+  assert target >= 0
+  var best = array(target + 1, -1)
+  var from_coin = array(target + 1, 0)
+  best[0] = 0
+  for amt in 1..target + 1 {
+    for coin in coins {
+      if coin > 0 and coin <= amt and best[amt - coin] >= 0 {
+        let cand = best[amt - coin] + 1
+        if best[amt] < 0 or cand < best[amt] {
+          best[amt] = cand
+          from_coin[amt] = coin
+        }
+      }
+    }
+  }
+  assert best[target] >= 0
+  var out: [Int] = []
+  var rest = target
+  while rest > 0 {
+    push(out, from_coin[rest])
+    rest -= from_coin[rest]
+  }
+  sort(out)
+  return out
+}
+
+test "change" {
+  assert change([1, 5, 10, 25], 1) == [1]
+  assert change([1, 5, 10, 25, 100], 25) == [25]
+  assert change([1, 5, 10, 25, 100], 15) == [5, 10]
+  assert change([1, 5, 10, 25, 100], 40) == [5, 10, 25]
+  assert change([1, 4, 15, 20, 50], 23) == [4, 4, 15]
+  assert change([2, 5, 10, 20, 50], 0) == []
+  assert change([1, 5, 10, 21, 25], 63) == [21, 21, 21]
+}

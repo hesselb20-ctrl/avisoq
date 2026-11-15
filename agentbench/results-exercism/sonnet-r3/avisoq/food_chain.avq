@@ -1,0 +1,56 @@
+fn animal(n: Int) -> Str {
+  if n == 1 { return "fly" }
+  if n == 2 { return "spider" }
+  if n == 3 { return "bird" }
+  if n == 4 { return "cat" }
+  if n == 5 { return "dog" }
+  if n == 6 { return "goat" }
+  if n == 7 { return "cow" }
+  return "horse"
+}
+
+fn remark(n: Int) -> Str {
+  if n == 2 { return "It wriggled and jiggled and tickled inside her." }
+  if n == 3 { return "How absurd to swallow a bird!" }
+  if n == 4 { return "Imagine that, to swallow a cat!" }
+  if n == 5 { return "What a hog, to swallow a dog!" }
+  if n == 6 { return "Just opened her throat and swallowed a goat!" }
+  if n == 7 { return "I don't know how she swallowed a cow!" }
+  return ""
+}
+
+fn verse(n: Int) -> [Str] {
+  var out: [Str] = ["I know an old lady who swallowed a " + animal(n) + "."]
+  if n == 8 {
+    push(out, "She's dead, of course!")
+    return out
+  }
+  if n > 1 { push(out, remark(n)) }
+  var k = n
+  while k > 1 {
+    var line = "She swallowed the " + animal(k) + " to catch the " + animal(k - 1)
+    if k - 1 == 2 { line += " that wriggled and jiggled and tickled inside her" }
+    push(out, line + ".")
+    k -= 1
+  }
+  push(out, "I don't know why she swallowed the fly. Perhaps she'll die.")
+  return out
+}
+
+fn food_chain(start_verse: Int, end_verse: Int) -> [Str] {
+  var out: [Str] = []
+  for v in start_verse..end_verse + 1 {
+    if v > start_verse { push(out, "") }
+    let lines = verse(v)
+    for l in lines { push(out, l) }
+  }
+  return out
+}
+
+test "basic" {
+  assert food_chain(1, 1) == ["I know an old lady who swallowed a fly.", "I don't know why she swallowed the fly. Perhaps she'll die."]
+  assert food_chain(2, 2) == ["I know an old lady who swallowed a spider.", "It wriggled and jiggled and tickled inside her.", "She swallowed the spider to catch the fly.", "I don't know why she swallowed the fly. Perhaps she'll die."]
+  assert food_chain(3, 3) == ["I know an old lady who swallowed a bird.", "How absurd to swallow a bird!", "She swallowed the bird to catch the spider that wriggled and jiggled and tickled inside her.", "She swallowed the spider to catch the fly.", "I don't know why she swallowed the fly. Perhaps she'll die."]
+  assert food_chain(8, 8) == ["I know an old lady who swallowed a horse.", "She's dead, of course!"]
+  assert len(food_chain(1, 3)) == 2 + 1 + 4 + 1 + 5
+}

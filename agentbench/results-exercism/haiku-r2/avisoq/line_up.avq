@@ -1,0 +1,27 @@
+fn ordinal_suffix(n: Int) -> Str {
+  let tens = n % 100
+  if tens >= 11 and tens <= 13 { return "th" }
+  let last_digit = n % 10
+  if last_digit == 1 { return "st" }
+  if last_digit == 2 { return "nd" }
+  if last_digit == 3 { return "rd" }
+  return "th"
+}
+
+fn line_up(name: Str, number: Int) -> Str {
+  return name + ", you are the " + str(number) + ordinal_suffix(number) + " customer we serve today. Thank you!"
+}
+
+test "examples" {
+  assert line_up("Mary", 1) == "Mary, you are the 1st customer we serve today. Thank you!"
+  assert line_up("John", 12) == "John, you are the 12th customer we serve today. Thank you!"
+  assert line_up("Dahir", 162) == "Dahir, you are the 162nd customer we serve today. Thank you!"
+  assert line_up("Gianna", 4) == "Gianna, you are the 4th customer we serve today. Thank you!"
+  assert line_up("Maarten", 9) == "Maarten, you are the 9th customer we serve today. Thank you!"
+  assert line_up("X", 11) == "X, you are the 11th customer we serve today. Thank you!"
+  assert line_up("X", 13) == "X, you are the 13th customer we serve today. Thank you!"
+  assert line_up("X", 21) == "X, you are the 21st customer we serve today. Thank you!"
+  assert line_up("X", 111) == "X, you are the 111th customer we serve today. Thank you!"
+  assert line_up("X", 103) == "X, you are the 103rd customer we serve today. Thank you!"
+  assert line_up("X", 999) == "X, you are the 999th customer we serve today. Thank you!"
+}

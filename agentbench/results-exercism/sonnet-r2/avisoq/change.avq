@@ -1,0 +1,44 @@
+fn change(coins: [Int], target: Int) -> [Int] {
+  assert target >= 0
+  var best: [Int] = array(target + 1, -1)
+  var from_coin: [Int] = array(target + 1, 0)
+  best[0] = 0
+  for t in 1..target + 1 {
+    for c in coins {
+      if c > 0 and c <= t and best[t - c] >= 0 {
+        let cand = best[t - c] + 1
+        if best[t] < 0 or cand < best[t] {
+          best[t] = cand
+          from_coin[t] = c
+        }
+      }
+    }
+  }
+  assert best[target] >= 0
+  var picked: [Int] = []
+  var rest = target
+  while rest > 0 {
+    push(picked, from_coin[rest])
+    rest -= from_coin[rest]
+  }
+  for i in 1..len(picked) {
+    var j = i
+    while j > 0 and picked[j - 1] > picked[j] {
+      let tmp = picked[j - 1]
+      picked[j - 1] = picked[j]
+      picked[j] = tmp
+      j -= 1
+    }
+  }
+  return picked
+}
+
+test "basic" {
+  assert change([1, 5, 10, 25], 1) == [1]
+  assert change([1, 5, 10, 25, 100], 25) == [25]
+  assert change([1, 5, 10, 25, 100], 15) == [5, 10]
+  assert change([1, 5, 10, 25, 100], 40) == [5, 10, 25]
+  assert change([1, 4, 15, 20, 50], 23) == [4, 4, 15]
+  assert change([2, 5, 10, 20, 50], 0) == []
+  assert change([1, 5, 10, 21, 25], 63) == [21, 21, 21]
+}

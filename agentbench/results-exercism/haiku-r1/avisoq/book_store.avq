@@ -1,0 +1,85 @@
+// Price of a group of k different books, in cents: 800 per book less the group discount.
+fn group_price(k: Int) -> Int {
+  if k == 1 {
+    return 800
+  }
+  if k == 2 {
+    return 8 * 2 * 95
+  }
+  if k == 3 {
+    return 8 * 3 * 90
+  }
+  if k == 4 {
+    return 8 * 4 * 80
+  }
+  return 8 * 5 * 75
+}
+
+fn state_key(counts: [Int]) -> Str {
+  var key = ""
+  for i in 0..5 {
+    key += str(counts[i]) + ","
+  }
+  return key
+}
+
+// Cheapest price (cents) for the books still counted in counts. memo caches the answers.
+fn best_price(counts: [Int], memo: mut Map[Str, Int]) -> Int {
+  let key = state_key(counts)
+  if has(memo, key) {
+    return get(memo, key)
+  }
+  var total = 0
+  for i in 0..5 {
+    total += counts[i]
+  }
+  if total == 0 {
+    return 0
+  }
+  var best = -1
+  for mask in 1..32 {
+    var size = 0
+    var valid = true
+    for b in 0..5 {
+      if bit_and(shift_right(mask, b), 1) == 1 {
+        size += 1
+        if counts[b] == 0 {
+          valid = false
+        }
+      }
+    }
+    if valid {
+      var next = copy(counts)
+      for j in 0..5 {
+        if bit_and(shift_right(mask, j), 1) == 1 {
+          next[j] = next[j] - 1
+        }
+      }
+      let cost = group_price(size) + best_price(next, memo)
+      if best < 0 or cost < best {
+        best = cost
+      }
+    }
+  }
+  put(memo, key, best)
+  return best
+}
+
+fn book_store(basket: [Int]) -> Int {
+  var counts: [Int] = array(5, 0)
+  for i in 0..len(basket) {
+    counts[basket[i] - 1] += 1
+  }
+  var memo: Map[Str, Int] = {}
+  return best_price(counts, memo)
+}
+
+test "examples" {
+  assert book_store([1]) == 800
+  assert book_store([2, 2]) == 1600
+  assert book_store([1, 2]) == 1520
+  assert book_store([1, 1, 2, 3]) == 2160 + 800
+  assert book_store([1, 2, 3, 4, 5]) == 3000
+  assert book_store([1, 1, 2, 2, 3, 3, 4, 5]) == 5120
+  assert book_store([]) == 0
+}

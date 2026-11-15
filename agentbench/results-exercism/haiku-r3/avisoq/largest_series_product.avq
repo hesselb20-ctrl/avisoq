@@ -1,0 +1,20 @@
+// Largest product of `span` adjacent digits. Span 0 gives 1.
+// Returns -1 when the span is out of range or the input has a non-digit.
+fn largest_series_product(digits: Str, span: Int) -> Int {
+  let n = len(digits)
+  if span < 0 or span > n { return -1 }
+  for i in 0..n {
+    let d = digits[i]
+    if d < '0' or d > '9' { return -1 }
+  }
+  let starts = n - span + 1
+  var best = -1
+  for start in 0..starts {
+    var product = 1
+    for k in 0..span {
+      product = product * (digits[start + k] - '0')
+    }
+    if product > best { best = product }
+  }
+  return best
+}

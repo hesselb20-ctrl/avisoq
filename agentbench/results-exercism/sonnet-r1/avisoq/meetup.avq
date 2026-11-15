@@ -1,0 +1,59 @@
+import "std/strings"
+
+fn is_leap(year: Int) -> Bool {
+  return (year % 4 == 0 and year % 100 != 0) or year % 400 == 0
+}
+
+fn days_in(year: Int, month: Int) -> Int {
+  if month == 2 {
+    if is_leap(year) { return 29 }
+    return 28
+  }
+  if month == 4 or month == 6 or month == 9 or month == 11 { return 30 }
+  return 31
+}
+
+// 0 = Sunday
+fn weekday(year: Int, month: Int, day: Int) -> Int {
+  let offsets = [0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4]
+  var y = year
+  if month < 3 { y -= 1 }
+  return (y + y / 4 - y / 100 + y / 400 + offsets[month - 1] + day) % 7
+}
+
+fn weekday_index(name: Str) -> Int {
+  let names = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+  for i in 0..7 {
+    if names[i] == name { return i }
+  }
+  assert false
+  return 0
+}
+
+fn meetup(year: Int, month: Int, week: Str, dayofweek: Str) -> Str {
+  let target = weekday_index(dayofweek)
+  var start = 1
+  if week == "second" { start = 8 }
+  if week == "third" { start = 15 }
+  if week == "fourth" { start = 22 }
+  if week == "teenth" { start = 13 }
+  if week == "last" { start = days_in(year, month) - 6 }
+  var day = start
+  while weekday(year, month, day) != target {
+    day += 1
+  }
+  return str(year) + "-" + pad_left(str(month), 2, "0") + "-" + pad_left(str(day), 2, "0")
+}
+
+test "meetup" {
+  assert meetup(2013, 5, "teenth", "Monday") == "2013-05-13"
+  assert meetup(2013, 8, "teenth", "Monday") == "2013-08-19"
+  assert meetup(2018, 1, "first", "Monday") == "2018-01-01"
+  assert meetup(2019, 8, "third", "Tuesday") == "2019-08-20"
+  assert meetup(2020, 5, "teenth", "Wednesday") == "2020-05-13"
+  assert meetup(2021, 7, "fourth", "Sunday") == "2021-07-25"
+  assert meetup(2022, 11, "last", "Thursday") == "2022-11-24"
+  assert meetup(1953, 8, "teenth", "Saturday") == "1953-08-15"
+  assert meetup(2012, 2, "last", "Wednesday") == "2012-02-29"
+  assert meetup(2015, 3, "second", "Thursday") == "2015-03-12"
+}

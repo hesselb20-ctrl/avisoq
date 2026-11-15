@@ -1,0 +1,33 @@
+fn codon_protein(c: Str) -> Str {
+  if c == "AUG" { return "Methionine" }
+  if c == "UUU" or c == "UUC" { return "Phenylalanine" }
+  if c == "UUA" or c == "UUG" { return "Leucine" }
+  if c == "UCU" or c == "UCC" or c == "UCA" or c == "UCG" { return "Serine" }
+  if c == "UAU" or c == "UAC" { return "Tyrosine" }
+  if c == "UGU" or c == "UGC" { return "Cysteine" }
+  if c == "UGG" { return "Tryptophan" }
+  if c == "UAA" or c == "UAG" or c == "UGA" { return "STOP" }
+  return "INVALID"
+}
+
+fn protein_translation(strand: Str) -> [Str] {
+  var out: [Str] = []
+  var i = 0
+  while i < len(strand) {
+    assert i + 3 <= len(strand)
+    let p = codon_protein(strand[i..i + 3])
+    assert p != "INVALID"
+    if p == "STOP" { break }
+    push(out, p)
+    i += 3
+  }
+  return out
+}
+
+test "protein" {
+  assert protein_translation("") == []
+  assert protein_translation("AUG") == ["Methionine"]
+  assert protein_translation("AUGUUUUCUUAAAUG") == ["Methionine", "Phenylalanine", "Serine"]
+  assert protein_translation("UGGUGUUAUUAAUGGUUU") == ["Tryptophan", "Cysteine", "Tyrosine"]
+  assert protein_translation("UAAAUG") == []
+}

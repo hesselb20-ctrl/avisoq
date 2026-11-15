@@ -1,0 +1,67 @@
+fn reaches(rows: [Str], p: Int) -> Bool {
+  let h = len(rows)
+  let w = len(rows[0])
+  if w == 0 { return false }
+  var seen = array(h * w, false)
+  var stack: [Int] = []
+  if p == 'X' {
+    for r in 0..h {
+      if len(rows[r]) > 0 and rows[r][0] == p {
+        seen[r * w] = true
+        push(stack, r * w)
+      }
+    }
+  } else {
+    for c in 0..w {
+      if rows[0][c] == p {
+        seen[c] = true
+        push(stack, c)
+      }
+    }
+  }
+  let dr = [0, 0, -1, -1, 1, 1]
+  let dc = [-1, 1, 0, 1, 0, -1]
+  while len(stack) > 0 {
+    let cur = pop(stack)
+    let r = cur / w
+    let c = cur % w
+    if p == 'X' and c == w - 1 { return true }
+    if p == 'O' and r == h - 1 { return true }
+    for k in 0..6 {
+      let nr = r + dr[k]
+      let nc = c + dc[k]
+      if nr >= 0 and nr < h and nc >= 0 and nc < w and nc < len(rows[nr]) {
+        if rows[nr][nc] == p and not seen[nr * w + nc] {
+          seen[nr * w + nc] = true
+          push(stack, nr * w + nc)
+        }
+      }
+    }
+  }
+  return false
+}
+
+fn connect(board: [Str]) -> Str {
+  var rows: [Str] = []
+  for line in board {
+    var row = ""
+    for b in line {
+      if b != ' ' { row += chr(b) }
+    }
+    push(rows, row)
+  }
+  if len(rows) == 0 { return "" }
+  if reaches(rows, 'X') { return "X" }
+  if reaches(rows, 'O') { return "O" }
+  return ""
+}
+
+test "connect" {
+  assert connect([". . . . .", " . . . . .", "  . . . . .", "   . . . . .", "    . . . . ."]) == ""
+  assert connect(["X"]) == "X"
+  assert connect(["O"]) == "O"
+  assert connect(["."]) == ""
+  assert connect([". O . X .", " . X X O .", "  O O O X .", "   . X O X O", "    X O O O X"]) == ""
+  assert connect([". O . .", " O X X X", "  O X O .", "   X X O .", "    . O X ."]) == "X"
+  assert connect([". X . .", " X X . .", "  X . X .", "   . X X .", "    O O O O"]) == ""
+}

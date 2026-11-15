@@ -1,0 +1,45 @@
+import "std/arrays"
+
+// Fewest coins (with repetition) that add up to target; the coins are returned sorted.
+// Returns [] when the target is 0 or cannot be made.
+fn change(coins: [Int], target: Int) -> [Int] {
+  var out: [Int] = []
+  if target <= 0 {
+    return out
+  }
+  let top = target + 1
+  var fewest: [Int] = array(top, -1)
+  var pick: [Int] = array(top, 0)
+  fewest[0] = 0
+  for t in 1..top {
+    for k in 0..len(coins) {
+      let c = coins[k]
+      if c > 0 and c <= t and fewest[t - c] >= 0 {
+        let cand = fewest[t - c] + 1
+        if fewest[t] < 0 or cand < fewest[t] {
+          fewest[t] = cand
+          pick[t] = c
+        }
+      }
+    }
+  }
+  if fewest[target] < 0 {
+    return out
+  }
+  var rest = target
+  while rest > 0 {
+    push(out, pick[rest])
+    rest = rest - pick[rest]
+  }
+  sort(out)
+  return out
+}
+
+test "examples" {
+  assert change([1, 5, 10, 25], 1) == [1]
+  assert change([1, 5, 10, 25, 100], 25) == [25]
+  assert change([1, 5, 10, 25, 100], 15) == [5, 10]
+  assert change([1, 5, 10, 25, 100], 40) == [5, 10, 25]
+  assert change([1, 5, 10, 25], 0) == []
+  assert change([2], 3) == []
+}

@@ -1,0 +1,39 @@
+fn letters_key(s: Str) -> [Int] {
+  var counts: [Int] = array(256, 0)
+  for b in s {
+    var c = b
+    if c >= 'A' and c <= 'Z' { c += 32 }
+    counts[c] += 1
+  }
+  return counts
+}
+
+fn lower_of(s: Str) -> Str {
+  var out = ""
+  for b in s {
+    if b >= 'A' and b <= 'Z' { out += chr(b + 32) } else { out += chr(b) }
+  }
+  return out
+}
+
+fn anagram(subject: Str, candidates: [Str]) -> [Str] {
+  let key = letters_key(subject)
+  let low = lower_of(subject)
+  var found: [Str] = []
+  for cand in candidates {
+    if lower_of(cand) != low and len(cand) == len(subject) and letters_key(cand) == key {
+      push(found, cand)
+    }
+  }
+  return found
+}
+
+test "basic" {
+  assert anagram("diaper", ["hello", "world", "zombies", "pants"]) == []
+  assert anagram("solemn", ["lemons", "cherry", "melons"]) == ["lemons", "melons"]
+  assert anagram("stone", ["stone", "tones", "banana", "tons", "notes", "Seton"]) == ["tones", "notes", "Seton"]
+  assert anagram("BANANA", ["BANANA"]) == []
+  assert anagram("go", ["go", "Go", "GO"]) == []
+  assert anagram("tapper", ["patter"]) == []
+  assert anagram("allergy", ["gallery", "ballerina", "regally", "clergy", "largely", "leading"]) == ["gallery", "regally", "largely"]
+}

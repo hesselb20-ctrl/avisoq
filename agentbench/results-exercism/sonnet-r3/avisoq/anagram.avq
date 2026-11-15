@@ -1,0 +1,39 @@
+fn lower_text(s: Str) -> Str {
+  var out = ""
+  for b in s {
+    let c = if b >= 'A' and b <= 'Z' then b + 32 else b
+    out += chr(c)
+  }
+  return out
+}
+
+fn letter_counts(s: Str) -> [Int] {
+  var counts = array(256, 0)
+  for b in s {
+    counts[b] += 1
+  }
+  return counts
+}
+
+fn anagram(subject: Str, candidates: [Str]) -> [Str] {
+  let low = lower_text(subject)
+  let target = letter_counts(low)
+  var out: [Str] = []
+  for cand in candidates {
+    let lc = lower_text(cand)
+    if lc != low and len(lc) == len(low) and letter_counts(lc) == target {
+      push(out, cand)
+    }
+  }
+  return out
+}
+
+test "basic" {
+  assert anagram("diaper", ["hello", "world", "zombies", "pants"]) == []
+  assert anagram("solemn", ["lemons", "cherry", "melons"]) == ["lemons", "melons"]
+  assert anagram("stone", ["stone", "tones", "banana", "tons", "notes", "Seton"]) == ["tones", "notes", "Seton"]
+  assert anagram("BANANA", ["BANANA"]) == []
+  assert anagram("go", ["Go", "GO"]) == []
+  assert anagram("tapper", ["patter", "ptaper"]) == ["ptaper"]
+  assert anagram("good", ["dog", "goody"]) == []
+}

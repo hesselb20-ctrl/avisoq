@@ -1,0 +1,34 @@
+// Sum of the proper divisors (the aliquot sum) of n, found by trial up to the square root.
+fn aliquot_sum(n: Int) -> Int {
+  var total = 0
+  var i = 1
+  while i <= n / i {
+    if n % i == 0 {
+      let j = n / i
+      if i != n { total += i }
+      if j != i and j != n { total += j }
+    }
+    i += 1
+  }
+  return total
+}
+
+fn perfect_numbers(number: Int) -> Str {
+  assert number > 0
+  let s = aliquot_sum(number)
+  if s == number { return "perfect" }
+  if s > number { return "abundant" }
+  return "deficient"
+}
+
+test "examples" {
+  assert perfect_numbers(6) == "perfect"
+  assert perfect_numbers(28) == "perfect"
+  assert perfect_numbers(496) == "perfect"
+  assert perfect_numbers(12) == "abundant"
+  assert perfect_numbers(24) == "abundant"
+  assert perfect_numbers(8) == "deficient"
+  assert perfect_numbers(13) == "deficient"
+  assert perfect_numbers(1) == "deficient"
+  assert perfect_numbers(2) == "deficient"
+}

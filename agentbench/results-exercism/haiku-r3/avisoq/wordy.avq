@@ -1,0 +1,43 @@
+import "std/strings"
+
+// Number at position idx of the word list; anything else is a syntax error.
+fn operand(parts: [Str], idx: Int) -> Int {
+  if idx >= len(parts) { assert false }
+  match parse_int(parts[idx]) {
+    Some(v) => { return v }
+    None => { assert false }
+  }
+  return 0
+}
+
+// Evaluates "What is N op N op N ...?" from left to right. Malformed questions stop the program.
+fn wordy(question: Str) -> Int {
+  let prefix = "What is "
+  if not starts_with(question, prefix) { assert false }
+  if not ends_with(question, "?") { assert false }
+  let body = substr(question, len(prefix), len(question) - 1)
+  let parts = split(body, " ")
+  var acc = operand(parts, 0)
+  var i = 1
+  while i < len(parts) {
+    let op = parts[i]
+    if op == "plus" {
+      acc = acc + operand(parts, i + 1)
+      i += 2
+    } else if op == "minus" {
+      acc = acc - operand(parts, i + 1)
+      i += 2
+    } else if op == "multiplied" {
+      if i + 1 >= len(parts) or parts[i + 1] != "by" { assert false }
+      acc = acc * operand(parts, i + 2)
+      i += 3
+    } else if op == "divided" {
+      if i + 1 >= len(parts) or parts[i + 1] != "by" { assert false }
+      acc = acc / operand(parts, i + 2)
+      i += 3
+    } else {
+      assert false
+    }
+  }
+  return acc
+}

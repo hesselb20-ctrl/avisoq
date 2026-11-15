@@ -1,0 +1,33 @@
+fn normalized_byte(b: Int) -> Int {
+  if b >= 'A' and b <= 'Z' { return b + 32 }
+  if b >= 'a' and b <= 'z' { return b }
+  if b >= '0' and b <= '9' { return b }
+  return 0
+}
+
+fn crypto_square(plaintext: Str) -> Str {
+  var clean = ""
+  for i in 0..len(plaintext) {
+    let b = normalized_byte(plaintext[i])
+    if b > 0 { clean += chr(b) }
+  }
+  let n = len(clean)
+  if n == 0 { return "" }
+  var cols = 0
+  while cols * cols < n { cols += 1 }
+  var rows = cols
+  if (cols - 1) * cols >= n { rows = cols - 1 }
+  var out = ""
+  for col in 0..cols {
+    if col > 0 { out += " " }
+    for row in 0..rows {
+      let idx = row * cols + col
+      if idx < n {
+        out += chr(clean[idx])
+      } else {
+        out += " "
+      }
+    }
+  }
+  return out
+}

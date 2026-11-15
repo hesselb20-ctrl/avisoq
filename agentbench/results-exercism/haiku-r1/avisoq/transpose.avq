@@ -1,0 +1,37 @@
+// Transpose lines; shorter lines are padded on the left with spaces, never on the right.
+fn transpose(lines: [Str]) -> [Str] {
+  var width = 0
+  for i in 0..len(lines) {
+    if len(lines[i]) > width {
+      width = len(lines[i])
+    }
+  }
+  var out: [Str] = []
+  for j in 0..width {
+    var last = -1
+    for i in 0..len(lines) {
+      if len(lines[i]) > j {
+        last = i
+      }
+    }
+    let stop = last + 1
+    var row = ""
+    for i in 0..stop {
+      if len(lines[i]) > j {
+        row += chr(lines[i][j])
+      } else {
+        row += " "
+      }
+    }
+    push(out, row)
+  }
+  return out
+}
+
+test "examples" {
+  assert transpose([]) == []
+  assert transpose(["A1"]) == ["A", "1"]
+  assert transpose(["ABC", "DE"]) == ["AD", "BE", "C"]
+  assert transpose(["AB", "DEF"]) == ["AD", "BE", " F"]
+  assert transpose(["The", "quick", "fox"]) == ["Tqf", "huo", "eix", " c", " k"]
+}

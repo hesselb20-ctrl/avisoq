@@ -1,0 +1,45 @@
+import "std/strings"
+
+fn letter_points(c: Int) -> Int {
+  let ch = chr(c)
+  if index_of("AEIOULNRST", ch) >= 0 {
+    return 1
+  }
+  if index_of("DG", ch) >= 0 {
+    return 2
+  }
+  if index_of("BCMP", ch) >= 0 {
+    return 3
+  }
+  if index_of("FHVWY", ch) >= 0 {
+    return 4
+  }
+  if index_of("K", ch) >= 0 {
+    return 5
+  }
+  if index_of("JX", ch) >= 0 {
+    return 8
+  }
+  if index_of("QZ", ch) >= 0 {
+    return 10
+  }
+  return 0
+}
+
+fn scrabble_score(word: Str) -> Int {
+  let upper = to_upper(word)
+  var total = 0
+  for c in upper {
+    total += letter_points(c)
+  }
+  return total
+}
+
+test "examples" {
+  assert scrabble_score("a") == 1
+  assert scrabble_score("A") == 1
+  assert scrabble_score("cabbage") == 14
+  assert scrabble_score("") == 0
+  assert scrabble_score("zoo") == 12
+  assert scrabble_score("quirky") == 22
+}

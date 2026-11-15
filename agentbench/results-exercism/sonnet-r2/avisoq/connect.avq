@@ -1,0 +1,79 @@
+struct Grid { cells: [[Int]], rows: Int, cols: Int }
+
+fn parse_grid(board: [Str]) -> Grid {
+  var cells: [[Int]] = []
+  var cols = 0
+  for line in board {
+    var row: [Int] = []
+    for b in line {
+      if b != ' ' { push(row, b) }
+    }
+    if len(row) > cols { cols = len(row) }
+    push(cells, row)
+  }
+  let count = len(cells)
+  return Grid(cells: cells, rows: count, cols: cols)
+}
+
+fn reaches(g: Grid, mark: Int, top_to_bottom: Bool) -> Bool {
+  var seen: [Int] = array(g.rows * g.cols + 1, 0)
+  var stack: [Int] = []
+  if top_to_bottom {
+    if g.rows == 0 { return false }
+    for c in 0..len(g.cells[0]) {
+      if g.cells[0][c] == mark {
+        push(stack, c)
+        seen[c] = 1
+      }
+    }
+  } else {
+    for r in 0..g.rows {
+      if len(g.cells[r]) > 0 and g.cells[r][0] == mark {
+        push(stack, r * g.cols)
+        seen[r * g.cols] = 1
+      }
+    }
+  }
+  let dr = [0, 0, -1, -1, 1, 1]
+  let dc = [-1, 1, 0, 1, 0, -1]
+  while len(stack) > 0 {
+    let cur = pop(stack)
+    let r = cur / g.cols
+    let c = cur % g.cols
+    if top_to_bottom and r == g.rows - 1 { return true }
+    if not top_to_bottom and c == len(g.cells[r]) - 1 { return true }
+    for k in 0..6 {
+      let nr = r + dr[k]
+      let nc = c + dc[k]
+      if nr >= 0 and nr < g.rows and nc >= 0 and nc < len(g.cells[nr]) {
+        let id = nr * g.cols + nc
+        if seen[id] == 0 and g.cells[nr][nc] == mark {
+          seen[id] = 1
+          push(stack, id)
+        }
+      }
+    }
+  }
+  return false
+}
+
+fn connect(board: [Str]) -> Str {
+  let g = parse_grid(board)
+  if g.rows == 0 or g.cols == 0 { return "" }
+  if reaches(g, 'O', true) { return "O" }
+  if reaches(g, 'X', false) { return "X" }
+  return ""
+}
+
+test "basic" {
+  assert connect([". . . . .", " . . . . .", "  . . . . .", "   . . . . .", "    . . . . ."]) == ""
+  assert connect(["X"]) == "X"
+  assert connect(["O"]) == "O"
+  assert connect(["."]) == ""
+  assert connect([". O . X .", " . X X O .", "  O O O X .", "   . X O X O", "    X O O O X"]) == ""
+  assert connect(["X X X", " . . .", "  . . ."]) == "X"
+  assert connect(["O . .", " O . .", "  O . ."]) == "O"
+  assert connect([". . X", " . X .", "  X . ."]) == "X"
+  assert connect(["X . .", " . X .", "  . . X"]) == ""
+  assert connect(["O O O", " X X .", "  . . ."]) == ""
+}

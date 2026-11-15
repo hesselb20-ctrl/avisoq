@@ -1,0 +1,57 @@
+fn line_is(cells: [Int], a: Int, b: Int, c: Int, p: Int) -> Bool {
+  return cells[a] == p and cells[b] == p and cells[c] == p
+}
+
+fn wins(cells: [Int], p: Int) -> Bool {
+  if line_is(cells, 0, 1, 2, p) or line_is(cells, 3, 4, 5, p) or line_is(cells, 6, 7, 8, p) { return true }
+  if line_is(cells, 0, 3, 6, p) or line_is(cells, 1, 4, 7, p) or line_is(cells, 2, 5, 8, p) { return true }
+  if line_is(cells, 0, 4, 8, p) or line_is(cells, 2, 4, 6, p) { return true }
+  return false
+}
+
+// Invalid boards (impossible turn order, play after a win) stop the program with an assertion.
+fn state_of_tic_tac_toe(board: [Str]) -> Str {
+  assert len(board) == 3
+  var cells: [Int] = []
+  var xs = 0
+  var os = 0
+  for i in 0..3 {
+    assert len(board[i]) == 3
+    for j in 0..3 {
+      let b = board[i][j]
+      if b == 'X' {
+        xs += 1
+      } else if b == 'O' {
+        os += 1
+      } else {
+        assert b == ' '
+      }
+      push(cells, b)
+    }
+  }
+  assert xs == os or xs == os + 1
+  let x_wins = wins(cells, 'X')
+  let o_wins = wins(cells, 'O')
+  assert not (x_wins and o_wins)
+  if x_wins {
+    assert xs == os + 1
+    return "win"
+  }
+  if o_wins {
+    assert xs == os
+    return "win"
+  }
+  if xs + os == 9 { return "draw" }
+  return "ongoing"
+}
+
+test "examples" {
+  assert state_of_tic_tac_toe(["XOO", "X  ", "X  "]) == "win"
+  assert state_of_tic_tac_toe(["OXO", " X ", " X "]) == "win"
+  assert state_of_tic_tac_toe(["X  ", "   ", "   "]) == "ongoing"
+  assert state_of_tic_tac_toe(["XOX", "XXO", "OXO"]) == "draw"
+  assert state_of_tic_tac_toe(["XXX", "OO ", "   "]) == "win"
+  assert state_of_tic_tac_toe(["OXX", "XO ", "  O"]) == "win"
+  assert state_of_tic_tac_toe(["XO ", "OX ", "  X"]) == "win"
+  assert state_of_tic_tac_toe(["X O", "  X", "O  "]) == "ongoing"
+}

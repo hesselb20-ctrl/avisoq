@@ -1,0 +1,28 @@
+fn transpose(lines: [Str]) -> [Str] {
+  var width = 0
+  for line in lines {
+    if len(line) > width { width = len(line) }
+  }
+  var out: [Str] = []
+  for j in 0..width {
+    var last = 0
+    for i in 0..len(lines) {
+      if len(lines[i]) > j { last = i }
+    }
+    var row = ""
+    for i in 0..last + 1 {
+      if len(lines[i]) > j { row += chr(lines[i][j]) } else { row += " " }
+    }
+    push(out, row)
+  }
+  return out
+}
+
+test "basic" {
+  assert transpose([]) == []
+  assert transpose(["A1"]) == ["A", "1"]
+  assert transpose(["ABC", "DEF"]) == ["AD", "BE", "CF"]
+  assert transpose(["ABC", "DE"]) == ["AD", "BE", "C"]
+  assert transpose(["AB", "DEF"]) == ["AD", "BE", " F"]
+  assert transpose([""]) == []
+}

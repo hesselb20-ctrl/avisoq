@@ -1,0 +1,25 @@
+fn prime_factors(value: Int) -> [Int] {
+  var out: [Int] = []
+  var n = value
+  var d = 2
+  while d * d <= n {
+    while n % d == 0 {
+      push(out, d)
+      n = n / d
+    }
+    d += 1
+  }
+  if n > 1 {
+    push(out, n)
+  }
+  return out
+}
+
+test "examples" {
+  assert prime_factors(1) == []
+  assert prime_factors(2) == [2]
+  assert prime_factors(60) == [2, 2, 3, 5]
+  assert prime_factors(97) == [97]
+  assert prime_factors(901255) == [5, 17, 23, 461]
+  assert prime_factors(93819012551) == [11, 9539, 894119]
+}

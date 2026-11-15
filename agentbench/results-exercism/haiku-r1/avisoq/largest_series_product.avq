@@ -1,0 +1,28 @@
+// Largest product of `span` adjacent digits. Returns -1 when span is negative or longer than the input.
+fn largest_series_product(digits: Str, span: Int) -> Int {
+  let n = len(digits)
+  if span < 0 or span > n {
+    return -1
+  }
+  let stop = n - span + 1
+  var best = -1
+  for start in 0..stop {
+    var prod = 1
+    for k in 0..span {
+      prod = prod * (digits[start + k] - '0')
+    }
+    if prod > best {
+      best = prod
+    }
+  }
+  return best
+}
+
+test "examples" {
+  assert largest_series_product("29", 2) == 18
+  assert largest_series_product("0123456789", 2) == 72
+  assert largest_series_product("63915", 3) == 162
+  assert largest_series_product("0000", 2) == 0
+  assert largest_series_product("123", 0) == 1
+  assert largest_series_product("12345", 5) == 120
+}

@@ -1,0 +1,40 @@
+// Appends the lines of verse n (1 to 8) of the song to out.
+fn add_verse(out: mut [Str], n: Int) {
+  let names = ["fly", "spider", "bird", "cat", "dog", "goat", "cow", "horse"]
+  let comments = ["", "It wriggled and jiggled and tickled inside her.", "How absurd to swallow a bird!", "Imagine that, to swallow a cat!", "What a hog, to swallow a dog!", "Just opened her throat and swallowed a goat!", "I don't know how she swallowed a cow!", "She's dead, of course!"]
+  push(out, "I know an old lady who swallowed a " + names[n - 1] + ".")
+  if comments[n - 1] != "" {
+    push(out, comments[n - 1])
+  }
+  if n < 8 {
+    var k = n
+    while k >= 2 {
+      var line = "She swallowed the " + names[k - 1] + " to catch the " + names[k - 2]
+      if k == 3 {
+        line += " that wriggled and jiggled and tickled inside her"
+      }
+      push(out, line + ".")
+      k -= 1
+    }
+    push(out, "I don't know why she swallowed the fly. Perhaps she'll die.")
+  }
+}
+
+fn food_chain(start_verse: Int, end_verse: Int) -> [Str] {
+  var out: [Str] = []
+  var v = start_verse
+  while v <= end_verse {
+    add_verse(out, v)
+    if v < end_verse {
+      push(out, "")
+    }
+    v += 1
+  }
+  return out
+}
+
+test "examples" {
+  assert food_chain(1, 1) == ["I know an old lady who swallowed a fly.", "I don't know why she swallowed the fly. Perhaps she'll die."]
+  assert food_chain(2, 2) == ["I know an old lady who swallowed a spider.", "It wriggled and jiggled and tickled inside her.", "She swallowed the spider to catch the fly.", "I don't know why she swallowed the fly. Perhaps she'll die."]
+  assert food_chain(8, 8) == ["I know an old lady who swallowed a horse.", "She's dead, of course!"]
+}

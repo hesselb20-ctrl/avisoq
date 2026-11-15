@@ -1,0 +1,36 @@
+import "std/strings"
+
+fn is_vowel(c: Int) -> Bool {
+  return c == 'a' or c == 'e' or c == 'i' or c == 'o' or c == 'u'
+}
+
+// Translates one word. `cut` is the number of leading letters moved to the end.
+fn pig_word(w: Str) -> Str {
+  if len(w) == 0 { return "" }
+  if is_vowel(w[0]) or starts_with(w, "xr") or starts_with(w, "yt") {
+    return w + "ay"
+  }
+  var cut = len(w)
+  for i in 0..len(w) {
+    let c = w[i]
+    if is_vowel(c) {
+      cut = i
+      if i > 0 and w[i - 1] == 'q' { cut = i + 1 }
+      break
+    }
+    if c == 'y' and i > 0 {
+      cut = i
+      break
+    }
+  }
+  return substr(w, cut, len(w)) + substr(w, 0, cut) + "ay"
+}
+
+fn pig_latin(phrase: Str) -> Str {
+  let words = split(phrase, " ")
+  var out: [Str] = []
+  for i in 0..len(words) {
+    push(out, pig_word(words[i]))
+  }
+  return join(out, " ")
+}

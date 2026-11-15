@@ -1,0 +1,37 @@
+fn crypto_square(plaintext: Str) -> Str {
+  var norm = ""
+  for b in plaintext {
+    if b >= 'A' and b <= 'Z' {
+      norm += chr(b + 32)
+    } else if (b >= 'a' and b <= 'z') or (b >= '0' and b <= '9') {
+      norm += chr(b)
+    }
+  }
+  let n = len(norm)
+  if n == 0 { return "" }
+  var c = 1
+  while c * c < n { c += 1 }
+  var r = c
+  if (c - 1) * c >= n { r = c - 1 }
+  var out = ""
+  for col in 0..c {
+    if col > 0 { out += " " }
+    for row in 0..r {
+      let idx = row * c + col
+      if idx < n {
+        out += chr(norm[idx])
+      } else {
+        out += " "
+      }
+    }
+  }
+  return out
+}
+
+test "crypto" {
+  assert crypto_square("") == ""
+  assert crypto_square("... --- ...") == ""
+  assert crypto_square("A") == "a"
+  assert crypto_square("If man was meant to stay on the ground, god would have given us roots.") == "imtgdvs fearwer mayoogo anouuio ntnnlvt wttddes aohghn  sseoau "
+  assert crypto_square("Chill out.") == "clu hlt io "
+}

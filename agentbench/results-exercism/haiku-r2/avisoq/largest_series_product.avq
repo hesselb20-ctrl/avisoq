@@ -1,0 +1,29 @@
+// Largest product of `span` adjacent digits in `digits`.
+fn largest_series_product(digits: Str, span: Int) -> Int {
+  assert span >= 0
+  assert span <= len(digits)
+  let top = len(digits) - span + 1
+  var best = 0
+  for start in 0..top {
+    var product = 1
+    let stop = start + span
+    for k in start..stop {
+      let d = digits[k] - '0'
+      assert d >= 0 and d <= 9
+      product = product * d
+    }
+    if product > best { best = product }
+  }
+  return best
+}
+
+test "examples" {
+  assert largest_series_product("29", 2) == 18
+  assert largest_series_product("0123456789", 2) == 72
+  assert largest_series_product("63915", 3) == 162
+  assert largest_series_product("73167176531330624919225119674426574742355349194934", 6) == 23520
+  assert largest_series_product("0000", 2) == 0
+  assert largest_series_product("99", 0) == 1
+  assert largest_series_product("", 0) == 1
+  assert largest_series_product("123", 3) == 6
+}

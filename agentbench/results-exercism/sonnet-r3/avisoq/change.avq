@@ -1,0 +1,37 @@
+fn change(coins: [Int], target: Int) -> [Int] {
+  if target == 0 { return [] }
+  assert target > 0
+  let inf = 1000000000
+  var best = array(target + 1, inf)
+  var from = array(target + 1, 0)
+  best[0] = 0
+  for t in 1..target + 1 {
+    for c in coins {
+      if c > 0 and c <= t and best[t - c] + 1 < best[t] {
+        best[t] = best[t - c] + 1
+        from[t] = c
+      }
+    }
+  }
+  assert best[target] < inf
+  var out: [Int] = []
+  var rem = target
+  while rem > 0 {
+    push(out, from[rem])
+    rem -= from[rem]
+  }
+  var sorted_out = out
+  sort(sorted_out)
+  return sorted_out
+}
+
+import "std/arrays"
+
+test "basic" {
+  assert change([1, 5, 10, 25], 1) == [1]
+  assert change([1, 5, 10, 25, 100], 25) == [25]
+  assert change([1, 5, 10, 25, 100], 15) == [5, 10]
+  assert change([1, 5, 10, 21, 25], 63) == [21, 21, 21]
+  assert change([2, 5, 10, 20, 50], 0) == []
+  assert change([4, 5], 13) == [4, 4, 5]
+}

@@ -1,0 +1,69 @@
+import "std/strings"
+
+// Day of week with Sunday = 0 (Sakamoto's method).
+fn weekday_of(year: Int, month: Int, day: Int) -> Int {
+  var y = year
+  if month < 3 { y = y - 1 }
+  let offsets = [0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4]
+  return (y + y / 4 - y / 100 + y / 400 + offsets[month - 1] + day) % 7
+}
+
+fn days_in_month(year: Int, month: Int) -> Int {
+  if month == 2 {
+    if (year % 4 == 0 and year % 100 != 0) or year % 400 == 0 { return 29 }
+    return 28
+  }
+  if month == 4 or month == 6 or month == 9 or month == 11 { return 30 }
+  return 31
+}
+
+fn day_index(name: Str) -> Int {
+  if name == "Sunday" { return 0 }
+  if name == "Monday" { return 1 }
+  if name == "Tuesday" { return 2 }
+  if name == "Wednesday" { return 3 }
+  if name == "Thursday" { return 4 }
+  if name == "Friday" { return 5 }
+  assert name == "Saturday"
+  return 6
+}
+
+fn nth_index(week: Str) -> Int {
+  if week == "first" { return 0 }
+  if week == "second" { return 1 }
+  if week == "third" { return 2 }
+  assert week == "fourth"
+  return 3
+}
+
+fn meetup(year: Int, month: Int, week: Str, dayofweek: Str) -> Str {
+  let target = day_index(dayofweek)
+  var day = 0
+  if week == "teenth" {
+    for t in 13..20 {
+      if weekday_of(year, month, t) == target { day = t }
+    }
+  } else if week == "last" {
+    let last = days_in_month(year, month)
+    let back = (weekday_of(year, month, last) - target + 7) % 7
+    day = last - back
+  } else {
+    let first_wd = weekday_of(year, month, 1)
+    let first_hit = 1 + (target - first_wd + 7) % 7
+    day = first_hit + 7 * nth_index(week)
+  }
+  return str(year) + "-" + pad_left(str(month), 2, "0") + "-" + pad_left(str(day), 2, "0")
+}
+
+test "examples" {
+  assert meetup(2013, 5, "teenth", "Monday") == "2013-05-13"
+  assert meetup(2013, 8, "teenth", "Monday") == "2013-08-19"
+  assert meetup(2018, 1, "first", "Monday") == "2018-01-01"
+  assert meetup(2019, 8, "third", "Tuesday") == "2019-08-20"
+  assert meetup(2020, 5, "teenth", "Wednesday") == "2020-05-13"
+  assert meetup(2021, 7, "fourth", "Sunday") == "2021-07-25"
+  assert meetup(2022, 11, "last", "Thursday") == "2022-11-24"
+  assert meetup(1953, 8, "teenth", "Saturday") == "1953-08-15"
+  assert meetup(2024, 2, "last", "Thursday") == "2024-02-29"
+  assert meetup(2000, 2, "teenth", "Monday") == "2000-02-14"
+}

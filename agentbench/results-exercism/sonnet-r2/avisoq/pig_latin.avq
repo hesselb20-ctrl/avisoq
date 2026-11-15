@@ -1,0 +1,49 @@
+import "std/strings"
+
+fn is_vowel(b: Int) -> Bool {
+  return b == 'a' or b == 'e' or b == 'i' or b == 'o' or b == 'u'
+}
+
+fn pig_word(w: Str) -> Str {
+  if len(w) == 0 { return w }
+  if is_vowel(w[0]) or starts_with(w, "xr") or starts_with(w, "yt") {
+    return w + "ay"
+  }
+  var i = 0
+  while i < len(w) {
+    if is_vowel(w[i]) { break }
+    if w[i] == 'q' and i + 1 < len(w) and w[i + 1] == 'u' {
+      i += 2
+      break
+    }
+    if w[i] == 'y' and i > 0 { break }
+    i += 1
+  }
+  return w[i..len(w)] + w[0..i] + "ay"
+}
+
+fn pig_latin(phrase: Str) -> Str {
+  let words = split(phrase, " ")
+  var out = ""
+  for i in 0..len(words) {
+    if i > 0 { out += " " }
+    out += pig_word(words[i])
+  }
+  return out
+}
+
+test "basic" {
+  assert pig_latin("apple") == "appleay"
+  assert pig_latin("ear") == "earay"
+  assert pig_latin("xray") == "xrayay"
+  assert pig_latin("yttria") == "yttriaay"
+  assert pig_latin("pig") == "igpay"
+  assert pig_latin("chair") == "airchay"
+  assert pig_latin("thrush") == "ushthray"
+  assert pig_latin("quick") == "ickquay"
+  assert pig_latin("square") == "aresquay"
+  assert pig_latin("my") == "ymay"
+  assert pig_latin("rhythm") == "ythmrhay"
+  assert pig_latin("quick fast run") == "ickquay astfay unray"
+  assert pig_latin("yellow") == "ellowyay"
+}

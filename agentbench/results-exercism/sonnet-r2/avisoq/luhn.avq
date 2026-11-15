@@ -1,0 +1,33 @@
+fn luhn(value: Str) -> Bool {
+  var count = 0
+  var total = 0
+  var i = len(value) - 1
+  while i >= 0 {
+    let b = value[i]
+    i -= 1
+    if b == ' ' { continue }
+    if b < '0' or b > '9' { return false }
+    var d = b - '0'
+    if count % 2 == 1 {
+      d = d * 2
+      if d > 9 { d -= 9 }
+    }
+    total += d
+    count += 1
+  }
+  if count <= 1 { return false }
+  return total % 10 == 0
+}
+
+test "basic" {
+  assert luhn("1") == false
+  assert luhn("0") == false
+  assert luhn(" 0") == false
+  assert luhn("0 0") == true
+  assert luhn("4539 3195 0343 6467") == true
+  assert luhn("066 123 478") == false
+  assert luhn("055a 444 285") == false
+  assert luhn("059a") == false
+  assert luhn("091") == true
+  assert luhn("") == false
+}

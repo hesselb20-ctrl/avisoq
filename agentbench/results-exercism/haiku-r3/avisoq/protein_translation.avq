@@ -1,0 +1,26 @@
+fn amino_acid(codon: Str) -> Str {
+  if codon == "AUG" { return "Methionine" }
+  if codon == "UUU" or codon == "UUC" { return "Phenylalanine" }
+  if codon == "UUA" or codon == "UUG" { return "Leucine" }
+  if codon == "UCU" or codon == "UCC" or codon == "UCA" or codon == "UCG" { return "Serine" }
+  if codon == "UAU" or codon == "UAC" { return "Tyrosine" }
+  if codon == "UGU" or codon == "UGC" { return "Cysteine" }
+  if codon == "UGG" { return "Tryptophan" }
+  if codon == "UAA" or codon == "UAG" or codon == "UGA" { return "STOP" }
+  return ""
+}
+
+// Translates codons until a STOP codon (or an unknown codon, or the end of the strand).
+fn protein_translation(strand: Str) -> [Str] {
+  var proteins: [Str] = []
+  var i = 0
+  while i + 3 <= len(strand) {
+    let codon = substr(strand, i, i + 3)
+    let name = amino_acid(codon)
+    if name == "STOP" { return proteins }
+    if name == "" { return proteins }
+    push(proteins, name)
+    i += 3
+  }
+  return proteins
+}

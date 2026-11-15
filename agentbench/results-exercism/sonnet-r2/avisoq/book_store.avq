@@ -1,0 +1,48 @@
+fn group_price(size: Int) -> Int {
+  if size == 1 { return 800 }
+  if size == 2 { return 1520 }
+  if size == 3 { return 2160 }
+  if size == 4 { return 2560 }
+  if size == 5 { return 3000 }
+  return 0
+}
+
+fn book_store(basket: [Int]) -> Int {
+  var counts: [Int] = array(6, 0)
+  for b in basket {
+    if b >= 1 and b <= 5 { counts[b] += 1 }
+  }
+  var sizes: [Int] = array(6, 0)
+  var more = true
+  while more {
+    var distinct = 0
+    for k in 1..6 {
+      if counts[k] > 0 {
+        counts[k] -= 1
+        distinct += 1
+      }
+    }
+    if distinct == 0 { more = false } else { sizes[distinct] += 1 }
+  }
+  var swaps = sizes[5]
+  if sizes[3] < swaps { swaps = sizes[3] }
+  sizes[5] -= swaps
+  sizes[3] -= swaps
+  sizes[4] += 2 * swaps
+  var total = 0
+  for s in 1..6 { total += sizes[s] * group_price(s) }
+  return total
+}
+
+test "basic" {
+  assert book_store([]) == 0
+  assert book_store([1]) == 800
+  assert book_store([2, 2]) == 1600
+  assert book_store([1, 2]) == 1520
+  assert book_store([1, 2, 3]) == 2160
+  assert book_store([1, 2, 3, 4]) == 2560
+  assert book_store([1, 2, 3, 4, 5]) == 3000
+  assert book_store([1, 1, 2, 2, 3, 3, 4, 5]) == 5120
+  assert book_store([1, 1, 2, 3, 4, 4, 5, 5]) == 5120
+  assert book_store([1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 1, 1, 2, 2, 3, 3, 4, 5]) == 11120
+}

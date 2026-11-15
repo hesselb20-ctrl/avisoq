@@ -1,0 +1,26 @@
+fn luhn(value: Str) -> Bool {
+  var digits: [Int] = []
+  for i in 0..len(value) {
+    let b = value[i]
+    if b == ' ' { continue }
+    if b < '0' or b > '9' { return false }
+    push(digits, b - '0')
+  }
+  let n = len(digits)
+  if n <= 1 { return false }
+  var total = 0
+  for i in 0..n {
+    let d = digits[n - 1 - i]
+    if i % 2 == 1 {
+      let doubled = d * 2
+      if doubled > 9 {
+        total += doubled - 9
+      } else {
+        total += doubled
+      }
+    } else {
+      total += d
+    }
+  }
+  return total % 10 == 0
+}

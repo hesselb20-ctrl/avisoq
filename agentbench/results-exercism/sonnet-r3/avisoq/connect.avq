@@ -1,0 +1,77 @@
+fn clean_row(line: Str) -> Str {
+  var out = ""
+  for b in line {
+    if b != ' ' { out += chr(b) }
+  }
+  return out
+}
+
+fn wins(rows: [Str], mark: Int, top_bottom: Bool) -> Bool {
+  let h = len(rows)
+  if h == 0 { return false }
+  var w = 0
+  for r in rows {
+    if len(r) > w { w = len(r) }
+  }
+  if w == 0 { return false }
+  var seen = array(h * w, false)
+  var stack: [Int] = []
+  if top_bottom {
+    for c in 0..len(rows[0]) {
+      if rows[0][c] == mark {
+        push(stack, c)
+        seen[c] = true
+      }
+    }
+  } else {
+    for r in 0..h {
+      if len(rows[r]) > 0 and rows[r][0] == mark {
+        push(stack, r * w)
+        seen[r * w] = true
+      }
+    }
+  }
+  let dr = [-1, -1, 0, 0, 1, 1]
+  let dc = [0, 1, -1, 1, -1, 0]
+  while len(stack) > 0 {
+    let cur = pop(stack)
+    let r = cur / w
+    let c = cur % w
+    if top_bottom and r == h - 1 { return true }
+    if not top_bottom and c == len(rows[r]) - 1 { return true }
+    for k in 0..6 {
+      let nr = r + dr[k]
+      let nc = c + dc[k]
+      if nr >= 0 and nr < h and nc >= 0 and nc < len(rows[nr]) {
+        let idx = nr * w + nc
+        if not seen[idx] and rows[nr][nc] == mark {
+          seen[idx] = true
+          push(stack, idx)
+        }
+      }
+    }
+  }
+  return false
+}
+
+fn connect(board: [Str]) -> Str {
+  var rows: [Str] = []
+  for l in board {
+    push(rows, clean_row(l))
+  }
+  if wins(rows, 'O', true) { return "O" }
+  if wins(rows, 'X', false) { return "X" }
+  return ""
+}
+
+test "basic" {
+  assert connect([". . . . .", " . . . . .", "  . . . . .", "   . . . . .", "    . . . . ."]) == ""
+  assert connect(["X"]) == "X"
+  assert connect(["O"]) == "O"
+  assert connect(["."]) == ""
+  assert connect([]) == ""
+  assert connect([". O . X .", " . X X O .", "  O O O X .", "   . X O X O", "    X O O O X"]) == ""
+  assert connect([". X . .", " X X . .", "  . X X .", "   . . X X"]) == "X"
+  assert connect([". O . .", " O X X X", "  O O O .", "   X X O X", "    . O X ."]) == "O"
+  assert connect(["X O . .", " . X . .", "  . . X .", "   O O . X"]) == ""
+}

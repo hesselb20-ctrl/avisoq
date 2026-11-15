@@ -1,0 +1,57 @@
+// Cell at row r, column c of the flat board (w cells per row).
+// Hex neighbours of (r, c): same row c-1 and c+1, row above c and c+1, row below c-1 and c.
+// Player O connects row 0 to row h-1; player X connects column 0 to column w-1.
+fn has_path(cells: [Int], h: Int, w: Int, p: Int) -> Bool {
+  var seen: [Bool] = array(h * w, false)
+  var stack: [Int] = []
+  for r0 in 0..h {
+    for c0 in 0..w {
+      let on_start = (p == 'O' and r0 == 0) or (p == 'X' and c0 == 0)
+      if on_start and cells[r0 * w + c0] == p {
+        seen[r0 * w + c0] = true
+        push(stack, r0 * w + c0)
+      }
+    }
+  }
+  let dr = [0, 0, -1, -1, 1, 1]
+  let dc = [-1, 1, 0, 1, -1, 0]
+  while len(stack) > 0 {
+    let cur = pop(stack)
+    let cr = cur / w
+    let cc = cur % w
+    if (p == 'O' and cr == h - 1) or (p == 'X' and cc == w - 1) { return true }
+    for k in 0..6 {
+      let nr = cr + dr[k]
+      let nc = cc + dc[k]
+      if nr >= 0 and nr < h and nc >= 0 and nc < w {
+        let ni = nr * w + nc
+        if seen[ni] == false and cells[ni] == p {
+          seen[ni] = true
+          push(stack, ni)
+        }
+      }
+    }
+  }
+  return false
+}
+
+fn connect(board: [Str]) -> Str {
+  let h = len(board)
+  if h == 0 { return "" }
+  var cells: [Int] = []
+  var w = 0
+  for r in 0..h {
+    var count = 0
+    for k in 0..len(board[r]) {
+      let b = byte_at(board[r], k)
+      if b != ' ' {
+        push(cells, b)
+        count += 1
+      }
+    }
+    if r == 0 { w = count }
+  }
+  if has_path(cells, h, w, 'O') { return "O" }
+  if has_path(cells, h, w, 'X') { return "X" }
+  return ""
+}

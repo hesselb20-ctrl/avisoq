@@ -1,0 +1,27 @@
+fn perfect_numbers(number: Int) -> Str {
+  assert number > 0
+  var total = 0
+  var d = 1
+  while d * d <= number {
+    if number % d == 0 {
+      total += d
+      let other = number / d
+      if other != d { total += other }
+    }
+    d += 1
+  }
+  total -= number
+  if total == number { return "perfect" }
+  if total > number { return "abundant" }
+  return "deficient"
+}
+
+test "basic" {
+  assert perfect_numbers(6) == "perfect"
+  assert perfect_numbers(28) == "perfect"
+  assert perfect_numbers(33550336) == "perfect"
+  assert perfect_numbers(12) == "abundant"
+  assert perfect_numbers(8) == "deficient"
+  assert perfect_numbers(13) == "deficient"
+  assert perfect_numbers(1) == "deficient"
+}

@@ -366,6 +366,80 @@ Run time of this round's solutions, all 10 tasks, same inputs (Python from the f
 Avisoq is ahead of Rust on 9 of 10 tasks in both runs and behind on `sat` in both. More than
 half of each total is still the `interp` task.
 
+## Tasks the author did not write, three runs per cell (15 November 2026, Avisoq 0.13.1)
+
+Everything above uses tasks and tests written by the author of the language, run once. This
+section removes both objections as far as one person can.
+
+**Where the tasks come from.** `exercism.mjs` imports them from the Exercism problem
+specifications (https://github.com/exercism/problem-specifications, MIT licence, commit
+`84a96854` of 11 November 2026), statement and test cases unchanged. Nobody picks tasks:
+
+1. An exercise qualifies if all its cases call one function, every argument and result is a
+   whole number, a boolean, a string, or an array of whole numbers or strings, and at least 8
+   cases remain after dropping cases that expect an error, cases with characters outside
+   ASCII, and cases Exercism itself has replaced. 44 exercises qualify.
+2. They are ordered by the SHA-256 of their name and the first 20 are taken: line-up,
+   scrabble-score, crypto-square, change, sum-of-multiples, largest-series-product, luhn,
+   anagram, book-store, protein-translation, transpose, food-chain, wordy, pig-latin,
+   prime-factors, meetup, isbn-verifier, connect, perfect-numbers, state-of-tic-tac-toe.
+3. The first two cases of each are shown to the model as examples. The other 364 are hidden
+   and used for grading.
+
+**How a run goes.** One fresh agent per model, language and run gets the 20 statements and
+signatures (and, for Avisoq, the one-page guide). It may compile and run its own tests as often
+as it likes, never sees the hidden cases, and hands in once; there is no repair round. Three
+runs per cell, 18 runs in all, 360 solutions per model.
+
+### Claude Sonnet (3 runs per language)
+
+| Language | Correct per run | Total | Rejected before running | Stopped with an error | Silently wrong | Time per run | Mean time | Mean tokens |
+|---|---|---:|---:|---:|---:|---|---:|---:|
+| Avisoq | 20, 20, 20 | 60 of 60 | 0 | 0 | 0 | 149 s, 172 s, 169 s | 163 s | 143k |
+| Python | 20, 20, 20 | 60 of 60 | 0 | 0 | 0 | 129 s, 110 s, 117 s | 119 s | 127k |
+| Rust | 20, 20, 20 | 60 of 60 | 0 | 0 | 0 | 149 s, 161 s, 116 s | 142 s | 131k |
+
+### Claude Haiku (3 runs per language)
+
+| Language | Correct per run | Total | Rejected before running | Stopped with an error | Silently wrong | Time per run | Mean time | Mean tokens |
+|---|---|---:|---:|---:|---:|---|---:|---:|
+| Avisoq | 20, 20, 19 | 59 of 60 | 0 | 0 | 1 | 400 s, 279 s, 318 s | 332 s | 186k |
+| Python | 19, 20, 20 | 59 of 60 | 0 | 0 | 1 | 221 s, 216 s, 192 s | 210 s | 154k |
+| Rust | 20, 19, 19 | 58 of 60 | 0 | 0 | 2 | 266 s, 227 s, 257 s | 250 s | 165k |
+
+Failures: Avisoq run 3, pig-latin (a rule applied in the wrong order); Python run 1 and Rust
+runs 2 and 3, food-chain (whether verses are separated by an empty line, which the statement
+does not say).
+
+### What this shows
+
+- **Correctness: no difference.** 119 of 120 for Avisoq, 119 of 120 for Python, 118 of 120
+  for Rust. With one or two failures per language, that is a tie, not a ranking.
+- **A model learns Avisoq from one page well enough to match languages it has seen millions
+  of lines of.** These are also problems whose Python and Rust solutions are all over the
+  public internet, which favours those two.
+- **Avisoq costs the agent more.** Sonnet took 15% longer than with Rust and 37% longer than
+  with Python; Haiku 33% and 58% longer, and 10 to 20% more tokens. The claim "level with Rust
+  on agent time" made further up, from single runs, does not survive three runs.
+- **Avisoq's safety net was not exercised.** Its one failure was a silently wrong answer, the
+  same kind as the others'. Tasks this small rarely overflow or index out of range.
+
+### What it still does not show
+
+- The selection rule and the harness are the author's, even though the tasks are not. The
+  rule drops every case that expects an error, so how each language reports bad input is not
+  tested.
+- Both models are from one vendor. (A local open-weights model is reported below.)
+- In round 1 the two example cases shown for `anagram` differed from rounds 2 and 3, because
+  an import bug (cases that Exercism had replaced) was fixed in between. All rounds are graded
+  on the same hidden cases.
+- Times are wall-clock for one agent run and include its tool calls; they vary by up to 45%
+  between runs of the same cell.
+- Twenty textbook exercises are still small programs. Nothing here measures large codebases.
+
+`node agentbench/results-exercism/summary.mjs` rebuilds these tables from the graded runs; the
+solutions of every run are in `results-exercism/`.
+
 ## What each language does with a bug
 
 `bugs.mjs` writes the same twelve mistakes in Avisoq, Rust and Python and runs them. Avisoq is

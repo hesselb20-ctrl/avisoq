@@ -230,10 +230,26 @@ languages: Avisoq refuses or stops on all twelve, where Rust as shipped (`-O`) f
 wrong result on six and Python on five. Those cases were picked by the author to show the
 differences, so it is a list of behaviours, not a defect rate.
 
-So today the measured case for Avisoq is: as correct as Python and Rust on these tasks, at
-least as fast to run as Rust, much faster than Python, stricter than both about the bugs
-listed, and no quicker for an agent to write than Rust. Ten tasks and a few runs is a small
-sample; see the tables and their caveats in [`agentbench/README.md`](agentbench/README.md).
+Everything above uses tasks the author wrote, run once. To check it against tasks he did not
+write, 20 exercises were imported mechanically from the public Exercism problem set (chosen by
+a hash of their names, 364 hidden test cases) and every model and language was run three
+times:
+
+| 3 runs of 20 tasks each | Avisoq | Python | Rust |
+|---|---:|---:|---:|
+| Claude Sonnet, correct | 60 of 60 | 60 of 60 | 60 of 60 |
+| Claude Sonnet, mean time per run | 163 s | 119 s | 142 s |
+| Claude Haiku, correct | 59 of 60 | 59 of 60 | 58 of 60 |
+| Claude Haiku, mean time per run | 332 s | 210 s | 250 s |
+
+Correctness is a tie. Avisoq costs the agent more time: 15 to 33% more than Rust and 37 to 58%
+more than Python, which corrects the single-run "level with Rust" figure above.
+
+So today the measured case for Avisoq is: as correct as Python and Rust, on the author's tasks
+and on independent ones; at least as fast to run as Rust and much faster than Python on the
+author's tasks; stricter than both about the bugs listed; and slower for an agent to write
+than either. The method, per-run numbers and caveats are in
+[`agentbench/README.md`](agentbench/README.md).
 
 <img src=".github/assets/agents/scene.webp" width="100%" alt="Two models each solved 24 of 24 tasks on the first attempt in Avisoq, Python and Rust. The Avisoq solutions were the longest: about 380 lines against 200 for Python and 330 for Rust.">
 

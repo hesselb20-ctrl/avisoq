@@ -1,0 +1,24 @@
+// ISBN-10 check: dashes are ignored, the 10th character may be X (= 10), all others must be digits.
+fn isbn_verifier(isbn: Str) -> Bool {
+  var chars: [Int] = []
+  for i in 0..len(isbn) {
+    let b = isbn[i]
+    if b == '-' { continue }
+    push(chars, b)
+  }
+  if len(chars) != 10 { return false }
+  var total = 0
+  for i in 0..10 {
+    let b = chars[i]
+    var value = 0
+    if i == 9 and b == 'X' {
+      value = 10
+    } else if b >= '0' and b <= '9' {
+      value = b - '0'
+    } else {
+      return false
+    }
+    total += value * (10 - i)
+  }
+  return total % 11 == 0
+}

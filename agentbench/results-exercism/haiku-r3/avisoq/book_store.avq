@@ -1,0 +1,53 @@
+// Price in cents of a group of `size` different books (800 cents each, with the set discount).
+fn group_price(size: Int) -> Int {
+  if size == 1 { return 800 }
+  if size == 2 { return 1520 }
+  if size == 3 { return 2160 }
+  if size == 4 { return 2560 }
+  if size == 5 { return 3000 }
+  return 0
+}
+
+// Cheapest price for the books still left, given how many copies of each title remain.
+// Every possible group (any non-empty set of titles) is tried; results are memoised.
+fn best_price(counts: [Int], memo: mut Map[Str, Int]) -> Int {
+  var key = ""
+  for i in 0..5 {
+    key += str(counts[i]) + ","
+  }
+  if has(memo, key) { return get(memo, key) }
+  var left = 0
+  for i in 0..5 {
+    left += counts[i]
+  }
+  if left == 0 { return 0 }
+  var best = -1
+  for mask in 1..32 {
+    var size = 0
+    var ok = true
+    var next = copy(counts)
+    for t in 0..5 {
+      if bit_and(shift_right(mask, t), 1) == 1 {
+        if counts[t] == 0 { ok = false }
+        size += 1
+        next[t] = next[t] - 1
+      }
+    }
+    if ok {
+      let cost = group_price(size) + best_price(next, memo)
+      if best < 0 or cost < best { best = cost }
+    }
+  }
+  put(memo, key, best)
+  return best
+}
+
+fn book_store(basket: [Int]) -> Int {
+  var counts: [Int] = array(5, 0)
+  for i in 0..len(basket) {
+    let title = basket[i] - 1
+    counts[title] += 1
+  }
+  var memo: Map[Str, Int] = {}
+  return best_price(counts, memo)
+}

@@ -1,0 +1,100 @@
+// Cells of one board line, keeping only the characters O, X and '.'.
+fn parse_row(line: Str) -> [Int] {
+  var cells: [Int] = []
+  for c in line {
+    if c == 'O' or c == 'X' or c == '.' {
+      push(cells, c)
+    }
+  }
+  return cells
+}
+
+// O connects the top row to the bottom row; X connects the left column to the right column.
+fn is_start(color: Int, r: Int, c: Int) -> Bool {
+  if color == 'O' {
+    return r == 0
+  }
+  return c == 0
+}
+
+fn is_goal(color: Int, r: Int, c: Int, rows: Int, width: Int) -> Bool {
+  if color == 'O' {
+    return r == rows - 1
+  }
+  return c == width - 1
+}
+
+fn player_wins(flat: [Int], rows: Int, width: Int, color: Int) -> Bool {
+  let dr = [0, 0, -1, -1, 1, 1]
+  let dc = [-1, 1, 0, 1, -1, 0]
+  var seen: [Bool] = array(rows * width, false)
+  var queue: [Int] = []
+  for r in 0..rows {
+    for c in 0..width {
+      let idx = r * width + c
+      if flat[idx] == color and is_start(color, r, c) {
+        push(queue, idx)
+        seen[idx] = true
+      }
+    }
+  }
+  var head = 0
+  while head < len(queue) {
+    let cur = queue[head]
+    head += 1
+    let r = cur / width
+    let c = cur % width
+    if is_goal(color, r, c, rows, width) {
+      return true
+    }
+    for k in 0..6 {
+      let nr = r + dr[k]
+      let nc = c + dc[k]
+      if nr >= 0 and nr < rows and nc >= 0 and nc < width {
+        let nidx = nr * width + nc
+        if flat[nidx] == color and not seen[nidx] {
+          seen[nidx] = true
+          push(queue, nidx)
+        }
+      }
+    }
+  }
+  return false
+}
+
+fn connect(board: [Str]) -> Str {
+  let rows = len(board)
+  if rows == 0 {
+    return ""
+  }
+  let width = len(parse_row(board[0]))
+  var flat: [Int] = []
+  for r in 0..rows {
+    let row = parse_row(board[r])
+    for c in 0..width {
+      if c < len(row) {
+        push(flat, row[c])
+      } else {
+        push(flat, '.')
+      }
+    }
+  }
+  if player_wins(flat, rows, width, 'O') {
+    return "O"
+  }
+  if player_wins(flat, rows, width, 'X') {
+    return "X"
+  }
+  return ""
+}
+
+test "examples" {
+  assert connect([". . . . .", " . . . . .", "  . . . . .", "   . . . . .", "    . . . . ."]) == ""
+  assert connect(["X"]) == "X"
+  assert connect([". O . X .", " . X X O .", "  O O O X .", "   . X O X O", "    X O O O X"]) == ""
+  assert connect(["O"]) == "O"
+  assert connect(["O . .", " O . .", "  O . ."]) == "O"
+  assert connect(["X O", " X O"]) == "O"
+  assert connect(["X X", " O O"]) == "X"
+  assert connect(["O O", " X X"]) == "X"
+}

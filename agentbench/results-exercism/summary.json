@@ -1,0 +1,242 @@
+{
+ "haiku": {
+  "avisoq": [
+   {
+    "run": 1,
+    "total": 20,
+    "pass": 20,
+    "compile": 0,
+    "loud": 0,
+    "silent": 0,
+    "seconds": 400,
+    "ktokens": 183,
+    "attempts": null,
+    "failed": []
+   },
+   {
+    "run": 2,
+    "total": 20,
+    "pass": 20,
+    "compile": 0,
+    "loud": 0,
+    "silent": 0,
+    "seconds": 279,
+    "ktokens": 183,
+    "attempts": null,
+    "failed": []
+   },
+   {
+    "run": 3,
+    "total": 20,
+    "pass": 19,
+    "compile": 0,
+    "loud": 0,
+    "silent": 1,
+    "seconds": 318,
+    "ktokens": 193,
+    "attempts": null,
+    "failed": [
+     "pig_latin (wrong)"
+    ]
+   }
+  ],
+  "python": [
+   {
+    "run": 1,
+    "total": 20,
+    "pass": 19,
+    "compile": 0,
+    "loud": 0,
+    "silent": 1,
+    "seconds": 221,
+    "ktokens": 160,
+    "attempts": null,
+    "failed": [
+     "food_chain (wrong)"
+    ]
+   },
+   {
+    "run": 2,
+    "total": 20,
+    "pass": 20,
+    "compile": 0,
+    "loud": 0,
+    "silent": 0,
+    "seconds": 216,
+    "ktokens": 153,
+    "attempts": null,
+    "failed": []
+   },
+   {
+    "run": 3,
+    "total": 20,
+    "pass": 20,
+    "compile": 0,
+    "loud": 0,
+    "silent": 0,
+    "seconds": 192,
+    "ktokens": 148,
+    "attempts": null,
+    "failed": []
+   }
+  ],
+  "rust": [
+   {
+    "run": 1,
+    "total": 20,
+    "pass": 20,
+    "compile": 0,
+    "loud": 0,
+    "silent": 0,
+    "seconds": 266,
+    "ktokens": 172,
+    "attempts": null,
+    "failed": []
+   },
+   {
+    "run": 2,
+    "total": 20,
+    "pass": 19,
+    "compile": 0,
+    "loud": 0,
+    "silent": 1,
+    "seconds": 227,
+    "ktokens": 159,
+    "attempts": null,
+    "failed": [
+     "food_chain (wrong)"
+    ]
+   },
+   {
+    "run": 3,
+    "total": 20,
+    "pass": 19,
+    "compile": 0,
+    "loud": 0,
+    "silent": 1,
+    "seconds": 257,
+    "ktokens": 164,
+    "attempts": null,
+    "failed": [
+     "food_chain (wrong)"
+    ]
+   }
+  ]
+ },
+ "sonnet": {
+  "avisoq": [
+   {
+    "run": 1,
+    "total": 20,
+    "pass": 20,
+    "compile": 0,
+    "loud": 0,
+    "silent": 0,
+    "seconds": 149,
+    "ktokens": 140,
+    "attempts": null,
+    "failed": []
+   },
+   {
+    "run": 2,
+    "total": 20,
+    "pass": 20,
+    "compile": 0,
+    "loud": 0,
+    "silent": 0,
+    "seconds": 172,
+    "ktokens": 147,
+    "attempts": null,
+    "failed": []
+   },
+   {
+    "run": 3,
+    "total": 20,
+    "pass": 20,
+    "compile": 0,
+    "loud": 0,
+    "silent": 0,
+    "seconds": 169,
+    "ktokens": 142,
+    "attempts": null,
+    "failed": []
+   }
+  ],
+  "python": [
+   {
+    "run": 1,
+    "total": 20,
+    "pass": 20,
+    "compile": 0,
+    "loud": 0,
+    "silent": 0,
+    "seconds": 129,
+    "ktokens": 129,
+    "attempts": null,
+    "failed": []
+   },
+   {
+    "run": 2,
+    "total": 20,
+    "pass": 20,
+    "compile": 0,
+    "loud": 0,
+    "silent": 0,
+    "seconds": 110,
+    "ktokens": 125,
+    "attempts": null,
+    "failed": []
+   },
+   {
+    "run": 3,
+    "total": 20,
+    "pass": 20,
+    "compile": 0,
+    "loud": 0,
+    "silent": 0,
+    "seconds": 117,
+    "ktokens": 126,
+    "attempts": null,
+    "failed": []
+   }
+  ],
+  "rust": [
+   {
+    "run": 1,
+    "total": 20,
+    "pass": 20,
+    "compile": 0,
+    "loud": 0,
+    "silent": 0,
+    "seconds": 149,
+    "ktokens": 132,
+    "attempts": null,
+    "failed": []
+   },
+   {
+    "run": 2,
+    "total": 20,
+    "pass": 20,
+    "compile": 0,
+    "loud": 0,
+    "silent": 0,
+    "seconds": 161,
+    "ktokens": 133,
+    "attempts": null,
+    "failed": []
+   },
+   {
+    "run": 3,
+    "total": 20,
+    "pass": 20,
+    "compile": 0,
+    "loud": 0,
+    "silent": 0,
+    "seconds": 116,
+    "ktokens": 127,
+    "attempts": null,
+    "failed": []
+   }
+  ]
+ }
+}

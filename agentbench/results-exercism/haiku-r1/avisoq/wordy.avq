@@ -1,0 +1,83 @@
+import "std/strings"
+
+// Invalid input stops the program (there is no error result in this signature).
+fn to_num(s: Str) -> Int {
+  match parse_int(s) {
+    Some(value) => {
+      return value
+    }
+    None => {
+      assert false
+    }
+  }
+  return 0
+}
+
+fn wordy(question: Str) -> Int {
+  let prefix = "What is "
+  if len(question) < len(prefix) + 1 {
+    assert false
+  }
+  if substr(question, 0, len(prefix)) != prefix {
+    assert false
+  }
+  if question[len(question) - 1] != '?' {
+    assert false
+  }
+  let body = substr(question, len(prefix), len(question) - 1)
+  var toks: [Str] = []
+  for p in split(body, " ") {
+    if p != "" {
+      push(toks, p)
+    }
+  }
+  if len(toks) == 0 {
+    assert false
+  }
+  var acc = to_num(toks[0])
+  var i = 1
+  while i < len(toks) {
+    let op = toks[i]
+    if op == "plus" or op == "minus" {
+      if i + 1 >= len(toks) {
+        assert false
+      }
+      let rhs = to_num(toks[i + 1])
+      if op == "plus" {
+        acc = acc + rhs
+      } else {
+        acc = acc - rhs
+      }
+      i += 2
+    } else if op == "multiplied" or op == "divided" {
+      if i + 2 >= len(toks) {
+        assert false
+      }
+      if toks[i + 1] != "by" {
+        assert false
+      }
+      let factor = to_num(toks[i + 2])
+      if op == "multiplied" {
+        acc = acc * factor
+      } else {
+        acc = acc / factor
+      }
+      i += 3
+    } else {
+      assert false
+    }
+  }
+  return acc
+}
+
+test "examples" {
+  assert wordy("What is 5?") == 5
+  assert wordy("What is 0?") == 0
+  assert wordy("What is 5 plus 13?") == 18
+  assert wordy("What is 7 minus 5?") == 2
+  assert wordy("What is 6 multiplied by 4?") == 24
+  assert wordy("What is 25 divided by 5?") == 5
+  assert wordy("What is 5 plus 13 plus 6?") == 24
+  assert wordy("What is 3 plus 2 multiplied by 3?") == 15
+  assert wordy("What is -3 plus 7?") == 4
+}

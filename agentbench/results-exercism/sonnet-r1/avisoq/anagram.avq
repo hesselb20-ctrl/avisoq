@@ -1,0 +1,34 @@
+import "std/strings"
+import "std/arrays"
+
+fn sorted_letters(s: Str) -> [Int] {
+  var out: [Int] = []
+  for b in to_lower(s) {
+    push(out, b)
+  }
+  sort(out)
+  return out
+}
+
+fn anagram(subject: Str, candidates: [Str]) -> [Str] {
+  let lowered = to_lower(subject)
+  let key = sorted_letters(subject)
+  var found: [Str] = []
+  for cand in candidates {
+    if len(cand) == len(subject) and to_lower(cand) != lowered {
+      if sorted_letters(cand) == key {
+        push(found, cand)
+      }
+    }
+  }
+  return found
+}
+
+test "anagram" {
+  assert anagram("diaper", ["hello", "world", "zombies", "pants"]) == []
+  assert anagram("master", ["stream", "pigeon", "maters"]) == ["stream", "maters"]
+  assert anagram("stone", ["stone", "tones", "banana", "tons", "notes", "Seton"]) == ["tones", "notes", "Seton"]
+  assert anagram("BANANA", ["Banana"]) == []
+  assert anagram("tapper", ["patter"]) == []
+  assert anagram("sTOp", ["PoTS", "StoP"]) == ["PoTS"]
+}

@@ -1,0 +1,33 @@
+import "std/strings"
+import "std/arrays"
+
+// The sorted lowercase letters of a word.
+fn sorted_letters(word: Str) -> [Int] {
+  var letters: [Int] = []
+  for c in to_lower(word) {
+    push(letters, c)
+  }
+  sort(letters)
+  return letters
+}
+
+fn anagram(subject: Str, candidates: [Str]) -> [Str] {
+  let target = sorted_letters(subject)
+  let base = to_lower(subject)
+  var out: [Str] = []
+  for i in 0..len(candidates) {
+    let cand = candidates[i]
+    if to_lower(cand) != base and sorted_letters(cand) == target {
+      push(out, cand)
+    }
+  }
+  return out
+}
+
+test "examples" {
+  assert anagram("diaper", ["hello", "world", "zombies", "pants"]) == []
+  assert anagram("master", ["stream", "pigeon", "maters"]) == ["stream", "maters"]
+  assert anagram("stone", ["stone", "tones", "banana", "tons", "notes", "Seton"]) == ["tones", "notes", "Seton"]
+  assert anagram("stop", ["stop", "STOP", "tops"]) == ["tops"]
+  assert anagram("sTOp", ["PoTS", "StoP"]) == ["PoTS"]
+}

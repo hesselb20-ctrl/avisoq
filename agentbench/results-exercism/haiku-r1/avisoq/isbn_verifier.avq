@@ -1,0 +1,36 @@
+// ISBN-10 check: 9 digits and a last digit or X (= 10), hyphens ignored.
+fn isbn_verifier(isbn: Str) -> Bool {
+  var digits: [Int] = []
+  for c in isbn {
+    if c == '-' {
+      continue
+    }
+    if c >= '0' and c <= '9' {
+      push(digits, c - '0')
+    } else if c == 'X' and len(digits) == 9 {
+      push(digits, 10)
+    } else {
+      return false
+    }
+  }
+  if len(digits) != 10 {
+    return false
+  }
+  var total = 0
+  for i in 0..10 {
+    total += digits[i] * (10 - i)
+  }
+  return total % 11 == 0
+}
+
+test "examples" {
+  assert isbn_verifier("3-598-21508-8") == true
+  assert isbn_verifier("3-598-21508-9") == false
+  assert isbn_verifier("3-598-21507-X") == true
+  assert isbn_verifier("3598215088") == true
+  assert isbn_verifier("359821507X") == true
+  assert isbn_verifier("359821507x") == false
+  assert isbn_verifier("3-598-2X507-9") == false
+  assert isbn_verifier("") == false
+  assert isbn_verifier("134456729") == false
+}

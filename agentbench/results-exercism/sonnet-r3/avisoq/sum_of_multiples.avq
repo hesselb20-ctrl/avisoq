@@ -1,0 +1,20 @@
+fn sum_of_multiples(factors: [Int], limit: Int) -> Int {
+  var total = 0
+  for i in 1..limit {
+    var hit = false
+    for f in factors {
+      if f > 0 and i % f == 0 { hit = true }
+    }
+    if hit { total += i }
+  }
+  return total
+}
+
+test "basic" {
+  assert sum_of_multiples([3, 5], 1) == 0
+  assert sum_of_multiples([3, 5], 4) == 3
+  assert sum_of_multiples([3, 5], 20) == 78
+  assert sum_of_multiples([0], 10) == 0
+  assert sum_of_multiples([], 10) == 0
+  assert sum_of_multiples([3, 5], 1000) == 233168
+}

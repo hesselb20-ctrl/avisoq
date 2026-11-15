@@ -1,0 +1,34 @@
+fn isbn_verifier(isbn: Str) -> Bool {
+  var count = 0
+  var total = 0
+  for b in isbn {
+    if b == '-' { continue }
+    var v = 0
+    if b >= '0' and b <= '9' {
+      v = b - '0'
+    } else if b == 'X' and count == 9 {
+      v = 10
+    } else {
+      return false
+    }
+    if count >= 10 { return false }
+    total += v * (10 - count)
+    count += 1
+  }
+  if count != 10 { return false }
+  return total % 11 == 0
+}
+
+test "basic" {
+  assert isbn_verifier("3-598-21508-8") == true
+  assert isbn_verifier("3-598-21508-9") == false
+  assert isbn_verifier("3-598-21507-X") == true
+  assert isbn_verifier("3-598-21507-A") == false
+  assert isbn_verifier("359821507X") == true
+  assert isbn_verifier("3598215078X") == false
+  assert isbn_verifier("359821507") == false
+  assert isbn_verifier("") == false
+  assert isbn_verifier("3-598-2X507-9") == false
+  assert isbn_verifier("3132P34035") == false
+  assert isbn_verifier("98245726788") == false
+}

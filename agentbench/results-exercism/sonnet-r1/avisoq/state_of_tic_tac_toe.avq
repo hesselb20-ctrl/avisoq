@@ -1,0 +1,43 @@
+fn wins(board: [Str], p: Int) -> Bool {
+  for i in 0..3 {
+    if board[i][0] == p and board[i][1] == p and board[i][2] == p { return true }
+    if board[0][i] == p and board[1][i] == p and board[2][i] == p { return true }
+  }
+  if board[0][0] == p and board[1][1] == p and board[2][2] == p { return true }
+  if board[0][2] == p and board[1][1] == p and board[2][0] == p { return true }
+  return false
+}
+
+fn state_of_tic_tac_toe(board: [Str]) -> Str {
+  var xs = 0
+  var os = 0
+  for row in board {
+    for b in row {
+      if b == 'X' { xs += 1 }
+      if b == 'O' { os += 1 }
+    }
+  }
+  assert os <= xs
+  assert xs <= os + 1
+  let x_wins = wins(board, 'X')
+  let o_wins = wins(board, 'O')
+  assert not (x_wins and o_wins)
+  if x_wins {
+    assert xs == os + 1
+    return "win"
+  }
+  if o_wins {
+    assert xs == os
+    return "win"
+  }
+  if xs + os == 9 { return "draw" }
+  return "ongoing"
+}
+
+test "ttt" {
+  assert state_of_tic_tac_toe(["XOO", "X  ", "X  "]) == "win"
+  assert state_of_tic_tac_toe(["OXO", " X ", " X "]) == "win"
+  assert state_of_tic_tac_toe(["   ", "X  ", "   "]) == "ongoing"
+  assert state_of_tic_tac_toe(["XOX", "XXO", "OXO"]) == "draw"
+  assert state_of_tic_tac_toe(["   ", "   ", "   "]) == "ongoing"
+}

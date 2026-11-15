@@ -1,0 +1,33 @@
+import "std/arrays"
+import "std/strings"
+
+// Letters of a word, lower-cased and sorted, so that anagrams have equal keys.
+fn letter_key(s: Str) -> [Int] {
+  var bytes: [Int] = []
+  for b in to_lower(s) {
+    push(bytes, b)
+  }
+  sort(bytes)
+  return bytes
+}
+
+fn anagram(subject: Str, candidates: [Str]) -> [Str] {
+  let target = letter_key(subject)
+  let lowered = to_lower(subject)
+  var found: [Str] = []
+  for word in candidates {
+    if to_lower(word) != lowered and letter_key(word) == target {
+      push(found, word)
+    }
+  }
+  return found
+}
+
+test "examples" {
+  assert anagram("diaper", ["hello", "world", "zombies", "pants"]) == []
+  assert anagram("solemn", ["lemons", "cherry", "melons"]) == ["lemons", "melons"]
+  assert anagram("stone", ["stone", "tones", "banana", "tons", "notes", "Seton"]) == ["tones", "notes", "Seton"]
+  assert anagram("stop", ["stop", "STOP", "tops"]) == ["tops"]
+  assert anagram("sTOp", ["PoTS", "StoP", "spot"]) == ["PoTS", "spot"]
+  assert anagram("a", []) == []
+}

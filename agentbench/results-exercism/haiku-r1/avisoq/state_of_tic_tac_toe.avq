@@ -1,0 +1,107 @@
+// Invalid boards stop the program (the signature has no error result).
+
+fn line_win(cells: [Int], a: Int, b: Int, c: Int, p: Int) -> Bool {
+  return cells[a] == p and cells[b] == p and cells[c] == p
+}
+
+fn has_win(cells: [Int], p: Int) -> Bool {
+  if line_win(cells, 0, 1, 2, p) {
+    return true
+  }
+  if line_win(cells, 3, 4, 5, p) {
+    return true
+  }
+  if line_win(cells, 6, 7, 8, p) {
+    return true
+  }
+  if line_win(cells, 0, 3, 6, p) {
+    return true
+  }
+  if line_win(cells, 1, 4, 7, p) {
+    return true
+  }
+  if line_win(cells, 2, 5, 8, p) {
+    return true
+  }
+  if line_win(cells, 0, 4, 8, p) {
+    return true
+  }
+  if line_win(cells, 2, 4, 6, p) {
+    return true
+  }
+  return false
+}
+
+// True when taking away one of the player's marks removes every win of that player,
+// i.e. the winning mark was the last one placed.
+fn removal_clears(cells: [Int], p: Int) -> Bool {
+  for i in 0..9 {
+    if cells[i] == p {
+      var trial = copy(cells)
+      trial[i] = ' '
+      if not has_win(trial, p) {
+        return true
+      }
+    }
+  }
+  return false
+}
+
+fn state_of_tic_tac_toe(board: [Str]) -> Str {
+  var cells: [Int] = []
+  for r in 0..3 {
+    let row = board[r]
+    for c in 0..3 {
+      push(cells, row[c])
+    }
+  }
+  var xs = 0
+  var os = 0
+  for i in 0..9 {
+    if cells[i] == 'X' {
+      xs += 1
+    }
+    if cells[i] == 'O' {
+      os += 1
+    }
+  }
+  if xs != os and xs != os + 1 {
+    assert false
+  }
+  let wx = has_win(cells, 'X')
+  let wo = has_win(cells, 'O')
+  if wx and wo {
+    assert false
+  }
+  if wx {
+    if xs != os + 1 {
+      assert false
+    }
+    if not removal_clears(cells, 'X') {
+      assert false
+    }
+    return "win"
+  }
+  if wo {
+    if xs != os {
+      assert false
+    }
+    if not removal_clears(cells, 'O') {
+      assert false
+    }
+    return "win"
+  }
+  if xs + os == 9 {
+    return "draw"
+  }
+  return "ongoing"
+}
+
+test "examples" {
+  assert state_of_tic_tac_toe(["XOO", "X  ", "X  "]) == "win"
+  assert state_of_tic_tac_toe(["OXO", " X ", " X "]) == "win"
+  assert state_of_tic_tac_toe(["   ", "   ", "   "]) == "ongoing"
+  assert state_of_tic_tac_toe(["XOX", "XXO", "OXO"]) == "draw"
+  assert state_of_tic_tac_toe(["X  ", " O ", "  X"]) == "ongoing"
+  assert state_of_tic_tac_toe(["XXX", "OO ", "   "]) == "win"
+}

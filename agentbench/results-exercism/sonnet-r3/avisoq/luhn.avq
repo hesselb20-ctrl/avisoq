@@ -1,0 +1,37 @@
+fn luhn(value: Str) -> Bool {
+  var digits: [Int] = []
+  for b in value {
+    if b == ' ' {
+      continue
+    }
+    if b < '0' or b > '9' { return false }
+    push(digits, b - '0')
+  }
+  if len(digits) <= 1 { return false }
+  var total = 0
+  var i = len(digits) - 1
+  var pos = 0
+  while i >= 0 {
+    var d = digits[i]
+    if pos % 2 == 1 {
+      d = d * 2
+      if d > 9 { d = d - 9 }
+    }
+    total += d
+    pos += 1
+    i -= 1
+  }
+  return total % 10 == 0
+}
+
+test "basic" {
+  assert luhn("1") == false
+  assert luhn("0") == false
+  assert luhn(" 0") == false
+  assert luhn("0 0") == true
+  assert luhn("4539 3195 0343 6467") == true
+  assert luhn("066 123 478") == false
+  assert luhn("059a") == false
+  assert luhn("055-444-285") == false
+  assert luhn("") == false
+}

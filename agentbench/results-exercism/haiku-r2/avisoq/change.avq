@@ -1,0 +1,43 @@
+import "std/arrays"
+
+// Fewest coins (from `coins`, each usable any number of times) that add up to `target`.
+// Returns the coins in ascending order, or [] when there is no change to give.
+fn change(coins: [Int], target: Int) -> [Int] {
+  if target <= 0 { return [] }
+  let inf = target + 1
+  var best = array(target + 1, inf)
+  best[0] = 0
+  let top = target + 1
+  for t in 1..top {
+    for coin in coins {
+      if coin > 0 and coin <= t and best[t - coin] + 1 < best[t] {
+        best[t] = best[t - coin] + 1
+      }
+    }
+  }
+  if best[target] >= inf { return [] }
+  var picked: [Int] = []
+  var rest = target
+  while rest > 0 {
+    var step = 0
+    for coin in coins {
+      if step == 0 and coin > 0 and coin <= rest and best[rest - coin] == best[rest] - 1 {
+        step = coin
+      }
+    }
+    push(picked, step)
+    rest = rest - step
+  }
+  sort(picked)
+  return picked
+}
+
+test "examples" {
+  assert change([1, 5, 10, 25], 1) == [1]
+  assert change([1, 5, 10, 25, 100], 25) == [25]
+  assert change([1, 5, 10, 25, 100], 15) == [5, 10]
+  assert change([1, 5, 10, 25, 100], 40) == [5, 10, 25]
+  assert change([1, 5, 10, 25], 0) == []
+  assert change([2], 3) == []
+  assert change([3, 7], 14) == [7, 7]
+}

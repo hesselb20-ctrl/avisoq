@@ -1,0 +1,66 @@
+import "std/strings"
+
+fn is_leap(year: Int) -> Bool {
+  if year % 400 == 0 { return true }
+  if year % 100 == 0 { return false }
+  return year % 4 == 0
+}
+
+fn days_in_month(year: Int, month: Int) -> Int {
+  if month == 2 {
+    if is_leap(year) { return 29 }
+    return 28
+  }
+  if month == 4 or month == 6 or month == 9 or month == 11 { return 30 }
+  return 31
+}
+
+// Day of the week (0 = Sunday ... 6 = Saturday), Sakamoto's method.
+fn weekday_of(year: Int, month: Int, day: Int) -> Int {
+  let offsets = [0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4]
+  var y = year
+  if month < 3 { y = y - 1 }
+  let total = y + y / 4 - y / 100 + y / 400 + offsets[month - 1] + day
+  return total % 7
+}
+
+fn day_number(name: Str) -> Int {
+  if name == "Sunday" { return 0 }
+  if name == "Monday" { return 1 }
+  if name == "Tuesday" { return 2 }
+  if name == "Wednesday" { return 3 }
+  if name == "Thursday" { return 4 }
+  if name == "Friday" { return 5 }
+  if name == "Saturday" { return 6 }
+  assert false
+  return 0
+}
+
+fn meetup(year: Int, month: Int, week: Str, dayofweek: Str) -> Str {
+  let target = day_number(dayofweek)
+  var day = 0
+  if week == "teenth" {
+    let first13 = weekday_of(year, month, 13)
+    day = 13 + (target - first13 + 7) % 7
+  } else if week == "last" {
+    let last_day = days_in_month(year, month)
+    let last_dow = weekday_of(year, month, last_day)
+    day = last_day - (last_dow - target + 7) % 7
+  } else {
+    var k = 0
+    if week == "first" {
+      k = 0
+    } else if week == "second" {
+      k = 1
+    } else if week == "third" {
+      k = 2
+    } else if week == "fourth" {
+      k = 3
+    } else {
+      assert false
+    }
+    let first_dow = weekday_of(year, month, 1)
+    day = 1 + (target - first_dow + 7) % 7 + 7 * k
+  }
+  return pad_left(str(year), 4, "0") + "-" + pad_left(str(month), 2, "0") + "-" + pad_left(str(day), 2, "0")
+}

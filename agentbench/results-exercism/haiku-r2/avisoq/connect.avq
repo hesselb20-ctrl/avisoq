@@ -1,0 +1,71 @@
+import "std/strings"
+
+// Depth-first search for a chain of player cells from the start edge to the far edge.
+// O plays top to bottom (start row 0, goal last row); X plays left to right (start column 0, goal last column).
+// Neighbours of (r, c) on the hex parallelogram: same row c-1 and c+1; row above c and c+1; row below c-1 and c.
+fn connects(grid: [Int], rows: Int, cols: Int, player: Int) -> Bool {
+  var seen = array(rows * cols, false)
+  var stack: [Int] = []
+  for sr in 0..rows {
+    for sc in 0..cols {
+      let on_start = (player == 'O' and sr == 0) or (player == 'X' and sc == 0)
+      if on_start and grid[sr * cols + sc] == player {
+        push(stack, sr * cols + sc)
+        seen[sr * cols + sc] = true
+      }
+    }
+  }
+  let dr = [0, 0, -1, -1, 1, 1]
+  let dc = [1, -1, 0, 1, 0, -1]
+  while len(stack) > 0 {
+    let cur = pop(stack)
+    let row = cur / cols
+    let col = cur % cols
+    if (player == 'O' and row == rows - 1) or (player == 'X' and col == cols - 1) {
+      return true
+    }
+    for k in 0..6 {
+      let nr = row + dr[k]
+      let nc = col + dc[k]
+      if nr >= 0 and nr < rows and nc >= 0 and nc < cols {
+        let idx = nr * cols + nc
+        if not seen[idx] and grid[idx] == player {
+          seen[idx] = true
+          push(stack, idx)
+        }
+      }
+    }
+  }
+  return false
+}
+
+fn connect(board: [Str]) -> Str {
+  let rows = len(board)
+  if rows == 0 { return "" }
+  var cols = 0
+  var cells: [Int] = []
+  for r in 0..rows {
+    var count = 0
+    for tok in split(board[r], " ") {
+      if tok != "" {
+        push(cells, tok[0])
+        count += 1
+      }
+    }
+    if r == 0 { cols = count }
+  }
+  if connects(cells, rows, cols, 'O') { return "O" }
+  if connects(cells, rows, cols, 'X') { return "X" }
+  return ""
+}
+
+test "examples" {
+  assert connect([". . . . .", " . . . . .", "  . . . . .", "   . . . . .", "    . . . . ."]) == ""
+  assert connect(["X"]) == "X"
+  assert connect(["O"]) == "O"
+  assert connect([". O . X .", " . X X O .", "  O O O X .", "   . X O X O", "    X O O O X"]) == ""
+  assert connect(["O . . . .", " O . . . .", "  O . . . .", "   O . . . .", "    O . . . ."]) == "O"
+  assert connect(["X X X X X", " . . . . .", "  . . . . .", "   . . . . .", "    . . . . ."]) == "X"
+  assert connect(["X . . . .", " X . . . .", "  X . . . .", "   X . . . .", "    X . . . ."]) == ""
+  assert connect(["O X . . .", " X O . . .", "  . . O . .", "   . . . O .", "    . . . . O"]) == ""
+}

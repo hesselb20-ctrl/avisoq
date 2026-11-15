@@ -1,0 +1,56 @@
+fn cell(board: [Str], r: Int, c: Int) -> Int {
+  return board[r][c]
+}
+
+fn line_wins(board: [Str], mark: Int, r0: Int, c0: Int, dr: Int, dc: Int) -> Bool {
+  for k in 0..3 {
+    if cell(board, r0 + k * dr, c0 + k * dc) != mark { return false }
+  }
+  return true
+}
+
+fn has_won(board: [Str], mark: Int) -> Bool {
+  for i in 0..3 {
+    if line_wins(board, mark, i, 0, 0, 1) { return true }
+    if line_wins(board, mark, 0, i, 1, 0) { return true }
+  }
+  if line_wins(board, mark, 0, 0, 1, 1) { return true }
+  if line_wins(board, mark, 0, 2, 1, -1) { return true }
+  return false
+}
+
+fn state_of_tic_tac_toe(board: [Str]) -> Str {
+  assert len(board) == 3
+  var xs = 0
+  var os = 0
+  for row in board {
+    assert len(row) == 3
+    for b in row {
+      if b == 'X' { xs += 1 }
+      else if b == 'O' { os += 1 }
+    }
+  }
+  assert xs == os or xs == os + 1
+  let x_won = has_won(board, 'X')
+  let o_won = has_won(board, 'O')
+  assert not (x_won and o_won)
+  if x_won {
+    assert xs == os + 1
+    return "win"
+  }
+  if o_won {
+    assert xs == os
+    return "win"
+  }
+  if xs + os == 9 { return "draw" }
+  return "ongoing"
+}
+
+test "basic" {
+  assert state_of_tic_tac_toe(["XOO", "X  ", "X  "]) == "win"
+  assert state_of_tic_tac_toe(["OXO", " X ", " X "]) == "win"
+  assert state_of_tic_tac_toe(["   ", "   ", "   "]) == "ongoing"
+  assert state_of_tic_tac_toe(["XOX", "XXO", "OXO"]) == "draw"
+  assert state_of_tic_tac_toe(["XXX", " O ", "O  "]) == "win"
+  assert state_of_tic_tac_toe(["X  ", " X ", "  O"]) == "ongoing"
+}

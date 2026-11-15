@@ -1,0 +1,25 @@
+// Sum of the distinct positive multiples below `limit` of any of the factors.
+fn sum_of_multiples(factors: [Int], limit: Int) -> Int {
+  var total = 0
+  for n in 1..limit {
+    for f in factors {
+      if f > 0 and n % f == 0 {
+        total += n
+        break
+      }
+    }
+  }
+  return total
+}
+
+test "examples" {
+  assert sum_of_multiples([3, 5], 1) == 0
+  assert sum_of_multiples([3, 5], 4) == 3
+  assert sum_of_multiples([3, 5], 7) == 14
+  assert sum_of_multiples([3, 5], 10) == 23
+  assert sum_of_multiples([3, 5], 100) == 2318
+  assert sum_of_multiples([3, 5], 0) == 0
+  assert sum_of_multiples([], 10) == 0
+  assert sum_of_multiples([4, 6], 15) == 30
+  assert sum_of_multiples([0], 10) == 0
+}

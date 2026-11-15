@@ -1,0 +1,31 @@
+import "std/strings"
+
+fn letter_value(b: Int) -> Int {
+  if b == 'A' or b == 'E' or b == 'I' or b == 'O' or b == 'U' or b == 'L' or b == 'N' or b == 'R' or b == 'S' or b == 'T' { return 1 }
+  if b == 'D' or b == 'G' { return 2 }
+  if b == 'B' or b == 'C' or b == 'M' or b == 'P' { return 3 }
+  if b == 'F' or b == 'H' or b == 'V' or b == 'W' or b == 'Y' { return 4 }
+  if b == 'K' { return 5 }
+  if b == 'J' or b == 'X' { return 8 }
+  if b == 'Q' or b == 'Z' { return 10 }
+  return 0
+}
+
+fn scrabble_score(word: Str) -> Int {
+  let upper = to_upper(word)
+  var total = 0
+  for b in upper {
+    total += letter_value(b)
+  }
+  return total
+}
+
+test "examples" {
+  assert scrabble_score("a") == 1
+  assert scrabble_score("A") == 1
+  assert scrabble_score("cabbage") == 14
+  assert scrabble_score("") == 0
+  assert scrabble_score("zoo") == 12
+  assert scrabble_score("StreeT") == 6
+  assert scrabble_score("OxyphenbutaZone") == 41
+}
