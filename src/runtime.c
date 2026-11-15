@@ -446,15 +446,31 @@ static bool avisoq_path_ok(const vstr *path, char *full) {
 #ifdef _WIN32
   if (!_fullpath(full, path->data, 4096)) return false;
 #else
-  if (!realpath(path->data, full)) { if (path->len >= 4096) return false; memcpy(full, path->data, (size_t)path->len + 1); }
+  if (!realpath(path->data, full)) {
+    /* A file that does not exist yet: resolve the folder it would be in, so that links in the
+       path (macOS keeps temporary folders behind one) are followed just as for the granted roots. */
+    if (path->len >= 4000) return false;
+    char dir[4096];
+    memcpy(dir, path->data, (size_t)path->len + 1);
+    char *slash = strrchr(dir, '/');
+    if (slash && slash != dir) {
+      *slash = 0;
+      char real[4096];
+      if (realpath(dir, real) && strlen(real) + strlen(slash + 1) + 2 < 4096) snprintf(full, 4096, "%s/%s", real, slash + 1);
+      else memcpy(full, path->data, (size_t)path->len + 1);
+    } else memcpy(full, path->data, (size_t)path->len + 1);
+  }
 #endif
   if (avisoq_fs_any) return true;
   for (int i = 0; avisoq_fs_roots[i]; i++) {
-    size_t n = strlen(avisoq_fs_roots[i]);
 #ifdef _WIN32
+    size_t n = strlen(avisoq_fs_roots[i]);
     if (_strnicmp(full, avisoq_fs_roots[i], n) != 0) continue;
 #else
-    if (strncmp(full, avisoq_fs_roots[i], n) != 0) continue;
+    char rootreal[4096];
+    const char *root = realpath(avisoq_fs_roots[i], rootreal) ? rootreal : avisoq_fs_roots[i];
+    size_t n = strlen(root);
+    if (strncmp(full, root, n) != 0) continue;
 #endif
     if (full[n] == 0 || full[n] == '\\' || full[n] == '/') return true;
   }
@@ -585,10 +601,92 @@ static const vstr *avisoq_http(const char *method, const vstr *url, const vstr *
   return result ? result : vstr_from_buf("connection failed");
 }
 #else
+/* Linux and macOS: a small HTTP/1.0 client over a socket. Plain http only; an https address
+   is answered with an error value, because there is no TLS library to rely on here. */
+#include <netdb.h>
+#include <strings.h>
+#include <sys/socket.h>
+#include <sys/time.h>
+#include <unistd.h>
 static const vstr *avisoq_http(const char *method, const vstr *url, const vstr *body, const vstr *ctype, bool *ok) {
-  (void)method; (void)url; (void)body; (void)ctype;
   *ok = false;
-  return vstr_from_buf("http is not available in native builds on this platform yet");
+  const char *u = url->data;
+  bool tls = strncmp(u, "https://", 8) == 0;
+  if (!tls && strncmp(u, "http://", 7) != 0) return vstr_from_buf("bad url");
+  u += tls ? 8 : 7;
+  char host[256], port[8];
+  size_t hn = strcspn(u, ":/?#");
+  if (hn == 0 || hn >= sizeof host) return vstr_from_buf("bad url");
+  memcpy(host, u, hn);
+  host[hn] = 0;
+  for (size_t i = 0; i < hn; i++) if (host[i] >= 'A' && host[i] <= 'Z') host[i] = (char)(host[i] + 32);
+  u += hn;
+  snprintf(port, sizeof port, "%s", tls ? "443" : "80");
+  if (*u == ':') {
+    size_t pn = strspn(u + 1, "0123456789");
+    if (pn == 0 || pn >= sizeof port) return vstr_from_buf("bad url");
+    memcpy(port, u + 1, pn);
+    port[pn] = 0;
+    u += 1 + pn;
+  }
+  if (!avisoq_net_any) {
+    bool granted = false;
+    for (int i = 0; avisoq_net_hosts[i]; i++) if (strcmp(host, avisoq_net_hosts[i]) == 0) granted = true;
+    if (!granted) avisoq_fail(VSITE_NET_DENIED);
+  }
+  if (tls) return vstr_from_buf("https is not available in native builds on this platform yet");
+  const char *path = *u ? u : "/";
+  struct addrinfo hints, *found = NULL;
+  memset(&hints, 0, sizeof hints);
+  hints.ai_socktype = SOCK_STREAM;
+  if (getaddrinfo(host, port, &hints, &found) != 0 || !found) return vstr_from_buf("connection failed");
+  int fd = -1;
+  for (struct addrinfo *a = found; a; a = a->ai_next) {
+    fd = socket(a->ai_family, a->ai_socktype, a->ai_protocol);
+    if (fd < 0) continue;
+    struct timeval limit = { 30, 0 };
+    setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &limit, sizeof limit);
+    setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &limit, sizeof limit);
+    if (connect(fd, a->ai_addr, a->ai_addrlen) == 0) break;
+    close(fd);
+    fd = -1;
+  }
+  freeaddrinfo(found);
+  if (fd < 0) return vstr_from_buf("connection failed");
+  size_t cap = 65536, len = 0;
+  char *buf = (char *)malloc(cap);
+  if (!buf) { close(fd); return vstr_from_buf("connection failed"); }
+  int head = snprintf(buf, cap, "%s %s%s HTTP/1.0\r\nHost: %s\r\nConnection: close\r\n", method, *path == '/' ? "" : "/", path, host);
+  if (body) head += snprintf(buf + head, cap - (size_t)head, "Content-Type: %s\r\nContent-Length: %lld\r\n", ctype ? ctype->data : "text/plain", (long long)body->len);
+  head += snprintf(buf + head, cap - (size_t)head, "\r\n");
+  bool sent = head > 0 && (size_t)head < cap && send(fd, buf, (size_t)head, 0) == head;
+  if (sent && body && body->len) sent = send(fd, body->data, (size_t)body->len, 0) == (ssize_t)body->len;
+  if (!sent) { free(buf); close(fd); return vstr_from_buf("connection failed"); }
+  for (;;) {
+    if (len + 32768 > cap) { cap *= 2; char *b = (char *)realloc(buf, cap); if (!b) { free(buf); close(fd); return vstr_from_buf("connection failed"); } buf = b; }
+    ssize_t got = recv(fd, buf + len, cap - len - 1, 0);
+    if (got <= 0) break;
+    len += (size_t)got;
+  }
+  close(fd);
+  buf[len] = 0;
+  int status = 0;
+  char *end = strstr(buf, "\r\n\r\n");
+  if (len < 12 || strncmp(buf, "HTTP/", 5) != 0 || !end || sscanf(buf, "HTTP/%*s %d", &status) != 1) { free(buf); return vstr_from_buf("connection failed"); }
+  const vstr *result;
+  if (status < 200 || status >= 300) {
+    char msg[48];
+    snprintf(msg, sizeof msg, "http status %d", status);
+    result = vstr_from_buf(msg);
+  } else {
+    size_t n = len - (size_t)(end + 4 - buf);
+    vstr *s = vstr_new((int64_t)n);
+    memcpy(s->data, end + 4, n);
+    result = s;
+    *ok = true;
+  }
+  free(buf);
+  return result;
 }
 #endif
 
