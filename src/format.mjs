@@ -228,6 +228,13 @@ export function format(src) {
         const params = d.params.map((p) => `${p.name}: ${p.mut ? 'mut ' : ''}${fmtType(p.ty)}`).join(', ');
         let head = `${d.private ? 'private ' : ''}fn ${d.name}${typeParams(d)}(${params})`;
         if (d.ret !== 'Unit') head += ` -> ${fmtType(d.ret)}`;
+        if (d.extern && d.extern.tool) {
+          out.push(`tool ${head.replace(/^fn /, '')}`);
+          if (d.extern.tool.max !== null) out.push(`  at most ${d.extern.tool.max}`);
+          for (const x of d.extern.tool.totals) out.push(`  total ${x.param} at most ${x.max}`);
+          for (const c of d.requires) out.push(`  requires ${expr(c.expr)}`);
+          break;
+        }
         if (d.extern) { out.push(`extern ${quote(d.extern.source)}${d.extern.links.map((l) => ` link ${quote(l)}`).join('')} ${head}`); break; }
         if (d.effects.length) head += ` uses ${d.effects.map((e) => e.name).join(', ')}`;
         const contracts = [...d.requires.map((c) => ({ ...c, kw: 'requires' })), ...d.ensures.map((c) => ({ ...c, kw: 'ensures' }))]

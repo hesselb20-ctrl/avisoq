@@ -36,7 +36,8 @@ const elemSize = (ty) => (ty === 'Int' || ty === 'Float' ? 8 : ty === 'Bool' ? 1
 // usable. They are what makes it reasonable to run code nobody has reviewed.
 // host: { name: function } gives the code the functions it declares with extern "host"; they
 // are its only way to reach your program.
-export async function load(path, { allow = [], source, native = false, portable = false, timeLimitMs = 0, memoryLimitMb = 0, host = {} } = {}) {
+export async function load(path, { allow = [], source, native = false, portable = false, timeLimitMs = 0, memoryLimitMb = 0, host = {}, waits = false } = {}) {
+  // waits: true lets host functions return promises; every function of the module then returns one too.
   // native: true compiles to machine code and calls it in this process (src/embed-native.mjs).
   if (native) return (await import('./embed-native.mjs')).loadNative(path, { allow, source, portable, timeLimitMs, memoryLimitMb }, { AvisoqError });
   const src = source ?? readFileSync(path, 'utf8');
@@ -47,7 +48,7 @@ export async function load(path, { allow = [], source, native = false, portable 
     throw new AvisoqError(`${path}:${d.line}:${d.col}: error[${d.code}]: ${d.message}`, { kind: 'compile', diagnostics: compiled.diagnostics });
   }
   let printed = '';
-  const instance = await instantiate(compiled.wasm, compiled.meta, { allow, limits, host, write: (s) => { printed += s; } });
+  const instance = await instantiate(compiled.wasm, compiled.meta, { allow, limits, host, waits, write: (s) => { printed += s; } });
   const ex = instance.exports;
   const { structs, enums } = compiled.meta.types;
   const enc = new TextEncoder(), dec = new TextDecoder();
@@ -135,8 +136,40 @@ export async function load(path, { allow = [], source, native = false, portable 
     return undefined;
   }
 
-  const module = { $functions: compiled.meta.exports, $types: compiled.meta.types, $output: () => { const s = printed; printed = ''; return s; } };
+  const module = { $functions: compiled.meta.exports, $types: compiled.meta.types, $plan: compiled.meta.plan, $hash: compiled.meta.hash, $output: () => { const s = printed; printed = ''; return s; } };
   for (const f of compiled.meta.exports) {
+    const problem = (e) => {
+      if (e instanceof AvisoqError) return e;
+      if (e && e.info) {
+        const info = { ...e.info };
+        if (info.kind === 'time_limit') info.message = `the call ran longer than its time limit of ${timeLimitMs} ms`;
+        if (info.kind === 'out_of_memory' && memoryLimitMb) info.message = `the call used more memory than its limit of ${memoryLimitMb} MB`;
+        return new AvisoqError(`${f.name}: ${info.message}`, info);
+      }
+      return new AvisoqError(`${f.name}: ${e instanceof RangeError ? 'the call ran out of stack (recursion too deep)' : e.message}`, { kind: e instanceof RangeError ? 'stack_overflow' : 'trap' });
+    };
+    if (waits) {
+      const entry = WebAssembly.promising(ex[`fn_${f.name}`]);
+      let busy = false;
+      module[f.name] = async (...args) => {
+        if (args.length !== f.params.length) throw new AvisoqError(`${f.name} takes ${f.params.length} argument${f.params.length === 1 ? '' : 's'} (${f.params.map((p) => `${p.name}: ${p.ty}`).join(', ')}) but got ${args.length}`, { kind: 'argument' });
+        if (busy) throw new AvisoqError(`${f.name}: this module is in the middle of another call`, { kind: 'busy' });
+        busy = true;
+        const mark = ex.__heap.value;
+        if (timeLimitMs > 0) { limits.deadline = performance.now() + timeLimitMs; ex.__fuel.value = 50000; }
+        try {
+          const raws = args.map((a, i) => toRaw(a, f.params[i].ty, `${f.name}: argument '${f.params[i].name}'`));
+          const result = await entry(...raws);
+          return f.ret === 'Unit' ? undefined : fromRaw(result, f.ret);
+        } catch (e) {
+          throw problem(e);
+        } finally {
+          ex.__heap.value = mark;
+          busy = false;
+        }
+      };
+      continue;
+    }
     module[f.name] = (...args) => {
       if (args.length !== f.params.length) throw new AvisoqError(`${f.name} takes ${f.params.length} argument${f.params.length === 1 ? '' : 's'} (${f.params.map((p) => `${p.name}: ${p.ty}`).join(', ')}) but got ${args.length}`, { kind: 'argument' });
       const mark = ex.__heap.value;

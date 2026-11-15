@@ -1,6 +1,6 @@
 # Avisoq language reference
 
-Version 0.15. For a guided introduction read the [tutorial](TUTORIAL.md) first. Code blocks
+Version 0.16. For a guided introduction read the [tutorial](TUTORIAL.md) first. Code blocks
 marked as Avisoq on this page are compiled by the test suite.
 
 ## Source files
@@ -217,6 +217,7 @@ fn main() uses io {
 | `run` | `run_command` | `--allow run:<program>` (or `run`) |
 | `ffi` | calling an `extern` function | `--allow ffi` |
 | `host` | calling a function the embedding program provides (`extern "host"`) | by passing that function in `host` when loading |
+| `tools` | calling a declared `tool` | by `avisoq act` or the gateway, after approval |
 
 A program that needs a capability it was not given does not start. A path outside a granted
 folder, a host or a program that was not granted is refused when it is used.
@@ -310,6 +311,19 @@ extern "shim.c" link "sqlite3" fn count_rows(path: Str) -> Int   // also link a 
 An `extern` function is C code: native backend only, effect `ffi`, and only `Int`
 (`long long`), `Float` (`double`), `Bool` and `Str` (`const char*`) cross over.
 
+A `tool` is something outside the script that it may call, provided by an MCP server when
+the script runs:
+
+```
+tool refund(order: Int, amount_cents: Int) -> Str
+  at most 1                          // calls per run; the call over the cap is refused
+  total amount_cents at most 2000    // one Int argument, added up over the run
+  requires amount_cents > 0          // must hold on every call
+```
+
+Arguments and results are `Int`, `Float`, `Bool` and `Str`. A function that calls a tool
+declares `uses tools`. `avisoq plan` shows what a script can reach; see the README.
+
 `extern "host" fn unit_price(product: Str) -> Int` declares a function that the program
 embedding this code provides (`load(file, { host: { unit_price: ... } })` in JavaScript, or
 `avisoq mcp file.avq --host module.mjs`). Same four types, effect `host`, WebAssembly route.
@@ -332,6 +346,12 @@ Each call can be given a time limit and a memory limit (`timeLimitMs`, `memoryLi
 | `avisoq build file.avq -o out` | a `.wasm` file, or an executable with `--native` |
 | `avisoq call file.avq name '[args]'` | calls one function and prints the result as JSON |
 | `avisoq serve file.avq` | answers function calls as JSON lines |
+| `avisoq plan script.avq` | what a script can do: tools, how often, rules (`--tools`, `--fn`, `--json`) |
+| `avisoq approve script.avq` | records agreement to exactly that |
+| `avisoq act script.avq '[args]'` | runs an approved script (`--tools`, `--policy`, `--log`) |
+| `avisoq replay script.avq` | reruns the last logged run against its log |
+| `avisoq tools --tools file` | prints tool declarations for the servers in the file |
+| `avisoq gateway --tools file --policy file` | MCP server through which an agent submits scripts |
 | `avisoq mcp file.avq` | serves every callable function as a tool over the Model Context Protocol (`--host module.mjs`, `--time-limit`, `--memory`, `--allow`) |
 | `avisoq guide` | prints the guide written for AI models |
 | `avisoq lsp` | language server on stdin and stdout |

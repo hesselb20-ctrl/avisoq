@@ -337,6 +337,28 @@ fn word_count(text: Str) -> Result[Str, Str] uses run {
 }
 ```
 
+**Tools.** A script acts on the outside world only through tools it declares at the top.
+Copy the declarations you are given, and add limits to the ones that change things: tight
+limits are what lets a script run without a person approving it.
+
+```
+tool lookup_order(order: Int) -> Str
+tool refund(order: Int, amount_cents: Int) -> Str
+  at most 1                          // calls per run
+  total amount_cents at most 2000    // this argument, added up over the run
+  requires amount_cents > 0          // must hold on every call
+
+fn handle(order: Int) -> Str uses tools {     // calling a tool needs "uses tools"
+  let info = lookup_order(order)              // tools answer with text, usually JSON
+  ...
+}
+```
+
+Tools take and return `Int`, `Float`, `Bool` and `Str`. Parse JSON answers with `std/json`
+(`json_parse`, `json_get`, `json_int`, `json_str`, `json_at`, `json_len`). A tool call outside
+a loop is counted exactly; one inside a loop needs an `at most` to be bounded. If a tool
+fails, the script stops there.
+
 **Functions of the program that runs your code.** When the task says the host provides a
 function, declare it and call it; the function that calls it needs `uses host`:
 

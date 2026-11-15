@@ -1,0 +1,36 @@
+// Refunds the shipping cost of an order that arrived late, and tells the customer.
+// An agent wrote this; a person approves what it can do before it runs:
+//   avisoq plan refund_late_order.avq
+import "std/json"
+
+// The order as JSON: {"id": 1, "email": "...", "days_late": 3, "shipping_cents": 499, "refunded": false}
+tool lookup_order(order: Int) -> Str
+
+tool refund(order: Int, amount_cents: Int) -> Str
+  at most 1
+  total amount_cents at most 2000
+  requires amount_cents > 0
+
+tool send_email(to: Str, subject: Str, body: Str) -> Str
+  at most 1
+
+fn handle(order: Int) -> Str uses tools
+  requires order > 0
+{
+  let found = json_parse(lookup_order(order))
+  match found {
+    Err(error) => { return "could not read order " + str(order) + ": " + error }
+    Ok(info) => {
+      let late = unwrap_or(json_int(json_get(info, "days_late")), 0)
+      let shipping = unwrap_or(json_int(json_get(info, "shipping_cents")), 0)
+      let email = unwrap_or(json_str(json_get(info, "email")), "")
+      if unwrap_or(json_bool(json_get(info, "refunded")), false) { return "order " + str(order) + " was already refunded" }
+      if late < 2 or shipping <= 0 { return "order " + str(order) + " does not qualify" }
+      let receipt = refund(order, shipping)
+      if len(email) > 0 {
+        let sent = send_email(email, "Your shipping refund", "Your order arrived " + str(late) + " days late, so we refunded the shipping cost. " + receipt)
+      }
+      return "refunded " + str(shipping) + " cents on order " + str(order)
+    }
+  }
+}

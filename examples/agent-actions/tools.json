@@ -1,0 +1,1 @@
+{ "servers": { "shop": { "command": "node", "args": ["shop-server.mjs"] } } }

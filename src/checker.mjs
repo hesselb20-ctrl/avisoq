@@ -14,7 +14,7 @@ try {
 } catch { /* the hint is optional */ }
 import { elemOf, isArr, isMap, mangle, mapParts, showType, substType, typeArgs, typeHead, unify, walk } from './types.mjs';
 
-export const EFFECTS = new Set(['io', 'time', 'fs', 'net', 'run', 'ffi', 'host']);
+export const EFFECTS = new Set(['io', 'time', 'fs', 'net', 'run', 'ffi', 'host', 'tools']);
 const BUILTIN_EFFECTS = { print: 'io', now_ms: 'time', read_file: 'fs', write_file: 'fs', file_exists: 'fs', http_get: 'net', http_post: 'net', run_command: 'run' };
 const BUILTINS = new Set(['print', 'len', 'array', 'float', 'int', 'sqrt', 'now_ms', 'str', 'substr', 'byte_at',
   'put', 'get', 'get_or', 'has', 'keys', 'remove', 'copy', 'push', 'pop', 'chr', 'read_file', 'write_file', 'file_exists', 'http_get', 'http_post',
@@ -284,10 +284,13 @@ export function check(program, diags) {
         if (p.mut || (p.ty !== '?' && !ok(p.ty))) err('E0802', `extern function '${owner.name}' cannot take ${p.mut ? 'a mut parameter' : showType(p.ty)}`, p, 'an extern function takes Int, Float, Bool and Str; convert other values on the Avisoq side or in the C file');
       }
       if (owner.ret !== 'Unit' && owner.ret !== '?' && !ok(owner.ret)) err('E0802', `extern function '${owner.name}' cannot return ${showType(owner.ret)}`, owner, 'an extern function returns Int, Float, Bool, Str or nothing');
-      owner.paramSyms = owner.params.map((p) => ({ name: p.name, ty: p.ty, isParam: true }));
-      owner.locals = [];
-      if (owner.ret !== 'Unit') { owner.resultSym = { name: 'result', ty: owner.ret, isResult: true }; owner.locals.push(owner.resultSym); }
-      return;
+      // A tool with rules on its arguments is checked like a function with an empty body.
+      if (!(owner.extern.tool && owner.requires.length)) {
+        owner.paramSyms = owner.params.map((p) => ({ name: p.name, ty: p.ty, isParam: true }));
+        owner.locals = [];
+        if (owner.ret !== 'Unit') { owner.resultSym = { name: 'result', ty: owner.ret, isResult: true }; owner.locals.push(owner.resultSym); }
+        return;
+      }
     }
     const ret = isTest ? 'Unit' : owner.ret;
     const allowed = isTest ? new Set() : owner.effectSet;
@@ -1446,7 +1449,7 @@ export function check(program, diags) {
       else if (mv.sym.declLoop !== mv.loop || later) mv.report(); else mv.node.moved = true;
     }
 
-    if (ret !== 'Unit' && !alwaysReturns(owner.body)) {
+    if (ret !== 'Unit' && !owner.extern && !alwaysReturns(owner.body)) {
       err('E0205', `${label} does not return a value on every path`, owner, `make sure every branch ends in a return of type ${ret}`);
     }
   }

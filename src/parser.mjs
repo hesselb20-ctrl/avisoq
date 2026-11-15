@@ -168,7 +168,28 @@ export function parse(src) {
       // extern "host": a function the embedding program provides; calling it needs the host effect.
       if (typeParams.length) fail('an extern function cannot have type parameters');
       const none = Object.assign([], { closeLine: prevLine });
-      return ended({ kind: 'Fn', name: name.value, typeParams, ...extra, params, ret, effects: [{ name: ext.source === 'host' ? 'host' : 'ffi', line: kw.line, col: kw.col }], requires: [], ensures: [], body: none, extern: ext, line: kw.line, col: name.col });
+      const requires = [];
+      if (ext.tool) {
+        // tool name(...) -> T   at most 3   total amount at most 5000   requires amount > 0
+        const word = (w) => peek().kind === 'id' && peek().value === w;
+        const count = (what) => { const k = peek(); if (k.kind !== 'int') fail(`${what} is followed by a whole number`, 'for example: at most 3'); next(); return Number(k.value); };
+        const atMost = (what) => { if (!word('at')) fail(`expected 'at most' after ${what}`); next(); if (!word('most')) fail("expected 'most' after 'at'", 'write: at most 3'); next(); return count('at most'); };
+        for (;;) {
+          if (word('at')) { if (ext.tool.max !== null) fail('this tool already has an at most clause'); ext.tool.max = atMost('the tool'); }
+          else if (word('total')) {
+            next();
+            const pn = ident('the name of a parameter to add up');
+            if (!params.some((p) => p.name === pn.value && p.ty === 'Int')) fail(`'${pn.value}' is not an Int parameter of this tool`, 'total adds up one Int parameter over all calls: total amount_cents at most 5000', pn);
+            ext.tool.totals.push({ param: pn.value, max: atMost(`total ${pn.value}`) });
+          } else if (isKw('requires')) {
+            const k = next();
+            const start = peek().pos;
+            const expr = parseExpr();
+            requires.push({ expr, text: src.slice(start, prevEnd), line: k.line, col: k.col });
+          } else break;
+        }
+      }
+      return ended({ kind: 'Fn', name: name.value, typeParams, ...extra, params, ret, effects: [{ name: ext.tool ? 'tools' : ext.source === 'host' ? 'host' : 'ffi', line: kw.line, col: kw.col }], requires, ensures: [], body: none, extern: ext, line: kw.line, col: name.col });
     }
     const effects = [];
     if (isKw('uses')) {
@@ -634,6 +655,11 @@ export function parse(src) {
       d = parseFn({ source, links });
       program.fns.push(d);
     }
+    else if (peek().kind === 'id' && peek().value === 'tool' && ahead(1).kind === 'id') {
+      // A tool the script may call: provided from outside, with limits the runtime enforces.
+      d = parseFn({ source: 'host', links: [], tool: { max: null, totals: [] } });
+      program.fns.push(d);
+    }
     else if (isKw('let')) {
       // A constant: let LIMIT = 5000
       const kw = next();
@@ -643,7 +669,7 @@ export function parse(src) {
       program.consts.push(d);
     }
     else {
-      fail(`expected 'fn', 'struct', 'enum', 'let', 'import' or 'test' at top level but found ${show(peek())}`,
+      fail(`expected 'fn', 'tool', 'struct', 'enum', 'let', 'import' or 'test' at top level but found ${show(peek())}`,
         isKw('var') ? 'there are no global variables; a top-level let is a constant' : 'all code lives inside functions; the program starts at fn main()');
     }
     if (isPrivate) d.private = true;

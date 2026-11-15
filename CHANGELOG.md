@@ -4,6 +4,25 @@ Avisoq is an experimental preview. Until 1.0, any release may change the languag
 release below passed the full test suite on both backends on Windows; no other platform has
 been tested.
 
+## 0.16 (15 November 2026)
+
+Avisoq is now aimed at one job: scripts that AI agents write to act through tools.
+
+- `tool name(args) -> T` declares a tool the script may call, with `at most N`,
+  `total <param> at most N` and `requires` clauses. New effect `tools`.
+- `avisoq plan` prints what a script can do before it runs: the tools it can reach, how often
+  (a proof when the code cannot do more, otherwise a cap), and the rules on their arguments.
+- `avisoq approve` ties a person's agreement to the compiled script and its limits;
+  `--policy file.json` lets scripts inside set bounds run without asking.
+- `avisoq act` runs an approved script against MCP servers named in `--tools`, enforces the
+  caps before each call leaves, and logs every call. `avisoq replay` reruns the last run
+  against its log.
+- `avisoq gateway` is an MCP server for the agent itself: it lists the tools as declarations,
+  checks scripts, runs the ones the policy covers and asks for approval of the rest.
+- `avisoq tools` prints the declarations for the tools of any MCP server.
+- Tool calls may take time: scripts are suspended while a tool answers, and the waiting does
+  not count against the time limit.
+
 ## 0.15 (15 November 2026)
 
 - Limits per call when embedding: `timeLimitMs` and `memoryLimitMb` in JavaScript,

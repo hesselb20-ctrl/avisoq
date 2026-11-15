@@ -2,78 +2,93 @@
 
 # Avisoq
 
-The safe place to run code an AI just wrote.
+The language AI agents write their actions in.
 
-Avisoq is a small language for the code you did not write yourself and do not have time to
-review: a function an agent produced a second ago, a rule a customer typed in, a plug-in. You
-call it from Python or JavaScript, or hand it to an agent as a tool, and four things hold
-without anyone reading the code first:
-
-- **It can only do what you granted.** A function's signature says whether it prints, reads
-  files, uses the network or calls back into your program. Nothing is granted by default.
-- **It runs on a budget.** Every call can carry a time limit and a memory
-  limit; going over is an error in your language, and the next call works.
-- **It fails loudly instead of answering wrongly.** Overflow, a bad index, a missing key or a
-  broken contract stop the call with a message that says where.
-- **It is fast enough to leave in.** Native code or sandboxed WebAssembly, no garbage
-  collector, and agent-written Avisoq has run level with or ahead of agent-written Rust.
-
-A model learns the whole language from [one page](docs/AGENT_GUIDE.md): in a benchmark on
-tasks the author did not write, two Claude models scored 119 of 120 in Avisoq, the same as in
-Python.
+An agent that works through tools makes one call at a time, and someone has to trust each
+call, or approve each call, or look away. Avisoq lets the agent write the whole job as one
+short script instead, and **what that script can do is known before it runs**: which tools it
+can reach, how many times, and under which rules. That is what a person, or a policy, approves.
 
 ```
-// tools.avq
-import "std/strings"
+tool lookup_order(order: Int) -> Str
 
-// The unit price of a product in cents. The program around this file provides it:
-// it is the only thing this code can reach.
-extern "host" fn unit_price(product: Str) -> Int
+tool refund(order: Int, amount_cents: Int) -> Str
+  at most 1
+  total amount_cents at most 2000
+  requires amount_cents > 0
 
-// Prices an order in cents, with 10% off from 10 units.
-fn quote(product: Str, quantity: Int) -> Result[Int, Str] uses host
-  requires quantity > 0
+tool send_email(to: Str, subject: Str, body: Str) -> Str
+  at most 1
+
+fn handle(order: Int) -> Str uses tools
+  requires order > 0
 {
-  let price = unit_price(to_lower(trim(product)))
-  if price < 0 { return Err(error: "unknown product: " + product) }
-  let subtotal = price * quantity
-  return Ok(value: if quantity >= 10 then subtotal - subtotal / 10 else subtotal)
+  ...
 }
 ```
 
-Call it from your program, with limits:
+```
+$ avisoq plan refund_late_order.avq --tools tools.json
 
-```js
-import { load } from 'avisoq';
+refund_late_order.avq: handle(order: Int) -> Str   [823f5803db24]
 
-const tools = await load('tools.avq', {
-  timeLimitMs: 50, memoryLimitMb: 64,                  // per call
-  host: { unit_price: (product) => prices[product] ?? -1 },
-});
-tools.quote('widget', 12);   // { variant: 'Ok', value: 2700 }
-tools.quote('widget', 0);    // throws: precondition violated: requires quantity > 0
+It can call:
+  lookup_order(order: Int) -> Str   [shop, only reads]
+      at most once (the code cannot do more)
+  refund(order: Int, amount_cents: Int) -> Str   [shop, can destroy]
+      at most once (the code cannot do more)
+      amount_cents adds up to at most 2000 over the whole run
+      every call must satisfy: amount_cents > 0
+  send_email(to: Str, subject: Str, body: Str) -> Str   [shop]
+      at most once (the code cannot do more)
+
+It cannot print, read or write files, use the network, start programs, or call any other tool.
+It refuses to start unless: order > 0.
+Each run is stopped after 5000 ms of its own work or 256 MB.
 ```
 
-Or give it to an agent. This serves every function in the file as a tool over the Model
-Context Protocol, with the schema taken from the types and the description from the comment:
+That text is not a description someone wrote. The compiler worked it out from the code, and
+the runtime holds the script to it:
 
-```
-avisoq mcp tools.avq --host host.mjs
-```
+- **Nothing but the declared tools.** A script has no files, no network and no ambient access.
+  A tool it does not declare cannot be called, and a tool the servers do not offer cannot be
+  declared into being.
+- **Counted, and capped.** "At most once (the code cannot do more)" is a count of the call
+  sites; a call in a loop is "stopped if it tries more" and the call over the cap is refused
+  before it leaves. A `total` adds up one argument, such as money, over the whole run.
+- **Approval is tied to the script.** `avisoq approve` records agreement to exactly this code
+  and these limits. Change either and it will not run until someone agrees again. A policy
+  file can pre-approve scripts that stay inside set bounds, so routine work needs nobody.
+- **Everything is logged and can be replayed.** Every call, its arguments and its answer go to
+  a log, and `avisoq replay` reruns the script against that log without touching anything.
+- **It fails loudly.** Overflow, a bad index, a broken rule or a failed tool stop the script
+  with a message; it does not carry on with a wrong number.
 
-A working version of both is in [`examples/agent-tools`](examples/agent-tools/README.md).
+**For the agent**, `avisoq gateway` is one MCP server that replaces direct access to the real
+tools. The agent reads the tool list, writes a script, and submits it; the gateway runs it at
+once if the policy covers it, and otherwise answers with the manifest for a person to approve.
+A model learns the language from [one page](docs/AGENT_GUIDE.md).
 
-**What this is not.** It is not a general-purpose language with an ecosystem, and agents do
-not write it faster than Python or Rust (they take 15 to 58% longer, measured). It is days
-old, has had one author, and has only been run on Windows. See [Known limits](#known-limits).
+Try it: [`examples/agent-actions`](examples/agent-actions/README.md) has a stand-in shop
+(orders, refunds, email) as an MCP server, a script, a policy, and the commands above.
+
+**What this is not, yet.** It is days old, written by one person with an AI coding agent, and
+has only been run on Windows. Nobody has tried to break it. Tools take and return numbers,
+booleans and text only. Treat it as a working design to try and to attack, not as a security
+product to rely on. See [Known limits](#known-limits).
+
+Avisoq is also a complete small language underneath (types, contracts proven at compile time,
+a native backend, a standard library), and its functions can be
+[embedded in Python and JavaScript or served as tools](#use-it-from-javascript-or-python).
+The rest of this page covers that.
 
 <img src=".github/assets/figure/scene.webp" width="100%" alt="Three beats: a mandelbrot benchmark computed on one thread with every check on in 112 ms against 108 ms for C++; the same loop written as a sum, spread over 8 threads and 8 lanes; and the result, 4.6 ms against 15 ms for C++ parallelised by hand with OpenMP.">
 
-Version 0.15. One front end, two backends (native machine code through GCC, and sandboxed
+Version 0.16. One front end, two backends (native machine code through GCC, and sandboxed
 WebAssembly), a standard library written in Avisoq, a formatter, a compile-time contract prover,
 a language server, a package manager and a differential fuzzer. The test suites pass on both
-backends: 384 compiler cases each, 21 + 65 embedding, 41 limits and agent-tool, and 18 interop
-tests, plus 26 editor, 17 package and 10 sandbox tests.
+backends: 384 compiler cases each, 57 for scripts and the gateway, 21 + 65 embedding, 41 limits and
+agent-tool, and 18 interop tests, plus 26 editor, 17 package and 10 sandbox tests.
 
 **Documentation:** [tutorial](docs/TUTORIAL.md) (fifteen minutes, every example tested) ·
 [language reference](docs/REFERENCE.md) · [changelog](CHANGELOG.md) ·
@@ -98,6 +113,8 @@ avisoq run   program.avq --allow io --native     # machine code
 avisoq test  program.avq
 avisoq fmt   program.avq                         # canonical layout
 avisoq build program.avq --native --portable -o program.exe
+avisoq plan | approve | act | replay script.avq   # scripts that act through tools (see above)
+avisoq gateway --tools tools.json --policy policy.json   # what the agent connects to
 avisoq mcp   tools.avq                           # its functions as tools for an AI agent
 avisoq guide                                     # the language guide written for AI agents
 avisoq lsp                                       # language server
@@ -467,6 +484,11 @@ on an idle machine with 8 logical cores (Zen 4, AVX-512). Ratios are relative to
   slower on long chains of additions and on dividing very large numbers.
 - **`std/json` reads numbers as Floats** and does not round them as exactly as a full JSON
   library; whole numbers up to 2^53 are exact.
+- **Scripts and tools are new.** Tool arguments and results are `Int`, `Float`, `Bool` and
+  `Str` (JSON travels as text); a failed tool call stops the script, it cannot be caught; the
+  call counts treat every loop as unbounded even when its length is fixed; approval is a file
+  next to the script, with no signatures or users behind it; and scripts run on the
+  WebAssembly route through Node only.
 - **The sandbox has soft spots.** On the WebAssembly route, maps live on the host side and are
   not counted by the memory limit (the time limit still stops a runaway). On the native route
   there is no virtual machine: the limits and the capability checks are the compiler's and

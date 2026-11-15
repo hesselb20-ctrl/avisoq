@@ -9,3 +9,7 @@ agentbench/work-hard/
 agentbench/work-expert/
 *.dll
 agentbench/work-exercism/
+shop-state.json
+*.runs.jsonl
+*.approval.json
+avisoq-scripts/

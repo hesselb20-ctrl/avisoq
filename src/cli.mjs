@@ -21,6 +21,14 @@ commands:
   serve   answer function calls as JSON lines on stdin/stdout, for other languages
   mcp     serve every function of the file as a tool for AI agents (Model Context Protocol)
 
+scripts that act through tools:
+  plan <script>               what the script can do: which tools, how often, under which rules
+  approve <script>            agree to exactly that; any change to the script needs a new approval
+  act <script> '[args]'       run an approved script; every tool call is logged
+  replay <script>             rerun the last logged run against its log, calling nothing
+  tools                       print the declarations of the tools in --tools, ready to paste
+  gateway                     let an AI agent submit scripts: an MCP server that checks, asks and runs
+
 packages (run in the project folder):
   init [name]                  create avisoq.json
   add <name> <path|git url>    add a dependency (--rev <tag or commit> for git)
@@ -37,6 +45,10 @@ options:
   --budget          with --shared: count steps, so callers can set a time limit per call
   --time-limit <ms> call, serve, mcp: stop any call that runs longer than this
   --host <file.mjs> mcp: a JavaScript module whose exports the code may call (extern "host")
+  --tools <file>    the MCP servers the tools come from: { "servers": { "name": { "command", "args" } } }
+  --policy <file>   what may run without asking a person: { "tools": { "name": { "max": 1 } } }
+  --log <file>      where act writes its log (default: <script>.runs.jsonl)
+  --fn <name>       which function of the script to start, when it has more than one
   --portable        native only: build for any recent 64-bit x86 CPU, not just this one
   --no-sandbox      native only: run without the reduced-rights launcher (Windows)
   --memory <MB>     stop the program, or a call, if it uses more memory than this (run: native only)
@@ -58,6 +70,11 @@ for (let i = 0; i < args.length; i++) {
   else if (a === '--shared') { flags.shared = true; flags.native = true; }
   else if (a === '--budget') flags.budget = true;
   else if (a === '--host') flags.host = args[++i];
+  else if (a === '--tools') flags.tools = args[++i];
+  else if (a === '--policy') flags.policy = args[++i];
+  else if (a === '--log') flags.log = args[++i];
+  else if (a === '--fn') flags.fn = args[++i];
+  else if (a === '--dir') flags.dir = args[++i];
   else if (a === '--time-limit') flags.timeLimit = Number(args[++i]) || 0;
   else if (a === '--memory') flags.memory = Number(args[++i]) || 0;
   else if (a === '--allow') flags.allow = (args[++i] ?? '').split(',').filter(Boolean);
@@ -85,6 +102,10 @@ if (cmd === 'lsp') {
   const { startServer } = await import('./lsp.mjs');
   startServer();
   await new Promise(() => {}); // serve until the editor closes the connection
+}
+if (['plan', 'approve', 'act', 'replay', 'tools', 'gateway'].includes(cmd)) {
+  const { runCommand } = await import('./act-cli.mjs');
+  process.exit(await runCommand(cmd, pos.slice(1), flags));
 }
 if (cmd === 'mcp' && file) {
   const { mcp } = await import('./mcp.mjs');

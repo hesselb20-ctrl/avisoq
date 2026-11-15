@@ -214,7 +214,7 @@ const fmtFloat = (x) => (Object.is(x, -0) ? '-0.0' : Number.isInteger(x) && Math
 // Instantiates a compiled module. Only capabilities listed in `allow` are wired in.
 // limits: { deadline } (performance.now() value, 0 for none), read each time the program's step budget runs out.
 // host: { name: function } for the functions the program declares with extern "host".
-export async function instantiate(wasm, meta, { allow = [], write = (s) => process.stdout.write(s), limits = null, host = {} } = {}) {
+export async function instantiate(wasm, meta, { allow = [], write = (s) => process.stdout.write(s), limits = null, host = {}, waits = false } = {}) {
   const grants = parseGrants(allow);
   let memory, instance;
   let parts = [];
@@ -417,23 +417,46 @@ export async function instantiate(wasm, meta, { allow = [], write = (s) => proce
   }
   // Functions of the embedding program. Only Int, Float, Bool and Str cross over.
   const hostFail = (kind, message) => { const err = new AvisoqFailure(message); err.info = { kind, message }; throw err; };
-  imports.host = Object.fromEntries((meta.host ?? []).map((h) => [h.name, (...raw) => {
-    const f = host[h.name];
-    if (typeof f !== 'function') hostFail('capability_denied', `host function '${h.name}' was not provided`);
-    const args = raw.map((v, i) => (h.params[i] === 'Int' ? (v >= -9007199254740991n && v <= 9007199254740991n ? Number(v) : v) : h.params[i] === 'Bool' ? v !== 0 : h.params[i] === 'Str' ? dec.decode(strBytes(v)) : v));
-    let r;
-    try { r = f(...args); } catch (e) { if (e instanceof AvisoqFailure) throw e; hostFail('host', `host function '${h.name}' failed: ${e && e.message ? e.message : String(e)}`); }
-    const wrong = (want) => hostFail('host', `host function '${h.name}' must return ${want} but returned ${typeof r === 'object' ? JSON.stringify(r) : String(r)}`);
-    if (h.ret === 'Unit') return undefined;
-    if (h.ret === 'Int') {
-      if (typeof r === 'number' && Number.isInteger(r)) return BigInt(r);
-      if (typeof r === 'bigint' && r >= -(2n ** 63n) && r < 2n ** 63n) return r;
-      return wrong('an Int');
+  // waits: host functions may return promises; the program is suspended until they settle
+  // (WebAssembly promise integration), and its exports must be called through WebAssembly.promising.
+  const hostKind = (e) => (e && typeof e.kind === 'string' ? e.kind : 'host');
+  imports.host = Object.fromEntries((meta.host ?? []).map((h) => {
+    const what = h.tool ? 'tool' : 'host function';
+    const before = (raw) => {
+      if (typeof host[h.name] !== 'function') hostFail('capability_denied', `${what} '${h.name}' was not provided`);
+      return raw.map((v, i) => (h.params[i] === 'Int' ? (v >= -9007199254740991n && v <= 9007199254740991n ? Number(v) : v) : h.params[i] === 'Bool' ? v !== 0 : h.params[i] === 'Str' ? dec.decode(strBytes(v)) : v));
+    };
+    const failed = (e) => { if (e instanceof AvisoqFailure) throw e; hostFail(hostKind(e), e && e.kind ? e.message : `${what} '${h.name}' failed: ${e && e.message ? e.message : String(e)}`); };
+    const after = (r) => {
+      const wrong = (want) => hostFail('host', `${what} '${h.name}' must return ${want} but returned ${typeof r === 'object' ? JSON.stringify(r) : String(r)}`);
+      if (h.ret === 'Unit') return undefined;
+      if (h.ret === 'Int') {
+        if (typeof r === 'number' && Number.isInteger(r)) return BigInt(r);
+        if (typeof r === 'bigint' && r >= -(2n ** 63n) && r < 2n ** 63n) return r;
+        return wrong('an Int');
+      }
+      if (h.ret === 'Float') return typeof r === 'number' ? r : wrong('a Float');
+      if (h.ret === 'Bool') return typeof r === 'boolean' ? (r ? 1 : 0) : wrong('a Bool');
+      return typeof r === 'string' ? newStr(enc.encode(r)) : wrong('a Str');
+    };
+    if (waits) {
+      return [h.name, new WebAssembly.Suspending(async (...raw) => {
+        const args = before(raw);
+        const started = performance.now();
+        let r;
+        try { r = await host[h.name](...args); } catch (e) { failed(e); }
+        // time spent waiting for the outside world is not the program's own
+        if (limits && limits.deadline) limits.deadline += performance.now() - started;
+        return after(r);
+      })];
     }
-    if (h.ret === 'Float') return typeof r === 'number' ? r : wrong('a Float');
-    if (h.ret === 'Bool') return typeof r === 'boolean' ? (r ? 1 : 0) : wrong('a Bool');
-    return typeof r === 'string' ? newStr(enc.encode(r)) : wrong('a Str');
-  }]));
+    return [h.name, (...raw) => {
+      const args = before(raw);
+      let r;
+      try { r = host[h.name](...args); } catch (e) { failed(e); }
+      return after(r);
+    }];
+  }));
   for (const c of Object.keys(caps)) {
     if (grants.names.has(c)) { imports[c] = caps[c]; continue; }
     // Not granted: the module links, but every entry point refuses to act.

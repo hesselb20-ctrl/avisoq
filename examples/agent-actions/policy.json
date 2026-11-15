@@ -1,0 +1,9 @@
+{
+  "tools": {
+    "lookup_order": {},
+    "list_late_orders": {},
+    "refund": { "max": 1, "totals": { "amount_cents": 2000 } },
+    "send_email": { "max": 1 }
+  },
+  "effects": []
+}

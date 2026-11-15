@@ -2,7 +2,9 @@
 import { Module, I32, I64, F64, uleb, sleb, f64bytes } from './wasm.mjs';
 
 import { FAIL } from './fail.mjs';
+import { createHash } from 'node:crypto';
 import { callableFns, describeFn, describeTypes } from './exports.mjs';
+import { manifestOf } from './manifest.mjs';
 import { containerTest, elemOf, isArr, isMap, mapParts, walk } from './types.mjs';
 
 export { FAIL };
@@ -799,7 +801,8 @@ export function codegen(program, opts = {}) {
 
   const meta = {
     sites,
-    host: hostFns.map((f) => ({ name: f.name, params: f.params.map((p) => p.ty), ret: f.ret })),
+    host: hostFns.map((f) => ({ name: f.name, params: f.params.map((p) => p.ty), ret: f.ret, ...(f.extern.tool ? { tool: true } : {}) })),
+    ...(opts.exports ? { plan: manifestOf(program) } : {}),
     effects: program.main ? [...program.main.effectSet] : [],
     tests: program.tests.map((t) => ({ name: t.name, line: t.line })),
     hasMain: !!program.main,
@@ -808,6 +811,8 @@ export function codegen(program, opts = {}) {
       types: describeTypes(program),
     } : {}),
   };
+  // What an approval is tied to: the code itself (without positions or file names) and its manifest.
+  if (opts.exports) meta.hash = createHash('sha256').update(m.encode()).update(JSON.stringify(meta.plan)).digest('hex');
   m.customs.push({ name: 'avisoq.meta', text: JSON.stringify(meta) });
   return { wasm: m.encode(), meta };
 }
