@@ -149,6 +149,26 @@ fn chatty(id: Int) -> Str uses tools, io { print("x")
   report('policy: other capabilities must be listed', /capability 'io'/.test(p({ tools: { read_note: {} } }, 'chatty')) && p({ tools: { read_note: {} }, effects: ['io'] }, 'chatty') === null);
 }
 
+// ---- which function a script starts at, and what a policy says in words ----
+{
+  const { entryOf, showPolicy } = await import('../src/act.mjs');
+  const two = await planOf(`
+fn one(id: Int) -> Str uses tools { return read_note(id) }
+fn all(n: Int) -> Str uses tools { return one(n) + one(n + 1) }
+`);
+  report('a script starts at the function nothing else calls', entryOf(two) === 'all' && entryOf(two, 'one') === 'one');
+  const many = await planOf('fn a() -> Int { return 1 }\nfn b() -> Int { return 2 }\n');
+  let message = '';
+  try { entryOf(many, undefined, 'in the "function" argument'); } catch (e) { message = e.message; }
+  report('two starting points must be told apart', /say which function to start in the "function" argument \(there are: a, b\)/.test(message), message);
+  const text = showPolicy({ tools: { read_note: {}, pay: { max: 1, totals: { cents: 500 } } } });
+  report('a policy can be read by whoever writes scripts', /read_note: any number of calls/.test(text) && /pay: at most 1 call per run \(declare: at most 1\), cents adding up to at most 500/.test(text) && /no printing/.test(text), text);
+  const both = policyProblem({ tools: { pay: { max: 1, totals: { cents: 5 } } } }, await planOf('fn f(a: Int) -> Str uses tools, io { print("x")\n  return pay(a, 1) + pay(a, 2) }\n'), 'f');
+  report('every way a script falls outside the policy is reported at once', /at most 1 time/.test(both) && /total of 5/.test(both) && /capability 'io'/.test(both), both);
+  const main = await prepare(at('m.avq'), { source: 'fn main(order: Int) -> Str { return "x" }\n' }).then(() => 'compiled', (e) => `${e.diagnostics?.[0]?.code} ${e.diagnostics?.[0]?.hint}`);
+  report('main with parameters points to a named function', /^E0401 give the function another name/.test(main), main);
+}
+
 // ---- the command line, against a real MCP server ----
 const script = at('refund_late_order.avq');
 copyFileSync(join(example, 'refund_late_order.avq'), script);

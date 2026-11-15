@@ -12,7 +12,7 @@
 // the cap in the declaration, which the runtime enforces, and a count of the call sites, which
 // is a proof when no call sits in a loop or in a recursive function.
 import { callableFns } from './exports.mjs';
-import { showType } from './types.mjs';
+import { showType, walk } from './types.mjs';
 
 const MANY = Infinity;
 const add = (a, b) => { const out = new Map(a); for (const [k, n] of b) out.set(k, (out.get(k) ?? 0) + n); return out; };
@@ -89,12 +89,16 @@ export function manifestOf(program) {
     };
   };
   const entries = callableFns(program).concat(program.main && !callableFns(program).includes(program.main) ? [program.main] : []);
+  // A function no other function of the script calls is where the script starts.
+  const called = new Set();
+  for (const f of program.fns) if (!f.extern) for (const st of f.body) walk(st, (n) => { if (n.kind === 'Call' && n.fn) called.add(n.fn); });
   return {
     tools: tools.map((t) => ({ name: t.name, params: t.params.map((p) => ({ name: p.name, ty: p.ty })), ret: t.ret, max: t.extern.tool.max, totals: t.extern.tool.totals, rules: t.requires.map((c) => c.text) })),
     entries: entries.map((f) => {
       const counted = bounds(f) ?? new Map();
       return {
         name: f.name,
+        root: !called.has(f),
         signature: `${f.name}(${f.params.map((p) => `${p.name}: ${showType(p.ty)}`).join(', ')})${f.ret === 'Unit' ? '' : ` -> ${showType(f.ret)}`}`,
         effects: [...f.effectSet].filter((e) => e !== 'tools'),
         tools: tools.filter((t) => counted.has(t.name)).map((t) => describe(t, counted.get(t.name))),

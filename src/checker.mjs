@@ -1531,7 +1531,7 @@ export function check(program, diags) {
   if (main) {
     currentFile = main.file;
     if (main.params.length || main.ret !== 'Unit') {
-      err('E0401', "'main' must take no parameters and return no value", main, 'write: fn main() uses io { ... }');
+      err('E0401', "'main' must take no parameters and return no value", main, 'give the function another name to take parameters or return a result, for example: fn handle(order: Int) -> Str; main is only for a program that starts on its own');
     } else {
       program.main = main;
     }

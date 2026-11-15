@@ -13,7 +13,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
-import { act, approvedBy, bindTools, entryOf, policyProblem, prepare, showManifest } from './act.mjs';
+import { act, approvedBy, bindTools, entryOf, policyProblem, prepare, showManifest, showPolicy } from './act.mjs';
 import { declarationOf, openTools } from './mcp-client.mjs';
 
 const version = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
@@ -23,7 +23,9 @@ const HOW = `Write one Avisoq script that does the whole job, instead of calling
 1. avisoq_tools lists the tools a script may use; copy the declarations you need to the top of the script.
    Add limits to the ones that change things:   at most 1   /   total amount_cents at most 2000   /   requires amount_cents > 0
    Tight limits are what lets a script run without asking a person.
-2. A function that calls tools says "uses tools". Tools answer with text, usually JSON: import "std/json".
+2. Put the work in a function with a name of your own (not main) that takes the inputs as parameters and RETURNS its result.
+   Do not print: the returned value is what you get back. A function that calls tools says "uses tools".
+   Tools answer with text, usually JSON: import "std/json".
 3. avisoq_check shows what the script could do. avisoq_run runs it.
 avisoq_guide explains the language.`;
 
@@ -43,7 +45,7 @@ export async function gateway({ toolsFile, policyFile, dir, limits, allow = [] }
     const source = String(args.script ?? '');
     const scratch = join(dir, `${safeName(args.name)}.draft.avq`);
     const prepared = await prepare(scratch, { source, allow, ...limits });
-    const entry = entryOf(prepared.plan, args.function);
+    const entry = entryOf(prepared.plan, args.function, 'in the "function" argument');
     const { tools, notes } = bindTools(prepared.plan, servers.tools);
     const file = join(dir, `${safeName(args.name)}-${prepared.hash.slice(0, 12)}.avq`);
     const text = showManifest(prepared.plan, entry, { file: basename(file), hash: prepared.hash, limits, notes });
@@ -65,7 +67,7 @@ export async function gateway({ toolsFile, policyFile, dir, limits, allow = [] }
   async function call(name, args) {
     if (problem) return text(`The gateway could not start its tools: ${problem}`, true);
     if (name === 'avisoq_guide') return text(`${GUIDE()}\n\n## Scripts that use tools\n\n${HOW}\n\nExample:\n\ntool lookup_order(order: Int) -> Str\ntool refund(order: Int, amount_cents: Int) -> Str\n  at most 1\n  total amount_cents at most 2000\n  requires amount_cents > 0\n\nfn handle(order: Int) -> Str uses tools {\n  let receipt = refund(order, 499)\n  return receipt\n}\n`);
-    if (name === 'avisoq_tools') return text(`${[...servers.tools.values()].map(declarationOf).join('\n\n')}\n\n${HOW}`);
+    if (name === 'avisoq_tools') return text(`${[...servers.tools.values()].map(declarationOf).join('\n\n')}\n\n${policy() ? showPolicy(policy()) : 'There is no policy: every script needs a person to approve it before it runs.'}\n\n${HOW}`);
     if (name !== 'avisoq_check' && name !== 'avisoq_run') return null;
     let seen;
     try { seen = await look(args); } catch (e) {

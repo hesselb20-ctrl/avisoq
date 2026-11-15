@@ -69,6 +69,14 @@ tools. The agent reads the tool list, writes a script, and submits it; the gatew
 once if the policy covers it, and otherwise answers with the manifest for a person to approve.
 A model learns the language from [one page](docs/AGENT_GUIDE.md).
 
+A first trial: two Claude models were given only the gateway and the task "refund the shipping
+on every late order and email the customer", against a stand-in shop. The stronger model did
+it on the first try. The weaker one got stuck, which exposed two gaps in what the gateway
+tells an agent; with those fixed, and told that one run per order is fine, it did it too. Both
+refunded the order that fit the policy (499 cents) and left the one over its limit (2500
+cents) for a person, without trying to get around it. That is three runs on one task, set up
+by the author: a sign it works, not a measurement.
+
 Try it: [`examples/agent-actions`](examples/agent-actions/README.md) has a stand-in shop
 (orders, refunds, email) as an MCP server, a script, a policy, and the commands above.
 

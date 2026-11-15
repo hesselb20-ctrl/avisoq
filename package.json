@@ -1,7 +1,7 @@
 {
   "name": "avisoq",
   "version": "0.16.0",
-  "description": "Avisoq: a fast, safe programming language designed to be written and verified by AI agents",
+  "description": "Avisoq: the language AI agents write their actions in. What a script can do (which tools, how often, under which rules) is known and approved before it runs.",
   "license": "MIT",
   "author": "Hessel",
   "repository": { "type": "git", "url": "git+https://github.com/hesselb20-ctrl/avisoq.git" },

@@ -63,13 +63,15 @@ export async function prepare(path, { source, tools = {}, allow = [], timeLimitM
 }
 
 // The one function to start: the one named, or the only one there is.
-export function entryOf(plan, name) {
-  const entries = plan.entries.filter((e) => e.name !== 'main' || plan.entries.length === 1);
+export function entryOf(plan, name, how = 'with --fn') {
+  // without a name: the one function that no other function of the script calls
+  const roots = plan.entries.filter((e) => e.root);
+  const entries = roots.length ? roots : plan.entries;
   if (name) {
     if (!plan.entries.some((e) => e.name === name)) throw new AvisoqError(`there is no function '${name}' to start (there ${plan.entries.length === 1 ? 'is' : 'are'}: ${plan.entries.map((e) => e.name).join(', ') || 'none'})`, { kind: 'argument' });
     return name;
   }
-  if (entries.length !== 1) throw new AvisoqError(`say which function to start with --fn (there are: ${entries.map((e) => e.name).join(', ') || 'none'})`, { kind: 'argument' });
+  if (entries.length !== 1) throw new AvisoqError(`say which function to start ${how} (there are: ${entries.map((e) => e.name).join(', ') || 'none'})`, { kind: 'argument' });
   return entries[0].name;
 }
 
@@ -100,18 +102,33 @@ export function approvedBy(path, prepared, entry) {
 export function policyProblem(policy, plan, entryName) {
   const entry = plan.entries.find((e) => e.name === entryName);
   const allowed = policy.tools ?? {};
+  const problems = [];
   for (const t of entry.tools) {
     const rule = allowed[t.name];
-    if (!rule) return `the policy does not allow the tool '${t.name}'`;
-    if (rule.max !== undefined && (t.bound === 'unlimited' || t.calls > rule.max)) return `the policy allows '${t.name}' at most ${rule.max} time${rule.max === 1 ? '' : 's'} per run, and this script ${t.bound === 'unlimited' ? 'has no limit on it' : `allows ${t.calls}`}`;
+    if (!rule) { problems.push(`the policy does not allow the tool '${t.name}'`); continue; }
+    if (rule.max !== undefined && (t.bound === 'unlimited' || t.calls > rule.max)) problems.push(`the policy allows '${t.name}' at most ${rule.max} time${rule.max === 1 ? '' : 's'} per run, and this script ${t.bound === 'unlimited' ? 'has no limit on it' : `allows ${t.calls}`}`);
     for (const [param, most] of Object.entries(rule.totals ?? {})) {
       const declared = t.totals.find((x) => x.param === param);
-      if (!declared || declared.max > most) return `the policy limits ${param} of '${t.name}' to a total of ${most}, and this script ${declared ? `allows ${declared.max}` : 'sets no total'}`;
+      if (!declared || declared.max > most) problems.push(`the policy limits ${param} of '${t.name}' to a total of ${most}, and this script ${declared ? `allows ${declared.max}` : 'sets no total'}`);
     }
   }
-  const extra = entry.effects.filter((e) => !(policy.effects ?? []).includes(e));
-  if (extra.length) return `the policy does not allow the capability '${extra[0]}'`;
-  return null;
+  for (const e of entry.effects.filter((x) => !(policy.effects ?? []).includes(x))) problems.push(`the policy does not allow the capability '${e}'${e === 'io' ? ' (printing): return the result from the function instead' : ''}`);
+  return problems.length ? problems.join('; ') : null;
+}
+
+// A policy in words, for whoever writes scripts under it.
+export function showPolicy(policy) {
+  const lines = Object.entries(policy.tools ?? {}).map(([name, rule]) => {
+    const parts = [];
+    if (rule.max !== undefined) parts.push(`at most ${rule.max} call${rule.max === 1 ? '' : 's'} per run (declare: at most ${rule.max})`);
+    for (const [param, most] of Object.entries(rule.totals ?? {})) parts.push(`${param} adding up to at most ${most} per run (declare: total ${param} at most ${most})`);
+    return `  ${name}: ${parts.length ? parts.join(', ') : 'any number of calls'}`;
+  });
+  const effects = policy.effects ?? [];
+  return `A script runs without asking a person when it uses only these tools, within these bounds:
+${lines.join('\n') || '  (none)'}
+${effects.length ? `It may also use: ${effects.join(', ')}.` : 'It may use nothing else: no printing, files or network.'}
+Anything beyond that is not run until a person approves it.`;
 }
 
 // ---- running, with a log ----
