@@ -557,9 +557,11 @@ export function buildNative(compiled, outPath, opts = {}) {
   const cache = join(tmpdir(), 'avisoq-cache');
   mkdirSync(cache, { recursive: true });
   let flags = opts.portable ? CFLAGS.map((f) => (f === '-march=native' ? '-march=x86-64-v2' : f)) : CFLAGS;
+  // macOS: the system compiler is clang, without OpenMP, static linking or -march=native on Apple chips.
+  if (process.platform === 'darwin') flags = flags.filter((f) => f !== '-fopenmp' && f !== '-static' && !f.startsWith('-march='));
   // A shared library (compile with shared: true): one thread, and position-independent where that matters.
   const shared = /^#define AVISOQ_SHARED 1$/m.test(compiled.c);
-  if (shared) flags = [...flags.filter((f) => f !== '-fopenmp'), '-shared', ...(process.platform === 'win32' ? [] : ['-fPIC'])];
+  if (shared) flags = [...flags.filter((f) => f !== '-fopenmp' && (process.platform === 'win32' || f !== '-static')), '-shared', ...(process.platform === 'win32' ? [] : ['-fPIC'])];
   const ext = compiled.extern ?? { sources: [], links: [] };
   for (const s of ext.sources) if (!existsSync(s)) throw new Error(`extern C file not found: ${s}`);
   const useFlags = flags; // -static still applies to the compiler's own runtime; a .dll named on the command line is linked dynamically

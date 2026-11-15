@@ -25,7 +25,17 @@ enum { VSITE_OOM = 0, VSITE_DIV_OVERFLOW = 1, VSITE_FLOAT_RANGE = 2, VSITE_FS_DE
 #ifdef AVISOQ_SHARED
 /* A shared library must never end the program that loaded it: a failure jumps back to
    avisoq_call(), which reports it. Shared builds are single-threaded for that reason. */
+#ifdef _WIN32
+/* MinGW: the compiler's own jump, which does not go through Windows unwinding. */
 static void *avisoq_jmp[5];
+#define VSETJMP() __builtin_setjmp(avisoq_jmp)
+#define VLONGJMP() __builtin_longjmp(avisoq_jmp, 1)
+#else
+#include <setjmp.h>
+static jmp_buf avisoq_jmp;
+#define VSETJMP() setjmp(avisoq_jmp)
+#define VLONGJMP() longjmp(avisoq_jmp, 1)
+#endif
 static int avisoq_failed_site;
 #define VSITE_WIRE (-1)
 #define VSITE_DENIED (-2)
@@ -40,7 +50,7 @@ static int avisoq_failed_site;
 __attribute__((noreturn, cold, noinline)) static void avisoq_fail(int site) {
 #ifdef AVISOQ_SHARED
   avisoq_failed_site = site;
-  __builtin_longjmp(avisoq_jmp, 1);
+  VLONGJMP();
 #endif
 #pragma omp critical(avisoq_fail_lock)
   {
