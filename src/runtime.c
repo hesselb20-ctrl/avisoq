@@ -447,18 +447,23 @@ static bool avisoq_path_ok(const vstr *path, char *full) {
   if (!_fullpath(full, path->data, 4096)) return false;
 #else
   if (!realpath(path->data, full)) {
-    /* A file that does not exist yet: resolve the folder it would be in, so that links in the
-       path (macOS keeps temporary folders behind one) are followed just as for the granted roots. */
+    /* The file, or folders above it, do not exist yet: resolve the nearest folder that does,
+       so that links in the path (macOS keeps temporary folders behind one) are followed just
+       as they are for the granted roots, and put the rest of the path back on. */
     if (path->len >= 4000) return false;
-    char dir[4096];
+    char dir[4096], real[4096];
     memcpy(dir, path->data, (size_t)path->len + 1);
-    char *slash = strrchr(dir, '/');
-    if (slash && slash != dir) {
+    memcpy(full, path->data, (size_t)path->len + 1);
+    for (;;) {
+      char *slash = strrchr(dir, '/');
+      if (!slash || slash == dir) break;
       *slash = 0;
-      char real[4096];
-      if (realpath(dir, real) && strlen(real) + strlen(slash + 1) + 2 < 4096) snprintf(full, 4096, "%s/%s", real, slash + 1);
-      else memcpy(full, path->data, (size_t)path->len + 1);
-    } else memcpy(full, path->data, (size_t)path->len + 1);
+      if (realpath(dir, real)) {
+        const char *rest = path->data + (slash - dir);
+        if (strlen(real) + strlen(rest) + 1 < 4096) snprintf(full, 4096, "%s%s", real, rest);
+        break;
+      }
+    }
   }
 #endif
   if (avisoq_fs_any) return true;
