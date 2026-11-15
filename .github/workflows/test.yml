@@ -18,17 +18,31 @@ jobs:
         with:
           node-version: 26
       - name: Compiler, WebAssembly backend
-        run: node tests/run.mjs wasm
-      - name: Editor support and packages
-        run: node tests/ide.mjs && node tests/pkg.mjs
+        run: node tests/ci.mjs tests/run.mjs wasm
+      - name: Editor support
+        if: always()
+        run: node tests/ci.mjs tests/ide.mjs
+      - name: Packages
+        if: always()
+        run: node tests/ci.mjs tests/pkg.mjs
       - name: Scripts, manifest, approval, gateway
-        run: node tests/act.mjs
+        if: always()
+        run: node tests/ci.mjs tests/act.mjs
       - name: Attempts to get around the limits
-        run: node tests/attack.mjs
-      - name: Embedding, limits and tools
-        run: node tests/embed.mjs && node tests/mcp.mjs
+        if: always()
+        run: node tests/ci.mjs tests/attack.mjs
+      - name: Embedding
+        if: always()
+        run: node tests/ci.mjs tests/embed.mjs
+      - name: Limits, host functions and tools
+        if: always()
+        run: node tests/ci.mjs tests/mcp.mjs
       - name: Documentation examples
-        run: node tests/docs.mjs
+        if: always()
+        run: node tests/ci.mjs tests/docs.mjs
       - name: Compiler, native backend
-        if: runner.os == 'Linux'
-        run: node tests/run.mjs native
+        if: always() && runner.os != 'Windows'
+        run: node tests/ci.mjs tests/run.mjs native
+      - name: Embedding, native library
+        if: always() && runner.os != 'Windows'
+        run: node tests/ci.mjs tests/embed-native.mjs
