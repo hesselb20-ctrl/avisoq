@@ -2,6 +2,8 @@
 
 # Avisoq
 
+[![tests](https://github.com/hesselb20-ctrl/avisoq/actions/workflows/test.yml/badge.svg)](https://github.com/hesselb20-ctrl/avisoq/actions/workflows/test.yml)
+
 The language AI agents write their actions in.
 
 An agent that works through tools makes one call at a time, and someone has to trust each
@@ -89,6 +91,7 @@ Try it: [`examples/agent-actions`](examples/agent-actions/README.md) has a stand
 (orders, refunds, email) as an MCP server, a script, a policy, and the commands above.
 
 **What this is not, yet.** It is days old and written by one person with an AI coding agent.
+Its tests pass on Windows, Linux and macOS, but only its author has used it.
 The only attempts to break it are the author's own: `tests/attack.mjs` tries 55 ways around
 the limits, the manifest, the approval and the log, and all are stopped, but an attack suite
 written by the builder shows what was thought of, not what was missed. Treat it as a working
@@ -220,7 +223,8 @@ with `avisoq check file.avq --json`, whose errors carry the exact fix in a `hint
 
 Avisoq is a few days old and was written with an AI coding agent. It has a thorough test
 suite and has been used for one program of real size (`examples/loganalyzer.avq`, 260 lines),
-but not yet by anyone other than its author. It is developed and tested on Windows only.
+but not yet by anyone other than its author. It is developed on Windows; its tests also run
+on Linux and macOS on every push.
 Expect rough edges, and please report them.
 
 ## How it works
@@ -514,9 +518,12 @@ on an idle machine with 8 logical cores (Zen 4, AVX-512). Ratios are relative to
   callbacks are JavaScript-only. Nobody has tried to break out of any of this yet.
 - **Barely used.** One 260-line program and the examples; nobody but the author has written
   Avisoq yet. Expect gaps the moment someone writes something larger.
-- **Windows only, in practice.** The code is written to be portable, but Linux and macOS have
-  never been run. Native HTTP and the sandbox launcher are Windows-only; elsewhere native
-  `http_get` returns an error value and programs run without the launcher.
+- **Developed on Windows; tested on Linux and macOS by a workflow only.** Every push runs the
+  compiler suite on both backends, scripts and the gateway, the attack suite, embedding and
+  limits on Windows, Linux and macOS. Nobody has used it day to day on Linux or macOS. There,
+  native programs run without the reduced-rights launcher and without OpenMP on macOS, native
+  `http_get` speaks plain http only (https is an error value), and the C interop and
+  `run_command` tests have not been run.
 - **Functions are not first-class.** They can be passed to functions, with captured values,
   and a `let` can name one, but they cannot be put in arrays or structs, or returned: which
   function runs is always known when the program is compiled. Each lambda creates its own copy

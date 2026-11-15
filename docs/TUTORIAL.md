@@ -333,4 +333,4 @@ in a form a program can read.
 - [Using Avisoq from JavaScript and Python](../examples/embed/README.md).
 - [Using installed programs and C libraries from Avisoq](../examples/interop).
 - [The one-page guide written for AI models](AGENT_GUIDE.md).
-- The README's "Known limits": Avisoq is days old and has only been run on Windows.
+- The README's "Known limits": Avisoq is days old and only its author has used it.

@@ -1,8 +1,8 @@
 # Changelog
 
 Avisoq is an experimental preview. Until 1.0, any release may change the language. Every
-release below passed the full test suite on both backends on Windows; no other platform has
-been tested.
+release below passed the full test suite on both backends on Windows. Since 0.17 the tests
+also run on Linux and macOS on every push.
 
 ## 0.17 (15 November 2026)
 
@@ -18,7 +18,11 @@ been tested.
 - A script submitted through the gateway may import the standard library only.
 - `tests/attack.mjs`: 55 attempts to get around the limits, the manifest, the approval and
   the log.
-- A workflow that runs the tests on Linux, macOS and Windows.
+- The tests run on Linux, macOS and Windows on every push, and pass on all three. Getting
+  there fixed the native backend outside Windows: a missing C header, a jump out of a failed
+  call that only GCC on Windows understood, linker and compiler flags clang rejects, file
+  grants that did not follow links, and native `http_get` / `http_post`, which now work over
+  a plain socket (http only).
 
 ## 0.16 (15 November 2026)
 
