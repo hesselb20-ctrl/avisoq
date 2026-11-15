@@ -1,0 +1,20 @@
+fn prime_factors(value: Int) -> [Int] {
+  var factors: [Int] = []
+  var n = value
+  var divisor = 2
+  while n > 1 {
+    while n % divisor == 0 {
+      push(factors, divisor)
+      n = n / divisor
+    }
+    if n == 1 {
+      break
+    }
+    if divisor > n / divisor {
+      push(factors, n)
+      break
+    }
+    divisor += 1
+  }
+  return factors
+}

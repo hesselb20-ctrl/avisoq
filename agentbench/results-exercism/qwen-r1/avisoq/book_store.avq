@@ -1,0 +1,91 @@
+import "std/arrays"
+
+fn book_store(basket: [Int]) -> Int {
+  var counts: [Int] = [0, 0, 0, 0, 0]
+  for title in basket {
+    if title >= 1 and title <= 5 {
+      counts[title - 1] = counts[title - 1] + 1
+    }
+  }
+  sort(counts)
+  let a = counts[4]
+  let b = counts[3]
+  let c = counts[2]
+  let d = counts[1]
+  let e = counts[0]
+  var total = 0
+  if a == 0 {
+    return 0
+  }
+  if b == 0 {
+    total = total + 800 * a
+  } else if c == 0 {
+    total = total + 1520 * b
+    total = total + 800 * (a - b)
+  } else if d == 0 {
+    total = total + 2160 * c
+    total = total + 1520 * (b - c)
+    total = total + 800 * (a - b)
+  } else if e == 0 {
+    total = total + 2560 * d
+    total = total + 2160 * (c - d)
+    total = total + 1520 * (b - c)
+    total = total + 800 * (a - b)
+  } else {
+    if d >= e {
+      total = total + 3000 * e
+      total = total + 2560 * (d - e)
+      total = total + 2160 * (c - d)
+      total = total + 1520 * (b - c)
+      total = total + 800 * (a - b)
+    } else {
+      total = total + 3000 * (e - d)
+      total = total + 5120
+      total = total + 2160 * (c - d)
+      total = total + 1520 * (b - c)
+      total = total + 800 * (a - b)
+    }
+  }
+  return total
+}
+
+test "single book" {
+  assert book_store([1]) == 800
+  assert book_store([5]) == 800
+}
+
+test "two same books" {
+  assert book_store([2, 2]) == 1600
+}
+
+test "two different books" {
+  assert book_store([1, 2]) == 1520
+}
+
+test "three different books" {
+  assert book_store([1, 2, 3]) == 2160
+}
+
+test "four different books" {
+  assert book_store([1, 2, 3, 4]) == 2560
+}
+
+test "five different books" {
+  assert book_store([1, 2, 3, 4, 5]) == 3000
+}
+
+test "example basket" {
+  assert book_store([1, 1, 2, 2, 3, 3, 4, 5]) == 5120
+}
+
+test "empty basket" {
+  assert book_store([]) == 0
+}
+
+test "many copies of one book" {
+  assert book_store([1, 1, 1, 1, 1]) == 4000
+}
+
+test "two full sets" {
+  assert book_store([1, 2, 3, 4, 5, 1, 2, 3, 4, 5]) == 6000
+}

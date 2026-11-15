@@ -19,7 +19,8 @@ without anyone reading the code first:
   collector, and agent-written Avisoq has run level with or ahead of agent-written Rust.
 
 A model learns the whole language from [one page](docs/AGENT_GUIDE.md): in a benchmark on
-tasks the author did not write, two models scored 119 of 120 in Avisoq, the same as in Python.
+tasks the author did not write, two Claude models scored 119 of 120 in Avisoq, the same as in
+Python. (A small local model did worse: 11 of 20, against 14 in Python.)
 
 ```
 // tools.avq
@@ -293,7 +294,10 @@ times:
 | Claude Haiku, mean time per run | 332 s | 210 s | 250 s |
 
 Correctness is a tie. Avisoq costs the agent more time: 15 to 33% more than Rust and 37 to 58%
-more than Python, which corrects the single-run "level with Rust" figure above.
+more than Python, which corrects the single-run "level with Rust" figure above. A weaker model
+from another vendor (Qwen, 27 billion parameters, run locally, one run) scored 11 of 20 in
+Avisoq against 14 in Python and 13 in Rust: within what chance allows on 20 tasks, but not in
+Avisoq's favour.
 
 So today the measured case for Avisoq is: as correct as Python and Rust, on the author's tasks
 and on independent ones; at least as fast to run as Rust and much faster than Python on the

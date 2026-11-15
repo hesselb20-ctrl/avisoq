@@ -411,10 +411,33 @@ Failures: Avisoq run 3, pig-latin (a rule applied in the wrong order); Python ru
 runs 2 and 3, food-chain (whether verses are separated by an empty line, which the statement
 does not say).
 
+### A model from another vendor: Qwen, run locally (1 run per language, Avisoq 0.14)
+
+A 27-billion-parameter Qwen model (4-bit quantised, a modified community build, on two consumer
+graphics cards) under a narrower protocol, `local-model.mjs`: one task at a time, the model
+writes the file, the harness compiles it and runs the two example cases, and on a failure the
+model gets the error and may try again, three attempts at most. It has no tools of its own.
+
+| Language | Correct | Rejected before running | Stopped with an error | Silently wrong | Attempts for 20 tasks | Model time | Tokens written |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Avisoq | 11 of 20 | 0 | 0 | 9 | 28 | 1899 s | 41k |
+| Python | 14 of 20 | 1 | 1 | 4 | 21 | 1695 s | 27k |
+| Rust | 13 of 20 | 0 | 1 | 6 | 22 | 1699 s | 30k |
+
+All 60 files passed their two example cases; the failures are on the hidden ones. Avisoq is
+behind here: three fewer correct than Python, two fewer than Rust, more attempts and half
+again as many tokens. Every Avisoq failure is a wrong answer from a logic mistake (a missed
+edge case in luhn, a wrong weekday offset in meetup, a greedy grouping in book-store), not
+something the language's checks could have stopped. With 20 tasks and one run, a gap of two
+or three is within what chance produces, so this does not show Avisoq is worse for a weaker
+model, but it certainly does not show it is better. (The Python rejection is a file with a
+stray null byte in it.)
+
 ### What this shows
 
-- **Correctness: no difference.** 119 of 120 for Avisoq, 119 of 120 for Python, 118 of 120
-  for Rust. With one or two failures per language, that is a tie, not a ranking.
+- **Correctness: no difference for the two Claude models.** 119 of 120 for Avisoq, 119 of 120
+  for Python, 118 of 120 for Rust. With one or two failures per language, that is a tie, not a
+  ranking. The weaker local model did somewhat worse in Avisoq (11 of 20 against 14 and 13).
 - **A model learns Avisoq from one page well enough to match languages it has seen millions
   of lines of.** These are also problems whose Python and Rust solutions are all over the
   public internet, which favours those two.
@@ -429,7 +452,8 @@ does not say).
 - The selection rule and the harness are the author's, even though the tasks are not. The
   rule drops every case that expects an error, so how each language reports bad input is not
   tested.
-- Both models are from one vendor. (A local open-weights model is reported below.)
+- The two models with three runs each are from one vendor. The model from another vendor
+  ran once, quantised, under a different protocol, so its row is an indication only.
 - In round 1 the two example cases shown for `anagram` differed from rounds 2 and 3, because
   an import bug (cases that Exercism had replaced) was fixed in between. All rounds are graded
   on the same hidden cases.

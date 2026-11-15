@@ -1,0 +1,27 @@
+fn isbn_verifier(isbn: Str) -> Bool {
+  var digits: [Int] = []
+  for i in 0..len(isbn) {
+    let b = isbn[i]
+    if b == '-' {
+      continue
+    }
+    if b >= '0' and b <= '9' {
+      push(digits, b - '0')
+    } else if b == 'X' {
+      push(digits, 10)
+    } else {
+      return false
+    }
+  }
+  if len(digits) != 10 {
+    return false
+  }
+  if digits[9] == 10 and len(isbn) > 1 and isbn[len(isbn) - 2] == 'X' {
+    return false
+  }
+  var total = 0
+  for i in 0..10 {
+    total = total + digits[i] * (10 - i)
+  }
+  return total % 11 == 0
+}

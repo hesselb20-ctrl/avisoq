@@ -1,0 +1,52 @@
+import "std/strings"
+
+fn transpose(lines: [Str]) -> [Str] {
+  var max_len = 0
+  for line in lines {
+    if len(line) > max_len { max_len = len(line) }
+  }
+  var out: [Str] = []
+  for col in 0..max_len {
+    var row = ""
+    for line in lines {
+      if col < len(line) {
+        row = row + line[col..col + 1]
+      } else {
+        row = row + " "
+      }
+    }
+    row = trim_right(row)
+    push(out, row)
+  }
+  return out
+}
+
+fn trim_right(s: Str) -> Str {
+  var end = len(s)
+  while end > 0 and s[end - 1] == ' ' { end = end - 1 }
+  return s[0..end]
+}
+
+test "empty" {
+  assert transpose([]) == []
+}
+
+test "single character" {
+  assert transpose(["A"]) == ["A"]
+}
+
+test "single row" {
+  assert transpose(["A1"]) == ["A", "1"]
+}
+
+test "ragged right" {
+  assert transpose(["ABC", "DE"]) == ["AD", "BE", "C"]
+}
+
+test "ragged left" {
+  assert transpose(["AB", "DEF"]) == ["AD", "BE", " F"]
+}
+
+test "spaces are kept" {
+  assert transpose(["A ", " B"]) == ["AB", "  "]
+}

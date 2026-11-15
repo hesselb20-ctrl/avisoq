@@ -1,0 +1,50 @@
+import "std/strings"
+
+fn is_vowel(b: Int) -> Bool {
+  return b == 'a' or b == 'e' or b == 'i' or b == 'o' or b == 'u'
+}
+
+fn translate_word(word: Str) -> Str {
+  let n = len(word)
+  if n == 0 {
+    return ""
+  }
+
+  if is_vowel(word[0]) or starts_with(word, "xr") or starts_with(word, "yt") {
+    return word + "ay"
+  }
+
+  var i = 0
+  while i < n {
+    let c = word[i]
+    if is_vowel(c) {
+      break
+    }
+    if i > 0 and c == 'y' {
+      break
+    }
+    if c == 'q' and i + 1 < n and word[i + 1] == 'u' {
+      i = i + 2
+      break
+    }
+    i = i + 1
+  }
+
+  return word[i..n] + word[0..i] + "ay"
+}
+
+fn pig_latin(phrase: Str) -> Str {
+  if phrase == "" {
+    return ""
+  }
+
+  let words = split(phrase, " ")
+  var out = ""
+  for i in 0..len(words) {
+    if i > 0 {
+      out = out + " "
+    }
+    out = out + translate_word(words[i])
+  }
+  return out
+}

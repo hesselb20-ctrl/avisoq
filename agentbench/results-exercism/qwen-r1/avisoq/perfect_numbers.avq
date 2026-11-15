@@ -1,0 +1,26 @@
+fn perfect_numbers(number: Int) -> Str {
+  if number <= 0 {
+    return "deficient"
+  }
+
+  var total = 1
+  var i = 2
+  while i <= number / i {
+    if number % i == 0 {
+      total = total + i
+      let q = number / i
+      if q != i {
+        total = total + q
+      }
+    }
+    i = i + 1
+  }
+
+  if total == number {
+    return "perfect"
+  } else if total > number {
+    return "abundant"
+  } else {
+    return "deficient"
+  }
+}

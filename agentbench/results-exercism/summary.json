@@ -123,6 +123,75 @@
    }
   ]
  },
+ "qwen": {
+  "avisoq": [
+   {
+    "run": 1,
+    "total": 20,
+    "pass": 11,
+    "compile": 0,
+    "loud": 0,
+    "silent": 9,
+    "seconds": 1899,
+    "ktokens": 41,
+    "attempts": 28,
+    "failed": [
+     "crypto_square (wrong)",
+     "largest_series_product (wrong)",
+     "luhn (wrong)",
+     "book_store (wrong)",
+     "transpose (wrong)",
+     "meetup (wrong)",
+     "isbn_verifier (wrong)",
+     "connect (wrong)",
+     "perfect_numbers (wrong)"
+    ]
+   }
+  ],
+  "python": [
+   {
+    "run": 1,
+    "total": 20,
+    "pass": 14,
+    "compile": 1,
+    "loud": 1,
+    "silent": 4,
+    "seconds": 1695,
+    "ktokens": 27,
+    "attempts": 21,
+    "failed": [
+     "change (stopped)",
+     "book_store (wrong)",
+     "transpose (wrong)",
+     "pig_latin (wrong)",
+     "isbn_verifier (rejected)",
+     "connect (wrong)"
+    ]
+   }
+  ],
+  "rust": [
+   {
+    "run": 1,
+    "total": 20,
+    "pass": 13,
+    "compile": 0,
+    "loud": 1,
+    "silent": 6,
+    "seconds": 1699,
+    "ktokens": 30,
+    "attempts": 22,
+    "failed": [
+     "crypto_square (wrong)",
+     "change (wrong)",
+     "book_store (wrong)",
+     "transpose (wrong)",
+     "pig_latin (wrong)",
+     "connect (wrong)",
+     "state_of_tic_tac_toe (stopped)"
+    ]
+   }
+  ]
+ },
  "sonnet": {
   "avisoq": [
    {

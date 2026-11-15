@@ -1,0 +1,34 @@
+import "std/arrays"
+
+fn change(coins: [Int], target: Int) -> [Int] {
+  if target < 0 { return [] }
+  let positive = filter(coins, fn(c: Int) => c > 0)
+  let values = sorted(positive)
+  if target == 0 { return [] }
+  if len(values) == 0 { return [] }
+  var dp = array(target + 1, -1)
+  dp[0] = 0
+  var last = array(target + 1, 0)
+  for amount in 1..target + 1 {
+    for i in 0..len(values) {
+      let coin = values[i]
+      if coin <= amount and dp[amount - coin] >= 0 {
+        let candidate = dp[amount - coin] + 1
+        if dp[amount] < 0 or candidate < dp[amount] {
+          dp[amount] = candidate
+          last[amount] = coin
+        }
+      }
+    }
+  }
+  if dp[target] < 0 { return [] }
+  var result: [Int] = []
+  var amount = target
+  while amount > 0 {
+    let coin = last[amount]
+    push(result, coin)
+    amount = amount - coin
+  }
+  sort(result)
+  return result
+}

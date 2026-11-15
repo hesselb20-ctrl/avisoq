@@ -1,0 +1,32 @@
+fn letter_value(c: Int) -> Int {
+  if c == 'a' or c == 'e' or c == 'i' or c == 'o' or c == 'u' or c == 'l' or c == 'n' or c == 'r' or c == 's' or c == 't' or c == 'A' or c == 'E' or c == 'I' or c == 'O' or c == 'U' or c == 'L' or c == 'N' or c == 'R' or c == 'S' or c == 'T' {
+    return 1
+  }
+  if c == 'd' or c == 'g' or c == 'D' or c == 'G' {
+    return 2
+  }
+  if c == 'b' or c == 'c' or c == 'm' or c == 'p' or c == 'B' or c == 'C' or c == 'M' or c == 'P' {
+    return 3
+  }
+  if c == 'f' or c == 'h' or c == 'v' or c == 'w' or c == 'y' or c == 'F' or c == 'H' or c == 'V' or c == 'W' or c == 'Y' {
+    return 4
+  }
+  if c == 'k' or c == 'K' {
+    return 5
+  }
+  if c == 'j' or c == 'x' or c == 'J' or c == 'X' {
+    return 8
+  }
+  if c == 'q' or c == 'z' or c == 'Q' or c == 'Z' {
+    return 10
+  }
+  return 0
+}
+
+fn scrabble_score(word: Str) -> Int {
+  var total = 0
+  for b in word {
+    total += letter_value(b)
+  }
+  return total
+}

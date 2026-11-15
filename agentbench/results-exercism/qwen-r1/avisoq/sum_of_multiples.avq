@@ -1,0 +1,17 @@
+fn sum_of_multiples(factors: [Int], limit: Int) -> Int {
+  var total = 0
+  var seen: Map[Int, Bool] = {}
+  for factor in factors {
+    if factor > 0 {
+      var multiple = factor
+      while multiple < limit {
+        if not has(seen, multiple) {
+          put(seen, multiple, true)
+          total = total + multiple
+        }
+        multiple = multiple + factor
+      }
+    }
+  }
+  return total
+}

@@ -1,0 +1,71 @@
+import "std/strings"
+
+fn weekday(y: Int, m: Int, d: Int) -> Int {
+  let t = [0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 5]
+  var yy = y
+  if m < 3 {
+    yy = yy - 1
+  }
+  let w = yy + yy / 4 - yy / 100 + yy / 400 + t[m - 1] + d
+  return w % 7
+}
+
+fn day_of_week_index(name: Str) -> Int {
+  if name == "Sunday" {
+    return 0
+  }
+  if name == "Monday" {
+    return 1
+  }
+  if name == "Tuesday" {
+    return 2
+  }
+  if name == "Wednesday" {
+    return 3
+  }
+  if name == "Thursday" {
+    return 4
+  }
+  if name == "Friday" {
+    return 5
+  }
+  return 6
+}
+
+fn days_in_month(year: Int, month: Int) -> Int {
+  if month == 2 {
+    if (year % 4 == 0 and year % 100 != 0) or year % 400 == 0 {
+      return 29
+    }
+    return 28
+  }
+  if month == 4 or month == 6 or month == 9 or month == 11 {
+    return 30
+  }
+  return 31
+}
+
+fn meetup(year: Int, month: Int, week: Str, dayofweek: Str) -> Str {
+  let target = day_of_week_index(dayofweek)
+  let first_weekday = weekday(year, month, 1)
+  let last_day = days_in_month(year, month)
+  let last_weekday = weekday(year, month, last_day)
+  var day = 0
+
+  if week == "first" {
+    day = 1 + (target - first_weekday + 7) % 7
+  } else if week == "second" {
+    day = 8 + (target - first_weekday + 7) % 7
+  } else if week == "third" {
+    day = 15 + (target - first_weekday + 7) % 7
+  } else if week == "fourth" {
+    day = 22 + (target - first_weekday + 7) % 7
+  } else if week == "teenth" {
+    let thirteenth_weekday = weekday(year, month, 13)
+    day = 13 + (target - thirteenth_weekday + 7) % 7
+  } else {
+    day = last_day - (last_weekday - target + 7) % 7
+  }
+
+  return str(year) + "-" + pad_left(str(month), 2, "0") + "-" + pad_left(str(day), 2, "0")
+}
