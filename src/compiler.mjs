@@ -521,7 +521,8 @@ export function findGcc() {
 // -muse-unaligned-vector-move: GCC on Windows can emit aligned vector stores to thread stacks
 // that are not aligned enough (GCC bug 54412); the assembler rewrites them as unaligned moves.
 const CFLAGS = ['-std=gnu17', '-O3', '-march=native', '-ffp-contract=off', '-fopenmp', '-static', '-w',
-  '-Wl,--stack,268435456', ...(process.platform === 'win32' ? ['-Wa,-muse-unaligned-vector-move'] : [])];
+  // a large stack is asked of the linker on Windows; elsewhere it is the shell's limit (ulimit -s)
+  ...(process.platform === 'win32' ? ['-Wl,--stack,268435456', '-Wa,-muse-unaligned-vector-move'] : [])];
 
 const gccEnv = (gcc) => {
   const env = { ...process.env };
