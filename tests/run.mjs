@@ -369,6 +369,19 @@ rejects('let viewing a mutable array', main('var a = [1, 2]\nlet b = a\na[0] = 9
 rejects('returning the caller\'s array', 'fn same(a: [Int]) -> [Int] { return a }\nfn main() { }', 'E0210');
 rejects('returning a view of a parameter', 'fn row(g: [[Int]]) -> [Int] { let r = g[0]\n return r }\nfn main() { }', 'E0210');
 rejects('array filled with one shared element', main('var g = array(3, [0, 0])'), 'E0210');
+const SHAPES = 'enum Shape { Circle(radius: Int), Box(width: Int, height: Int), Empty }\nstruct Two { a: [Int], b: [Int] }\nfn square(x: Int) -> Int { return x * x }\n';
+rejects('a match expression that misses a variant', SHAPES + main('let s = Empty\nlet a = match s { Circle(radius) => radius, Empty => 0 }\nprint(a)'), 'E0219');
+rejects('match expression arms of different types', SHAPES + main('let s = Empty\nlet a = match s { Circle(radius) => radius, else => "none" }\nprint(a)'), 'E0201');
+rejects('a match expression that would share an array', SHAPES + main('let s = Empty\nlet a = match s { Circle(radius) => [radius], else => [0] }\nprint(len(a))'), 'E0225');
+rejects('a block in a match expression arm', SHAPES + main('let s = Empty\nlet a = match s { Circle(radius) => { 1 }, else => 0 }'), 'E0001');
+rejects('a loop step of zero', main('for i in 0..10 step 0 { print(i) }'), 'E0001');
+rejects('a loop step that is not written out', main('let k = 2\nfor i in 0..10 step k { print(i) }'), 'E0001');
+rejects('a function variable that uses a var', SHAPES + main('var count = 3\nlet bump = fn(x: Int) => x + count\nprint(bump(1))'), 'E0231');
+rejects('a lambda kept in a variable without parameter types', main('let inc = fn(x) => x + 1\nprint(inc(1))'), 'E0232');
+rejects('a function kept in a var', SHAPES + main('var f = square\nprint(f(2))'), 'E0232');
+rejects('a function stored in an array', SHAPES + main('let f = square\nlet fs = [f]'), 'E0232');
+rejects('moving an array a function variable still reads', main('let data = [1, 2, 3]\nlet pick = fn(i: Int) => data[i]\nvar other = data\npush(other, 4)\nprint(pick(0))'), 'E0210');
+rejects('two fields taking the same array', SHAPES + main('var xs = [1]\nlet t = Two(a: xs, b: xs)\nprint(len(t.a))'), 'E0210');
 rejects('storing an array that is still used', main('let row = [1, 2]\nvar g = [[0], [0]]\ng[0] = row\nprint(row[0])'), 'E0210');
 rejects('putting an array that is still used into a map', main('let row = [1, 2]\nvar m: Map[Int, [Int]] = {}\nput(m, 1, row)\nprint(row[0])'), 'E0210');
 rejects('same array as mutable and other argument', 'fn mix(a: mut [Int], b: [Int]) { a[0] = b[0] }\nfn main() { var x = [1, 2]\n mix(x, x) }', 'E0211');
@@ -420,7 +433,7 @@ rejects('lambda with the wrong result type', `${ARR}${main('print(len(filter([1]
 rejects('a lambda cannot change outside data', `${ARR}${main('var out = [0]\neach([1, 2], fn(x) => push(out, x))')}`, 'E0231');
 rejects('a value where a function is needed', `${ARR}${main('print(len(map([1], 5)))')}`, 'E0232');
 rejects('a named function that does not fit', `${ARR}fn two(a: Int, b: Int) -> Int { return a + b }\n${main('print(len(map([1], two)))')}`, 'E0201');
-rejects('a function parameter used as a value', 'fn hold(f: fn(Int) -> Int) -> Int { let g = f\n return 1 }\nfn main() uses io { print(hold(fn(x) => x)) }', 'E0232');
+rejects('a function parameter used as a value', 'fn hold(f: fn(Int) -> Int) -> Int { let g = [f]\n return 1 }\nfn main() uses io { print(hold(fn(x) => x)) }', 'E0232');
 rejects('constraint not satisfied', `${ARR}${main('print(max_of([true, false]))')}`, 'E0220');
 rejects('constraint not satisfied by a struct', `${ARR}struct P { x: Int }\n${main('var ps = [P(x: 1)]\nsort(ps)')}`, 'E0220');
 rejects('unknown constraint', 'fn f[T: Hashable](x: T) -> Int { return 1 }\nfn main() uses io { print(f(1)) }', 'E0220');

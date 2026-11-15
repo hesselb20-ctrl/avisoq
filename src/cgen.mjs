@@ -341,6 +341,15 @@ export function cgen(program, opts = {}) {
             + `VDATA(${ctype(e.ty)}, ${a})[${i}]; })`;
         }
         case 'Cond': return `(${expr(e.cond)} ? ${expr(e.then)} : ${expr(e.els)})`;
+        case 'MatchExpr': {
+          const sc = tmp(), r = tmp(), en = program.types.enums.get(e.scrut.ty);
+          const other = e.arms.find((a) => a.variant === null);
+          const arms = e.arms.filter((a) => a.variant !== null).map((arm) => {
+            const binds = arm.syms.map((sym, i) => (sym ? `${ctype(sym.ty)} v_${sym.name} = ${sc}.u.v${arm.index}.f_${en.variants[arm.index].fields[i].name}; ` : '')).join('');
+            return `case ${arm.index}: { ${binds}${r} = ${expr(arm.expr)}; } break; `;
+          }).join('');
+          return `({ ${ctype(e.scrut.ty)} ${sc} = ${expr(e.scrut)}; ${ctype(e.ty)} ${r}; switch (${sc}.tag) { ${arms}default: ${other ? `{ ${r} = ${expr(other.expr)}; } break;` : '__builtin_unreachable();'} } ${r}; })`;
+        }
         case 'Field': return `(${expr(e.base)}).f_${e.name}`;
         case 'New': {
           const T = ctype(e.ty), k = e.variantIndex;

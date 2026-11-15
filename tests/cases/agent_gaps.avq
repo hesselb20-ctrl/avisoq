@@ -1,0 +1,125 @@
+// What agents writing Exercism solutions asked for: match as an expression, loops that count
+// down or skip, a name for a function, and a constructor that reads the length of what it takes.
+import "std/strings"
+import "std/arrays"
+
+enum Shape { Circle(radius: Int), Box(width: Int, height: Int), Empty }
+enum Colour { Red, Green, Blue }
+struct Grid { cells: [Int], rows: Int, last: Int }
+
+fn area(s: Shape) -> Int {
+  return match s { Circle(radius) => 3 * radius * radius, Box(width, height) => width * height, Empty => 0 }
+}
+
+fn name(c: Colour) -> Str {
+  let n = match c {
+    Red => "red"
+    Green => "green"
+    else => "other"
+  }
+  return n
+}
+
+fn parse_or(text: Str, fallback: Int) -> Int {
+  return match parse_int(text) { Some(value) => value, None => fallback } + 1
+}
+
+fn describe(s: Shape) -> Str {
+  var out = "shape:"
+  out += match s { Circle(radius) => " circle " + str(radius), Box(width, height) => " box " + str(width * height), Empty => " none" }
+  return out
+}
+
+// a match inside a match, and a match whose arms fail in different ways
+fn nested(a: Option[Int], b: Option[Int]) -> Int {
+  return match a { Some(value) => match b { Some(other) => value * other, None => value }, None => -1 }
+}
+
+fn checked_div(a: Int, s: Shape) -> Int {
+  return match s { Circle(radius) => a / radius, Box(width, height) => a / (width - height), Empty => a }
+}
+
+fn make(n: Int) -> Grid {
+  var cells: [Int] = []
+  for i in 0..n { push(cells, i * i) }
+  return Grid(cells: cells, rows: len(cells), last: len(cells) - 1)
+}
+
+fn square(x: Int) -> Int { return x * x }
+
+fn apply_twice(f: fn(Int) -> Int, x: Int) -> Int { return f(f(x)) }
+
+fn total(xs: [Int], f: fn(Int) -> Int) -> Int {
+  var t = 0
+  for x in xs { t += f(x) }
+  return t
+}
+
+fn texts(xs: [Int]) -> [Str] {
+  var out: [Str] = []
+  for x in xs { push(out, str(x)) }
+  return out
+}
+
+test "a match expression that divides by zero stops there" {
+  assert checked_div(12, Circle(radius: 4)) == 3
+  assert checked_div(12, Box(width: 5, height: 2)) == 4
+  assert checked_div(12, Empty) == 12
+}
+
+fn main() uses io {
+  print(area(Circle(radius: 2)), area(Box(width: 3, height: 4)), area(Empty))
+  print(name(Red), name(Green), name(Blue))
+  print(parse_or("41", 0), parse_or("x", 9))
+  print(describe(Circle(radius: 5)), describe(Box(width: 2, height: 3)), describe(Empty))
+  print(nested(Some(value: 6), Some(value: 7)), nested(Some(value: 6), None), nested(None, Some(value: 7)))
+
+  var packed = 0
+  for i in 10..0 step -1 { packed = packed * 2 + i }
+  print(packed)
+  var seen: [Int] = []
+  for i in 0..10 step 3 { push(seen, i) }
+  for i in 5..-1 step -2 {
+    if i == 3 { continue }
+    push(seen, i)
+  }
+  for i in 3..3 step 1 { push(seen, 99) }
+  for i in 3..4 step -1 { push(seen, 98) }
+  for i in 0..7 step 7 { push(seen, 100 + i) }
+  for i in 0..100 step 10 {
+    if i == 30 { break }
+    push(seen, 1000 + i)
+  }
+  print(join(texts(seen), ","))
+  let xs = [5, 6, 7, 8]
+  var back = ""
+  for i in len(xs) - 1..-1 step -1 { back += str(xs[i]) }
+  print(back)
+  // the ends are worked out once, and a step that would pass the largest Int just stops
+  var rounds = 0
+  for i in 9223372036854775800..9223372036854775807 step 5 { rounds += 1 }
+  for i in -9223372036854775800..-9223372036854775807 - 1 step -5 { rounds += 1 }
+  print(rounds)
+
+  let g = make(5)
+  print(g.rows, g.last, g.cells[4])
+  var ys = [1, 2, 3]
+  let h = Grid(cells: ys, rows: len(ys) * 2, last: 0)
+  print(h.rows, len(h.cells))
+
+  let sq = square
+  let also = sq
+  let offset = 10
+  let weights = [1, 2, 3]
+  let shifted = fn(x: Int) => x + offset
+  let weigh = fn(i: Int, x: Int) => weights[i] * x
+  let shout = fn(s: Str) => s + "!"
+  print(sq(7), also(3), shifted(5), weigh(2, 4), shout("hi"))
+  print(apply_twice(sq, 3), apply_twice(shifted, 1), total([1, 2, 3], sq), total([1, 2, 3], shifted))
+  let moved = map([1, 2, 3], shifted)
+  print(moved[0], moved[2])
+  if sq(2) == 4 {
+    let inner = fn(x: Int) => sq(x) + shifted(x)
+    print(inner(3), apply_twice(inner, 1))
+  }
+}

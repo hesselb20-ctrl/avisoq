@@ -211,7 +211,9 @@ xs[0] = 5                      // xs must be a var or a mut parameter
 if a > 0 { ... } else if a == 0 { ... } else { ... }
 while b < 10 { b = b + 1 }
 for i in 0..n { ... }          // i goes from 0 up to n - 1; i cannot be assigned
+for i in n - 1..-1 step -1 { ... }   // counts down from n - 1 to 0; step 2 skips; the end is excluded
 match value { Circle(r) => { ... } Empty => { ... } }   // every variant, or an else arm
+let area = match s { Circle(r) => 3 * r * r, Empty => 0 }   // match as a value (not for arrays or maps)
 return x
 assert a > 0
 ```
@@ -234,7 +236,10 @@ fn largest[T: Ord](a: T, b: T) -> T { ... }          // constraints: Ord, Eq, Nu
 `fn main()`.
 
 Functions can be passed as arguments, by name or as a lambda `fn(x) => x * 2`
-(an expression body only). They cannot be stored in variables or returned.
+(an expression body only). A `let` can name one: `let sq = square` or
+`let add = fn(x: Int) => x + offset` (parameter types are needed there, and it may only read
+`let` values from outside). Such a name can be called and passed on. Functions cannot be put in
+arrays or structs, kept in a `var`, or returned.
 
 ## Built-in functions
 

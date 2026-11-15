@@ -12,6 +12,13 @@ been tested.
   `open_library()` load one built earlier, and `avisoq call --native` uses it from the shell.
   1.7 to 23 times faster than the WebAssembly route on calls that do real work.
 - A failure inside a native library is reported to the caller; it never ends the process.
+- `match` as an expression: `let area = match s { Circle(r) => 3 * r * r, Empty => 0 }`.
+- Loops with a step: `for i in 10..0 step -1`, `for i in 0..n step 2`.
+- A `let` can name a function: `let sq = square`, `let add = fn(x: Int) => x + offset`. It
+  can be called and passed on. (Functions still cannot be stored in arrays or returned.)
+- `Grid(cells: cells, rows: len(cells))` compiles: a later field may read the length of a
+  value an earlier field took over.
+- `let g = f` for a function parameter `f` is now allowed; it used to be an error.
 - `agentbench`: a task set imported mechanically from Exercism (tasks and tests the author did
   not write), three runs per model and language, and a harness for local models.
 - Documentation: a tutorial, a language reference and this changelog; every example in them

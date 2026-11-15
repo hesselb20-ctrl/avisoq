@@ -16,8 +16,9 @@ function expr(e, min = 0) {
     case 'Name': return e.name;
     case 'MapLit': return '{}';
     case 'Tuple': return `(${e.elems.map((x) => expr(x)).join(', ')})`;
+    case 'MatchExpr': return wrap(0.5, `match ${expr(e.scrut)} { ${e.arms.map((a) => `${a.variant === null ? 'else' : `${a.variant}${a.binds.length ? `(${a.binds.map((b) => b.name).join(', ')})` : ''}`} => ${expr(a.expr)}`).join(', ')} }`);
     case 'Cond': return wrap(0.5, `if ${expr(e.cond)} then ${expr(e.then, 1)} else ${expr(e.els, 0.5)}`);
-    case 'Lambda': return wrap(0.5, `fn(${e.params.map((p) => p.name).join(', ')}) => ${expr(e.body)}`);
+    case 'Lambda': return wrap(0.5, `fn(${e.params.map((p) => (p.ty ? `${p.name}: ${showType(p.ty)}` : p.name)).join(', ')}) => ${expr(e.body)}`);
     case 'Unary':
       return e.op === 'not' ? wrap(3, `not ${expr(e.operand, 3)}`) : wrap(7, `-${expr(e.operand, 7)}`);
     case 'Binary': {
@@ -168,7 +169,7 @@ export function format(src) {
           braced(`while ${expr(s.cond)}`, s.body, indent, s.line);
         }
         break;
-      case 'For': braced(`for ${s.name} in ${expr(s.start)}..${expr(s.end, 5)}`, s.body, indent, s.stmtLine); break;
+      case 'For': braced(`for ${s.name} in ${expr(s.start)}..${expr(s.end, 5)}${s.step === undefined ? '' : ` step ${s.step}`}`, s.body, indent, s.stmtLine); break;
       case 'ForIn': braced(`for ${s.index ? `${s.index.name}, ` : ''}${s.name} in ${expr(s.iter)}`, s.body, indent, s.stmtLine); break;
       case 'Match': {
         out.push(`${indent}match ${expr(s.scrut)} {`);

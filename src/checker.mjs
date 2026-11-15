@@ -470,6 +470,16 @@ export function check(program, diags) {
         }
         owned(f.expr, `field '${f.name}'`);
       });
+      // Grid(cells: cells, rows: len(cells)): a later field may still read the length of a value an
+      // earlier field took over. Nothing is kept by that read, so the value has still moved.
+      e.fields.forEach((f, i) => {
+        if (f.expr.kind !== 'Name' || !f.expr.sym) return;
+        for (const g of e.fields.slice(i + 1)) {
+          walk(g.expr, (x) => {
+            if (x.kind === 'Call' && x.name === 'len' && x.args.length === 1 && x.args[0].kind === 'Name' && x.args[0].sym === f.expr.sym) x.args[0].glanceOf = f.expr;
+          });
+        }
+      });
       const missing = decl.typeParams.filter((p) => !bound.has(p));
       if (ok && missing.length) {
         err('E0213', `cannot work out type parameter ${missing.join(', ')} of '${decl.name}' here`, e,
@@ -497,7 +507,7 @@ export function check(program, diags) {
           }
           const sym = lookup(e.name);
           if (sym && sym.fnBinding) {
-            err('E0232', `'${e.name}' is a function parameter; it can only be called or passed to another function`, e);
+            err('E0232', `'${e.name}' is a function; it can only be called or passed to another function`, e, 'functions cannot be stored in arrays or structs, or returned');
             return '?';
           }
           if (sym) { e.sym = sym; e.inReturn = returning; (sym.uses ??= []).push(e); return sym.ty; }
@@ -593,6 +603,50 @@ export function check(program, diags) {
             return '?';
           }
           return isCmp ? 'Bool' : l;
+        }
+        case 'MatchExpr': {
+          const t = expr(e.scrut);
+          const scrutRoot = placeRoot(e.scrut);
+          if (scrutRoot && e.arms.some((a) => a.binds.length)) scrutRoot.viewed = true;
+          const en = enums.get(t);
+          if (t !== '?' && !en) err('E0215', `match needs an enum value but got ${t}`, e.scrut, 'match works on values of an enum type');
+          const seen = new Set();
+          let hasElse = false, rt = null;
+          for (const arm of e.arms) {
+            scopes.push(new Map());
+            arm.syms = [];
+            if (arm.variant === null) {
+              if (hasElse) err('E0217', 'this match has more than one else arm', arm);
+              hasElse = true;
+            } else if (en) {
+              const v = en.variants.find((x) => x.name === arm.variant);
+              if (!v) {
+                err('E0216', `'${arm.variant}' is not a variant of ${t}`, arm, `variants of ${t} are: ${en.variants.map((x) => x.name).join(', ')}`);
+              } else {
+                if (seen.has(v.name)) err('E0217', `variant '${v.name}' is matched more than once`, arm);
+                seen.add(v.name);
+                arm.index = v.index;
+                if (arm.binds.length && arm.binds.length !== v.fields.length) {
+                  err('E0218', `variant '${v.name}' has ${v.fields.length} field${v.fields.length === 1 ? '' : 's'} (${v.fields.map((f) => f.name).join(', ')}), but ${arm.binds.length} name${arm.binds.length === 1 ? ' was' : 's were'} given`, arm,
+                    `write ${v.name}${v.fields.length ? `(${v.fields.map((f) => f.name).join(', ')})` : ''}, or leave the names out to ignore the fields`);
+                } else {
+                  arm.syms = arm.binds.map((b, i) => (b.name === '_' ? null : declare(b.name, v.fields[i].ok ? v.fields[i].ty : '?', b, { view: true, fieldIndex: i })));
+                }
+              }
+            }
+            if (rt === null || rt === '?') rt = expr(arm.expr, hint); else want(arm.expr, rt, 'the value of this arm');
+            scopes.pop();
+          }
+          if (!e.arms.length) err('E0219', 'a match expression needs at least one arm', e);
+          if (en && !hasElse) {
+            const missing = en.variants.filter((v) => !seen.has(v.name)).map((v) => v.name);
+            if (missing.length) err('E0219', `match does not cover: ${missing.join(', ')}`, e, 'a match expression must give a value for every variant: add the missing arms, or an else arm');
+          }
+          e.scrutSym = temp(en ? t : 'Int');
+          if (rt === null || rt === '?') return '?';
+          if (rt === 'Unit') { err('E0201', 'the arms of a match expression must give a value', e); return '?'; }
+          if (hasContainer(rt)) err('E0225', `a match expression cannot give a value of type ${showType(rt)}`, e, 'arrays and maps are never shared; put the match on a line of its own and assign or return in each arm');
+          return rt;
         }
         case 'Cond': {
           want(e.cond, 'Bool', 'condition');
@@ -942,6 +996,58 @@ export function check(program, diags) {
 
     const nameNode = (sym, at) => ({ kind: 'Name', name: sym.name, sym, ty: sym.ty, line: at.line, col: at.col, file: at.file });
 
+    // The value a function took from outside is read again wherever the function is called, so
+    // that place counts as a use of it (it cannot have moved away in between).
+    const usedHere = (sym, at) => { const n = nameNode(sym, at); n.inReturn = returning; (sym.uses ??= []).push(n); return n; };
+
+    // let double = fn(x: Int) => x * 2, or let f = some_function: a name for a function, fixed when
+    // the program is compiled. It can be called and passed on; it is not a value that is stored.
+    function fnLet(s) {
+      const init = s.init;
+      const named = init.kind === 'Name' && !lookup(init.name) && !consts.has(init.name) && !variants.has(init.name) ? fns.get(init.name) : null;
+      const alias = init.kind === 'Name' ? lookup(init.name) : null;
+      const again = alias && alias.fnBinding && alias.fnBinding.fn ? alias : null;
+      if (init.kind !== 'Lambda' && !named && !again) return false;
+      const noop = () => { const at = { line: s.line, col: s.col, file: s.file }; for (const k of Object.keys(s)) delete s[k]; Object.assign(s, { kind: 'ExprStmt', expr: { kind: 'BoolLit', value: true, ty: 'Bool', ...at }, ...at }); };
+      const name = s.name;
+      if (s.mutable || s.ty) {
+        err('E0232', s.mutable ? `'${name}' holds a function, so it must be a let` : `'${name}' holds a function: leave out the type`, s, `write let ${name} = ...; which function it names is fixed when the program is compiled`);
+        noop();
+        return true;
+      }
+      if (lookup(name)) { err('E0103', `'${name}' is already defined in this scope or an enclosing one`, s, 'Avisoq does not allow shadowing; choose a new name'); noop(); return true; }
+      let binding = null, ty = '?';
+      if (again) {
+        binding = again.fnBinding;
+        ty = again.ty;
+      } else if (named) {
+        visible(named, init);
+        if (named.fnParams && named.fnParams.size) err('E0232', `'${init.name}' takes a function itself and cannot be given another name`, init);
+        else { binding = { fn: named, captureSyms: [] }; ty = `Fn[${[named.ret, ...named.params.map((p) => p.ty)].join(',')}]`; }
+      } else {
+        const untyped = init.params.find((p) => !p.ty);
+        if (untyped) {
+          err('E0232', `parameter '${untyped.name}' needs a type, because this lambda is kept in a variable`, untyped, `write let ${name} = fn(${init.params.map((p) => `${p.name}: ${p.ty ? showType(p.ty) : 'Type'}`).join(', ')}) => ...`);
+        } else if (init.params.every((p) => validType(p.ty, p))) {
+          const params = new Set(['__R']), bound = new Map();
+          const isOpen = (t) => [...t.matchAll(/[A-Za-z_][A-Za-z0-9_]*/g)].some((m) => params.has(m[0]) && !bound.has(m[0]));
+          const made = bindFn(init, { name, ty: `Fn[__R,${init.params.map((p) => p.ty).join(',')}]` }, null, params, bound, isOpen);
+          if (made) {
+            const changing = made.captures.find((c) => canMutate(c.node.sym));
+            if (changing) {
+              err('E0231', `a function kept in a variable cannot use '${changing.node.sym.name}', which can change`, init, `give '${changing.node.sym.name}' to the function as a parameter, or copy it into a let first`);
+            } else {
+              binding = { fn: made.fn, captureSyms: made.captures.map((c) => c.node.sym) };
+              ty = `Fn[${[made.fn.ret, ...init.params.map((p) => p.ty)].join(',')}]`;
+            }
+          }
+        }
+      }
+      scopes[scopes.length - 1].set(name, { name, ty, isParam: true, fnBinding: binding ?? { fn: null, captureSyms: [] }, broken: !binding });
+      noop();
+      return true;
+    }
+
     // Works out which function is passed for a function-valued parameter.
     function bindFn(arg, prm, tmpl, params, bound, isOpen) {
       const parts = typeArgs(prm.ty), retPat = parts[0];
@@ -959,6 +1065,11 @@ export function check(program, diags) {
       if (arg.kind === 'Lambda') {
         if (arg.params.length !== argTys.length) {
           err('E0202', `the function for '${prm.name}' takes ${argTys.length} argument${argTys.length === 1 ? '' : 's'}, but this lambda has ${arg.params.length}`, arg);
+          return null;
+        }
+        const wrong = arg.params.findIndex((lp, k) => lp.ty && lp.ty !== argTys[k]);
+        if (wrong >= 0) {
+          err('E0201', `parameter '${arg.params[wrong].name}' of this lambda is declared ${showType(arg.params[wrong].ty)}, but the function for '${prm.name}' receives ${showType(argTys[wrong])}`, arg.params[wrong]);
           return null;
         }
         const pristine = structuredClone(arg.body);
@@ -991,6 +1102,14 @@ export function check(program, diags) {
         };
         const saved = currentFile;
         setupSignature(lifted);
+        // Function names from outside that the body calls or passes on stay names inside it.
+        const outerFns = new Map();
+        walk(pristine, (n) => {
+          if (n.kind !== 'Call' && n.kind !== 'Name') return;
+          const l = lookup(n.name);
+          if (l && l.fnBinding && l.fnBinding.fn) outerFns.set(n.name, l);
+        });
+        if (outerFns.size) lifted.fnParams = new Map([...outerFns].map(([nm, l]) => [nm, { fn: l.fnBinding.fn, capNames: l.fnBinding.captureSyms.map((x) => x.name), ty: l.ty }]));
         for (const x of effects) lifted.effectSet.add(x);
         concreteFns.push(lifted);
         checkBody(lifted, false);
@@ -1002,9 +1121,11 @@ export function check(program, diags) {
         if (local && local.fnBinding) {
           // A function parameter passed on to another function.
           const { fn: bf, captureSyms } = local.fnBinding;
+          if (!bf) return null;
           if (fits(bf, captureSyms.length) && bindRet(bf.ret, arg)) {
-            return { fn: bf, captures: captureSyms.map((s) => ({ ty: s.ty, node: nameNode(s, arg) })) };
+            return { fn: bf, captures: captureSyms.map((s) => ({ ty: s.ty, node: usedHere(s, arg) })) };
           }
+          err('E0201', `'${arg.name}' does not fit '${prm.name}', which needs ${showType(substType(prm.ty, bound))}`, arg);
           return null;
         }
         if (!local) {
@@ -1033,10 +1154,11 @@ export function check(program, diags) {
       if (viaParam && viaParam.fnBinding) {
         // Calling a function parameter: a direct call to the function this instance was built with.
         const { fn: bf, captureSyms } = viaParam.fnBinding;
+        if (!bf) { e.args.forEach((a) => expr(a)); return '?'; } // its definition already has an error
         const n = bf.params.length - captureSyms.length;
         if (!argc(e, n)) return bf.ret;
         for (let i = 0; i < n; i++) want(e.args[i], bf.params[i].ty, `argument ${i + 1} of '${e.name}'`);
-        e.args = [...e.args, ...captureSyms.map((s) => nameNode(s, e))];
+        e.args = [...e.args, ...captureSyms.map((s) => usedHere(s, e))];
         return finishCall(e, bf);
       }
       const f = fns.get(e.name);
@@ -1106,6 +1228,7 @@ export function check(program, diags) {
     function stmt(s) {
       switch (s.kind) {
         case 'Let': {
+          if (fnLet(s)) break;
           if (s.ty && !validType(s.ty, s)) s.ty = null;
           let t = s.ty ? want(s.init, s.ty, `initial value of '${s.name}'`) : expr(s.init);
           if (s.ty) t = s.ty;
@@ -1311,13 +1434,13 @@ export function check(program, diags) {
     block(owner.body);
 
     for (const mv of moves) {
-      const later = (mv.sym.uses ?? []).some((u) => u !== mv.node && (u.line > mv.node.line || (u.line === mv.node.line && u.col > mv.node.col)));
+      const later = (mv.sym.uses ?? []).some((u) => u !== mv.node && u.glanceOf !== mv.node && (u.line > mv.node.line || (u.line === mv.node.line && u.col > mv.node.col)));
       // a value handed on and then replaced before it is read again (a = b; b = c) has moved, even inside a loop
       if (mv.sym.viewed) mv.report();
       // a value given away inside a return statement is never used again on that path,
       // unless the same return statement uses it a second time
       else if (mv.returning) {
-        const again = (mv.sym.uses ?? []).some((u) => u !== mv.node && u.inReturn === mv.returning && (u.line > mv.node.line || (u.line === mv.node.line && u.col > mv.node.col)));
+        const again = (mv.sym.uses ?? []).some((u) => u !== mv.node && u.glanceOf !== mv.node && u.inReturn === mv.returning && (u.line > mv.node.line || (u.line === mv.node.line && u.col > mv.node.col)));
         if (again) mv.report(); else mv.node.moved = true;
       } else if (mv.node.rebound) mv.node.moved = true;
       else if (mv.sym.declLoop !== mv.loop || later) mv.report(); else mv.node.moved = true;

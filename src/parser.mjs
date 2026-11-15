@@ -265,8 +265,19 @@ export function parse(src) {
           }
           expect('op', '..', 'loops are written: for i in start..end { ... } (end is exclusive)');
           const end = parseExpr();
+          // for i in start..end step k: k is a whole number, negative to count down
+          let step = null;
+          if (peek().kind === 'id' && peek().value === 'step') {
+            const st = next();
+            const negative = isOp('-');
+            if (negative) next();
+            const k = peek();
+            if (k.kind !== 'int' || BigInt(k.value) === 0n) fail('the step of a loop is a whole number other than 0, written out', 'write step 2, or step -1 to count down', st);
+            next();
+            step = negative ? -BigInt(k.value) : BigInt(k.value);
+          }
           const body = parseBlock();
-          return { kind: 'For', name: name.value, start, end, body, line: name.line, col: name.col, stmtLine: t.line };
+          return { kind: 'For', name: name.value, start, end, ...(step === null ? {} : { step }), body, line: name.line, col: name.col, stmtLine: t.line };
         }
         case 'match':
           return parseMatch();
@@ -502,6 +513,39 @@ export function parse(src) {
       }
       return { kind: 'Name', name: t.value, ...at };
     }
+    if (isKw('match')) {
+      // A match that gives a value: match shape { Circle(r) => 3 * r * r, Empty => 0 }
+      next();
+      const scrut = parseExpr();
+      expect('op', '{', 'a match expression is written: match value { Variant(x) => result, Other => result }');
+      const arms = [];
+      while (!isOp('}')) {
+        const armAt = { line: peek().line, col: peek().col };
+        let variant = null;
+        const binds = [];
+        if (isKw('else')) {
+          next();
+        } else {
+          variant = ident('a variant name').value;
+          if (isOp('(')) {
+            next();
+            while (!isOp(')')) {
+              const b = ident('a name for the field');
+              binds.push({ name: b.value, line: b.line, col: b.col });
+              if (!isOp(')')) expect('op', ',');
+            }
+            next();
+          }
+        }
+        expect('op', '=>', 'each arm of a match expression is written: Variant(x) => result');
+        if (isOp('{')) fail('an arm of a match expression gives a value, not a block', 'write Variant(x) => value; for statements in the arms, put the match on a line of its own');
+        const value = parseExpr();
+        arms.push({ variant, binds, expr: value, ...armAt });
+        if (isOp(',')) next();
+      }
+      next();
+      return { kind: 'MatchExpr', scrut, arms, ...at };
+    }
     if (isKw('if')) {
       // A conditional expression: if c then a else b
       next();
@@ -519,11 +563,14 @@ export function parse(src) {
       const params = [];
       while (!isOp(')')) {
         const pn = ident('a parameter name');
-        params.push({ name: pn.value, line: pn.line, col: pn.col });
+        // the type is needed only when the lambda is kept in a variable: let double = fn(x: Int) => x * 2
+        let pty = null;
+        if (isOp(':')) { next(); pty = parseType(); }
+        params.push({ name: pn.value, ...(pty ? { ty: pty } : {}), line: pn.line, col: pn.col });
         if (!isOp(')')) expect('op', ',');
       }
       next();
-      expect('op', '=>', 'a lambda is written fn(x) => expression; its parameter types come from where it is used');
+      expect('op', '=>', 'a lambda is written fn(x) => expression');
       return { kind: 'Lambda', params, body: parseExpr(), ...at };
     }
     if (isOp('(')) {

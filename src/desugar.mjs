@@ -65,6 +65,35 @@ export function desugar(program) {
         out.push({ kind: 'For', name: i, start: { kind: 'IntLit', value: 0n, raw: '0', ...at }, end: { kind: 'Call', name: 'len', args: [structuredClone(items)], ...at }, body, line: s.index ? s.index.line : s.line, col: s.index ? s.index.col : s.col, endLine: s.endLine, stmtLine: s.stmtLine });
         continue;
       }
+      if (s.kind === 'For' && s.step !== undefined) {
+        // for i in a..b step k  ->  a while loop that adds k after every round. The step is taken
+        // at the top of the next round, so `continue` still moves on.
+        exprs(s.start); exprs(s.end);
+        const cur = fresh('cur'), end = fresh('end'), go = fresh('go'), k = s.step, up = k > 0n;
+        const name = (x) => ({ kind: 'Name', name: x, ...at });
+        const int = (v) => ({ kind: 'IntLit', value: v, raw: String(v), ...at });
+        const bin = (op, left, right) => ({ kind: 'Binary', op, left, right, ...at });
+        const size = up ? k : -k;
+        const left = up ? bin('-', name(end), name(cur)) : bin('-', name(cur), name(end));
+        const body = block([
+          { kind: 'If', cond: name(go), then: [
+            { kind: 'If', cond: bin('<=', left, int(size)), then: [{ kind: 'Break', ...at }], els: null, ...at },
+            { kind: 'Assign', target: name(cur), value: bin('+', name(cur), int(k)), ...at },
+          ], els: null, ...at },
+          { kind: 'Assign', target: name(go), value: { kind: 'BoolLit', value: true, ...at }, ...at },
+          { kind: 'If', cond: bin(up ? '>=' : '<=', name(cur), name(end)), then: [{ kind: 'Break', ...at }], els: null, ...at },
+          { kind: 'Let', mutable: false, name: s.name, ty: null, init: name(cur), line: s.line, col: s.col, endLine: s.line, stmtLine: s.line },
+          ...s.body,
+        ]);
+        body.closeLine = s.body.closeLine;
+        out.push(
+          { kind: 'Let', mutable: false, name: end, ty: null, init: s.end, stmtLine: s.line, ...at },
+          { kind: 'Let', mutable: true, name: cur, ty: null, init: s.start, stmtLine: s.line, ...at },
+          { kind: 'Let', mutable: true, name: go, ty: null, init: { kind: 'BoolLit', value: false, ...at }, stmtLine: s.line, ...at },
+          { kind: 'While', cond: { kind: 'BoolLit', value: true, ...at }, invariants: [], body, ...at, stmtLine: s.stmtLine },
+        );
+        continue;
+      }
       if (s.try) {
         s.try = false;
         const scrut = s.kind === 'Let' ? s.init : s.kind === 'Assign' ? s.value : s.expr;

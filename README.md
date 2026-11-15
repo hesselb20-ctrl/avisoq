@@ -9,7 +9,7 @@ A small, fast, safe programming language designed to be written and verified by 
 Version 0.14. One front end, two backends (native machine code through GCC, and sandboxed
 WebAssembly), a standard library written in Avisoq, a formatter, a compile-time contract prover,
 a language server, a package manager and a differential fuzzer. The test suites pass on both
-backends: 371 compiler cases each, 21 + 65 embedding and 18 interop tests, plus 26 editor, 17 package and 10 sandbox tests.
+backends: 384 compiler cases each, 21 + 65 embedding and 18 interop tests, plus 26 editor, 17 package and 10 sandbox tests.
 
 ```
 import "std/strings"
@@ -167,7 +167,7 @@ module itself and runs it in a sandbox. Both keep every run-time check.
   reclaimed memory overwritten first, so a value handed back while still in use fails loudly
   instead of passing by luck.
 
-<img src=".github/assets/how/scene.webp" width="100%" alt="371 test programs go through one front end, are compiled by both the native and the WebAssembly backend, and all 371 print the same on both. The fuzzer found two mismatches, both fixed.">
+<img src=".github/assets/how/scene.webp" width="100%" alt="384 test programs go through one front end, are compiled by both the native and the WebAssembly backend, and all 384 print the same on both. The fuzzer found two mismatches, both fixed.">
 
 ## Capabilities
 
@@ -406,7 +406,9 @@ on an idle machine with 8 logical cores (Zen 4, AVX-512). Ratios are relative to
   never been run. Native HTTP and the sandbox launcher are Windows-only; elsewhere native
   `http_get` returns an error value and programs run without the launcher.
 - **Functions are not first-class.** They can be passed to functions, with captured values,
-  but not stored or returned. Each lambda creates its own copy of the function it is passed to.
+  and a `let` can name one, but they cannot be put in arrays or structs, or returned: which
+  function runs is always known when the program is compiled. Each lambda creates its own copy
+  of the function it is passed to.
 - **Prover:** linear integer reasoning only, and no SMT solver. Invariants it cannot prove are
   still checked while running.
 - **Generic constraints** cover the three built-in ones; you cannot declare your own.

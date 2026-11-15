@@ -307,6 +307,29 @@ export function codegen(program, opts = {}) {
       switch (e.kind) {
         case 'Held': lget(storeIndex); break;
         case 'Cond': expr(e.cond); emit(IF, wt(e.ty)); expr(e.then); emit(ELSE); expr(e.els); emit(END); break;
+        case 'MatchExpr': {
+          const sc = e.scrutSym.idx;
+          expr(e.scrut); lset(sc);
+          const arms = e.arms.filter((a) => a.variant !== null), other = e.arms.find((a) => a.variant === null);
+          const go = (k) => {
+            if (k === arms.length) { if (other) expr(other.expr); else emit(UNREACHABLE); return; }
+            const arm = arms[k];
+            // the last arm of a match that covers everything needs no test
+            if (k === arms.length - 1 && !other) {
+              arm.syms.forEach((sym, i) => { if (!sym) return; const cls = fieldClass(sym.ty); lget(sc); emit(LOAD[cls], cls === 'i32' ? 2 : 3, ...uleb(8 * (i + 1))); lset(sym.idx); });
+              expr(arm.expr);
+              return;
+            }
+            lget(sc); emit(I64_LOAD, 3, 0, ...i64c(arm.index), I64_EQ, IF, wt(e.ty));
+            arm.syms.forEach((sym, i) => { if (!sym) return; const cls = fieldClass(sym.ty); lget(sc); emit(LOAD[cls], cls === 'i32' ? 2 : 3, ...uleb(8 * (i + 1))); lset(sym.idx); });
+            expr(arm.expr);
+            emit(ELSE);
+            go(k + 1);
+            emit(END);
+          };
+          go(0);
+          break;
+        }
         case 'IntLit': emit(...i64c(e.value)); break;
         case 'FloatLit': emit(F64_CONST, ...f64bytes(e.value)); break;
         case 'BoolLit': emit(...i32c(e.value ? 1 : 0)); break;

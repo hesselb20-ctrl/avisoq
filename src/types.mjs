@@ -27,6 +27,7 @@ export function children(n) {
     case 'LetTuple': return [n.init];
     case 'AssignTuple': return [...n.targets, n.value];
     case 'Cond': return [n.cond, n.then, n.els];
+    case 'MatchExpr': return [n.scrut, ...n.arms.map((arm) => arm.expr)];
     case 'ForIn': return [n.iter, ...n.body];
     case 'Sum': case 'Comp': return [n.start, n.end, n.body];
     case 'Call': return n.args;

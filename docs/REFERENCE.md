@@ -25,7 +25,7 @@ marked as Avisoq on this page are compiled by the test suite.
 | `(A, B)` | tuple of 2 to 4 | `(a, b)`; parts are `.first`, `.second`, `.third`, `.fourth` |
 | struct | named fields | `struct Point { x: Int, y: Int }`, `Point(x: 1, y: 2)`, `p.x` |
 | enum | one of several variants | `enum Shape { Circle(r: Int), Empty }`, `Circle(r: 2)`, `Empty` |
-| `fn(A, B) -> R` | a function, as a parameter only | pass a function name or a lambda `fn(x) => x * 2` |
+| `fn(A, B) -> R` | a function, as a parameter or a `let` name | pass a function name or a lambda `fn(x) => x * 2` |
 
 There are no implicit conversions: `float(i)`, `int(f)`, `str(x)`. There is no null.
 
@@ -80,7 +80,11 @@ fn scale(xs: mut [Int], factor: Int) -> Int
   clauses. Inside `ensures`, `result` is the value being returned.
 - `private fn` (also `private struct`, `private enum`, `private let`) is usable only in its file.
 - Functions are not values: they can be passed to a parameter of function type, with a lambda
-  capturing the variables it reads, but not stored in a variable or a field, or returned.
+  capturing the variables it reads. A `let` can give one a name, `let sq = square` or
+  `let add = fn(x: Int) => x + offset`, which can then be called and passed on; which function
+  it names is fixed when the program is compiled. A lambda kept this way needs its parameter
+  types and may read only `let` values from outside. Functions cannot be kept in a `var`, an
+  array or a field, or returned.
 
 ### Constants
 
@@ -126,7 +130,7 @@ name. A declaration in your program wins over a standard library function of the
 | Assignment | `x = e`, `xs[i] = e`, `p.field = e`, `items[i].field = e`, `(a, b) = pair` |
 | Compound | `x += e`, also `-= *= /= %=`, on anything assignable |
 | Choice | `if c { } else if d { } else { }` |
-| Loops | `while c { }`, `for i in a..b { }` (b excluded), `for x in items { }`, `for i, x in items { }` |
+| Loops | `while c { }`, `for i in a..b { }` (b excluded), `for i in a..b step k { }` (k a whole number written out; negative counts down, b still excluded), `for x in items { }`, `for i, x in items { }` |
 | Loop control | `break`, `continue` (innermost loop) |
 | Matching | `match value { Variant(a, b) => { } Other => { } else => { } }`: every variant must be covered |
 | Leaving | `return e`, `return` |
@@ -148,14 +152,46 @@ name. A declaration in your program wins over a standard library function of the
 | `+ - * / %` | on `Int` and on `Float` (not `%`); `+` joins strings. `/` on `Int` rounds toward zero |
 | `and`, `or`, `not` | the right side of `and` / `or` is evaluated only when needed |
 | `if c then a else b` | a conditional value; not for arrays or maps |
+| `match v { A(x) => e, B => e }` | a value chosen by variant; every variant or an `else` arm; arms separated by commas or new lines; not for arrays or maps |
 | `sum(i in a..b: e)` | adds `e` for each `i`; the compiler may run it on several cores |
 | `[i in a..b: e]` | an array of `e` for each `i`; likewise |
-| `fn(x, y) => e` | a lambda, where a function parameter is expected |
+| `fn(x, y) => e` | a lambda, where a function parameter is expected; `let f = fn(x: Int) => e` names one |
 | `Name(field: e, ...)` | builds a struct or an enum variant |
 | `copy(e)` | an independent copy of an array, map or a value containing them |
 
 Precedence, loosest first: `or`, `and`, `not`, comparisons, `+ -`, `* / %`, unary `-`, then
 indexing, field access and calls.
+
+A match that gives a value, a loop that counts down, and names for functions:
+
+```avisoq
+enum Shape { Circle(radius: Int), Box(width: Int, height: Int), Empty }
+
+fn area(s: Shape) -> Int {
+  return match s { Circle(radius) => 3 * radius * radius, Box(width, height) => width * height, Empty => 0 }
+}
+
+fn square(x: Int) -> Int { return x * x }
+
+fn twice(f: fn(Int) -> Int, x: Int) -> Int { return f(f(x)) }
+
+fn main() uses io {
+  print(area(Circle(radius: 2)), area(Box(width: 3, height: 4)), area(Empty))
+  var countdown = ""
+  for i in 3..0 step -1 { countdown += str(i) + " " }
+  print(countdown + "go")
+  let sq = square
+  let offset = 10
+  let shift = fn(x: Int) => x + offset
+  print(sq(7), shift(5), twice(sq, 3), twice(shift, 1))
+}
+```
+
+```output
+12 12 0
+3 2 1 go
+49 15 81 21
+```
 
 ## Safety rules
 
