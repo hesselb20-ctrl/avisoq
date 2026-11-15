@@ -2,40 +2,77 @@
 
 # Avisoq
 
-A small, fast, safe programming language designed to be written and verified by AI agents.
+The safe place to run code an AI just wrote.
+
+Avisoq is a small language for the code you did not write yourself and do not have time to
+review: a function an agent produced a second ago, a rule a customer typed in, a plug-in. You
+call it from Python or JavaScript, or hand it to an agent as a tool, and four things hold
+without anyone reading the code first:
+
+- **It can only do what you granted.** A function's signature says whether it prints, reads
+  files, uses the network or calls back into your program. Nothing is granted by default.
+- **It runs on a budget.** Every call can carry a time limit and a memory
+  limit; going over is an error in your language, and the next call works.
+- **It fails loudly instead of answering wrongly.** Overflow, a bad index, a missing key or a
+  broken contract stop the call with a message that says where.
+- **It is fast enough to leave in.** Native code or sandboxed WebAssembly, no garbage
+  collector, and agent-written Avisoq has run level with or ahead of agent-written Rust.
+
+A model learns the whole language from [one page](docs/AGENT_GUIDE.md): in a benchmark on
+tasks the author did not write, two models scored 119 of 120 in Avisoq, the same as in Python.
+
+```
+// tools.avq
+import "std/strings"
+
+// The unit price of a product in cents. The program around this file provides it:
+// it is the only thing this code can reach.
+extern "host" fn unit_price(product: Str) -> Int
+
+// Prices an order in cents, with 10% off from 10 units.
+fn quote(product: Str, quantity: Int) -> Result[Int, Str] uses host
+  requires quantity > 0
+{
+  let price = unit_price(to_lower(trim(product)))
+  if price < 0 { return Err(error: "unknown product: " + product) }
+  let subtotal = price * quantity
+  return Ok(value: if quantity >= 10 then subtotal - subtotal / 10 else subtotal)
+}
+```
+
+Call it from your program, with limits:
+
+```js
+import { load } from 'avisoq';
+
+const tools = await load('tools.avq', {
+  timeLimitMs: 50, memoryLimitMb: 64,                  // per call
+  host: { unit_price: (product) => prices[product] ?? -1 },
+});
+tools.quote('widget', 12);   // { variant: 'Ok', value: 2700 }
+tools.quote('widget', 0);    // throws: precondition violated: requires quantity > 0
+```
+
+Or give it to an agent. This serves every function in the file as a tool over the Model
+Context Protocol, with the schema taken from the types and the description from the comment:
+
+```
+avisoq mcp tools.avq --host host.mjs
+```
+
+A working version of both is in [`examples/agent-tools`](examples/agent-tools/README.md).
+
+**What this is not.** It is not a general-purpose language with an ecosystem, and agents do
+not write it faster than Python or Rust (they take 15 to 58% longer, measured). It is days
+old, has had one author, and has only been run on Windows. See [Known limits](#known-limits).
 
 <img src=".github/assets/figure/scene.webp" width="100%" alt="Three beats: a mandelbrot benchmark computed on one thread with every check on in 112 ms against 108 ms for C++; the same loop written as a sum, spread over 8 threads and 8 lanes; and the result, 4.6 ms against 15 ms for C++ parallelised by hand with OpenMP.">
 
-Version 0.14. One front end, two backends (native machine code through GCC, and sandboxed
+Version 0.15. One front end, two backends (native machine code through GCC, and sandboxed
 WebAssembly), a standard library written in Avisoq, a formatter, a compile-time contract prover,
 a language server, a package manager and a differential fuzzer. The test suites pass on both
-backends: 384 compiler cases each, 21 + 65 embedding and 18 interop tests, plus 26 editor, 17 package and 10 sandbox tests.
-
-```
-import "std/strings"
-import "std/arrays"
-
-struct Count { word: Str, times: Int }
-
-fn tally(ws: [Str]) -> [Count] {
-  var seen: Map[Str, Int] = {}
-  for i in 0..len(ws) {
-    put(seen, ws[i], get_or(seen, ws[i], 0) + 1)
-  }
-  return map(keys(seen), fn(w) => Count(word: w, times: get(seen, w)))
-}
-
-fn main() uses io, fs {
-  match read_file("examples/sample.txt") {
-    Err(error) => { print("could not read the file:", error) }
-    Ok(text) => {
-      var counts = tally(split(text, " "))
-      sort_by(counts, fn(c) => 0 - c.times)
-      each(filter(counts, fn(c) => c.times > 1), fn(c) => print(c.word, c.times))
-    }
-  }
-}
-```
+backends: 384 compiler cases each, 21 + 65 embedding, 41 limits and agent-tool, and 18 interop
+tests, plus 26 editor, 17 package and 10 sandbox tests.
 
 **Documentation:** [tutorial](docs/TUTORIAL.md) (fifteen minutes, every example tested) ·
 [language reference](docs/REFERENCE.md) · [changelog](CHANGELOG.md) ·
@@ -60,6 +97,7 @@ avisoq run   program.avq --allow io --native     # machine code
 avisoq test  program.avq
 avisoq fmt   program.avq                         # canonical layout
 avisoq build program.avq --native --portable -o program.exe
+avisoq mcp   tools.avq                           # its functions as tools for an AI agent
 avisoq guide                                     # the language guide written for AI agents
 avisoq lsp                                       # language server
 avisoq init | add <name> <path or git url> | install     # packages
@@ -108,6 +146,18 @@ when the call does real work, and slightly slower per call when it does none. Fr
 gain is larger, because the WebAssembly route there goes through a pipe: 3 microseconds a call
 instead of 50. The price: no virtual-machine sandbox, one thread, and what the code prints goes
 straight to standard output.
+
+**Limits per call.** `timeLimitMs` and `memoryLimitMb` (`time_limit_ms`, `memory_limit_mb` in
+Python; `--time-limit` and `--memory` on the command line) work on both routes. A call that
+goes over stops with an error of kind `time_limit` or `out_of_memory` and the module stays
+usable. The memory limit costs nothing. The time limit counts loop rounds and calls, which
+costs 10 to 60% in WebAssembly and up to about 70% on the tightest native loops, so it is off
+unless you ask for it.
+
+**Functions from your program.** Code declares what it needs with
+`extern "host" fn name(...)` and you pass those functions in `host: { ... }`. They take and
+return `Int`, `Float`, `Bool` and `Str`, and they are the only way out of the sandbox.
+(WebAssembly route, from JavaScript, so far.)
 
 ### Use what already exists from Avisoq
 
@@ -416,6 +466,11 @@ on an idle machine with 8 logical cores (Zen 4, AVX-512). Ratios are relative to
   slower on long chains of additions and on dividing very large numbers.
 - **`std/json` reads numbers as Floats** and does not round them as exactly as a full JSON
   library; whole numbers up to 2^53 are exact.
+- **The sandbox has soft spots.** On the WebAssembly route, maps live on the host side and are
+  not counted by the memory limit (the time limit still stops a runaway). On the native route
+  there is no virtual machine: the limits and the capability checks are the compiler's and
+  the runtime's, and deep recursion ends the process. Host functions and the MCP server's
+  callbacks are JavaScript-only. Nobody has tried to break out of any of this yet.
 - **Barely used.** One 260-line program and the examples; nobody but the author has written
   Avisoq yet. Expect gaps the moment someone writes something larger.
 - **Windows only, in practice.** The code is written to be portable, but Linux and macOS have

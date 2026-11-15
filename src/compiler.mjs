@@ -163,7 +163,7 @@ export function compile(src, opts = {}) {
     // C files and libraries named by extern functions are compiled and linked with the program.
     const sources = new Set(), links = new Set();
     for (const f of program.fns) {
-      if (!f.extern) continue;
+      if (!f.extern || f.extern.source === 'host') continue;
       const src = f.extern.source;
       if (src.toLowerCase().endsWith('.c')) sources.add(resolve(f.file ? dirname(resolve(f.file)) : process.cwd(), src));
       else if (src !== 'c' && src !== 'm') links.add(src);
@@ -212,7 +212,9 @@ function describe(e) {
 const fmtFloat = (x) => (Object.is(x, -0) ? '-0.0' : Number.isInteger(x) && Math.abs(x) < 1e21 ? x.toFixed(1) : String(x));
 
 // Instantiates a compiled module. Only capabilities listed in `allow` are wired in.
-export async function instantiate(wasm, meta, { allow = [], write = (s) => process.stdout.write(s) } = {}) {
+// limits: { deadline } (performance.now() value, 0 for none), read each time the program's step budget runs out.
+// host: { name: function } for the functions the program declares with extern "host".
+export async function instantiate(wasm, meta, { allow = [], write = (s) => process.stdout.write(s), limits = null, host = {} } = {}) {
   const grants = parseGrants(allow);
   let memory, instance;
   let parts = [];
@@ -318,8 +320,16 @@ export async function instantiate(wasm, meta, { allow = [], write = (s) => proce
       http_post: (u, b, c) => http('POST', u, strBytes(b), dec.decode(strBytes(c))),
     },
   };
+  const tick = () => {
+    if (limits && limits.deadline && performance.now() > limits.deadline) {
+      const err = new AvisoqFailure('the call ran longer than its time limit');
+      err.info = { kind: 'time_limit', message: err.message };
+      throw err;
+    }
+    instance.exports.__fuel.value = 50000;
+  };
   const imports = {
-    env: { fail },
+    env: { fail, tick },
     // Pure string helpers: no capability needed.
     rt: {
       str_concat: (a, b) => strOfRanges([[a + 4, a + 4 + strLen(a)], [b + 4, b + 4 + strLen(b)]]),
@@ -405,6 +415,25 @@ export async function instantiate(wasm, meta, { allow = [], write = (s) => proce
       imports.rt[`map_get_or_${kc}_${vc}`] = (h, k, d) => maps[h].get(mkey[kc](k))?.v ?? d;
     }
   }
+  // Functions of the embedding program. Only Int, Float, Bool and Str cross over.
+  const hostFail = (kind, message) => { const err = new AvisoqFailure(message); err.info = { kind, message }; throw err; };
+  imports.host = Object.fromEntries((meta.host ?? []).map((h) => [h.name, (...raw) => {
+    const f = host[h.name];
+    if (typeof f !== 'function') hostFail('capability_denied', `host function '${h.name}' was not provided`);
+    const args = raw.map((v, i) => (h.params[i] === 'Int' ? (v >= -9007199254740991n && v <= 9007199254740991n ? Number(v) : v) : h.params[i] === 'Bool' ? v !== 0 : h.params[i] === 'Str' ? dec.decode(strBytes(v)) : v));
+    let r;
+    try { r = f(...args); } catch (e) { if (e instanceof AvisoqFailure) throw e; hostFail('host', `host function '${h.name}' failed: ${e && e.message ? e.message : String(e)}`); }
+    const wrong = (want) => hostFail('host', `host function '${h.name}' must return ${want} but returned ${typeof r === 'object' ? JSON.stringify(r) : String(r)}`);
+    if (h.ret === 'Unit') return undefined;
+    if (h.ret === 'Int') {
+      if (typeof r === 'number' && Number.isInteger(r)) return BigInt(r);
+      if (typeof r === 'bigint' && r >= -(2n ** 63n) && r < 2n ** 63n) return r;
+      return wrong('an Int');
+    }
+    if (h.ret === 'Float') return typeof r === 'number' ? r : wrong('a Float');
+    if (h.ret === 'Bool') return typeof r === 'boolean' ? (r ? 1 : 0) : wrong('a Bool');
+    return typeof r === 'string' ? newStr(enc.encode(r)) : wrong('a Str');
+  }]));
   for (const c of Object.keys(caps)) {
     if (grants.names.has(c)) { imports[c] = caps[c]; continue; }
     // Not granted: the module links, but every entry point refuses to act.

@@ -1,6 +1,6 @@
 // Runtime failure kinds shared by both backends.
 
-export const FAIL = { REQUIRES: 1, ENSURES: 2, ASSERT: 3, BOUNDS: 4, OVERFLOW: 5, DIVZERO: 6, ARRSIZE: 7, OOM: 8, KEY: 9, IO: 10, INVARIANT: 11, EXTERN: 12 };
+export const FAIL = { REQUIRES: 1, ENSURES: 2, ASSERT: 3, BOUNDS: 4, OVERFLOW: 5, DIVZERO: 6, ARRSIZE: 7, OOM: 8, KEY: 9, IO: 10, INVARIANT: 11, EXTERN: 12, HOST: 13 };
 
 const KIND = {
   [FAIL.REQUIRES]: ['precondition', (s) => `precondition violated: requires ${s.text}`],
@@ -14,6 +14,7 @@ const KIND = {
   [FAIL.KEY]: ['missing_key', () => 'key not found in map'],
   [FAIL.INVARIANT]: ['invariant', (s) => `loop invariant violated: invariant ${s.text}`],
   [FAIL.IO]: ['io_error', () => 'file or network operation failed'],
+  [FAIL.HOST]: ['unsupported', (s) => `host function '${s.text}' is provided by the program that embeds this code, through WebAssembly: load the file without native: true`],
   [FAIL.EXTERN]: ['unsupported', (s) => `extern function '${s.text}' is C code, which only the native backend can call: run with --native`],
 };
 

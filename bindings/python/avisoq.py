@@ -79,10 +79,14 @@ def _exact(value):
 class Module:
     """The functions of one Avisoq file. Each callable function is an attribute."""
 
-    def __init__(self, path, allow=()):
+    def __init__(self, path, allow=(), time_limit_ms=0, memory_limit_mb=0):
         command = _command() + ["serve", path]
         if allow:
             command += ["--allow", ",".join(allow)]
+        if time_limit_ms:
+            command += ["--time-limit", str(int(time_limit_ms))]
+        if memory_limit_mb:
+            command += ["--memory", str(int(memory_limit_mb))]
         self._next = 0
         self.output = ""
         self._process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, encoding="utf-8",
@@ -159,7 +163,7 @@ class NativeModule:
     with a lock); recursion deep enough to overflow the stack ends the process.
     """
 
-    def __init__(self, library):
+    def __init__(self, library, time_limit_ms=0, memory_limit_mb=0):
         try:
             self._lib = ctypes.CDLL(os.path.abspath(library))
         except OSError as e:
@@ -178,6 +182,11 @@ class NativeModule:
         about = json.loads(self._out.raw[:n].decode("utf-8"))
         self._structs = about["types"]["structs"]
         self._enums = about["types"]["enums"]
+        if time_limit_ms and not about.get("budget"):
+            raise AvisoqError("%s: a time limit needs a library built with --budget" % library, "setup")
+        self._lib.avisoq_limits.argtypes = [ctypes.c_int64, ctypes.c_int64]
+        self._lib.avisoq_limits.restype = None
+        self._lib.avisoq_limits(int(time_limit_ms), int(memory_limit_mb * 1048576))
         self._index = {f["name"]: i for i, f in enumerate(about["functions"])}
         self.functions = {f["name"]: f for f in about["functions"]}
         self.output = ""
@@ -315,28 +324,36 @@ class NativeModule:
         self.close()
 
 
-def open_library(library):
-    """Load a shared library built earlier with `avisoq build file.avq --shared -o <library>`."""
-    return NativeModule(library)
+def open_library(library, time_limit_ms=0, memory_limit_mb=0):
+    """Load a shared library built earlier with `avisoq build file.avq --shared -o <library>`.
+
+    A time limit needs a library built with --budget as well.
+    """
+    return NativeModule(library, time_limit_ms, memory_limit_mb)
 
 
-def load(path, allow=(), native=False):
+def load(path, allow=(), native=False, time_limit_ms=0, memory_limit_mb=0):
     """Compile an Avisoq file and return its functions. `allow` lists capabilities, e.g. ["io"].
+
+    time_limit_ms and memory_limit_mb bound every call: one that runs too long or uses too much
+    memory raises AvisoqError (kind "time_limit" or "out_of_memory") and the module stays usable.
 
     native=True compiles to machine code (GCC must be installed) and calls it in this process,
     which is several times faster for real work; the default runs it sandboxed in WebAssembly.
     """
     if not native:
-        return Module(path, allow)
+        return Module(path, allow, time_limit_ms, memory_limit_mb)
     extension = ".dll" if os.name == "nt" else ".dylib" if sys.platform == "darwin" else ".so"
     with open(path, "rb") as f:
-        key = hashlib.sha256(f.read() + ",".join(allow).encode("utf-8") + os.path.abspath(path).encode("utf-8")).hexdigest()[:24]
+        key = hashlib.sha256(f.read() + ",".join(allow).encode("utf-8") + os.path.abspath(path).encode("utf-8") + (b"budget" if time_limit_ms else b"")).hexdigest()[:24]
     folder = os.path.join(tempfile.gettempdir(), "avisoq-cache")
     os.makedirs(folder, exist_ok=True)
     library = os.path.join(folder, "py-" + key + extension)
     command = _command() + ["build", path, "--shared", "-o", library, "--json"]
     if allow:
         command += ["--allow", ",".join(allow)]
+    if time_limit_ms:
+        command += ["--budget"]
     done = subprocess.run(command, capture_output=True, text=True, encoding="utf-8", shell=command[0].lower().endswith((".cmd", ".bat")))
     if done.returncode != 0:
         message, details = (done.stdout or done.stderr).strip(), {}
@@ -347,4 +364,4 @@ def load(path, allow=(), native=False):
         except Exception:
             pass
         raise AvisoqError(message or "could not build " + path, "compile", details)
-    return NativeModule(library)
+    return NativeModule(library, time_limit_ms, memory_limit_mb)

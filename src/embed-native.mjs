@@ -29,7 +29,7 @@ async function ffiModule(AvisoqError) {
   return ffi;
 }
 
-export async function open(libraryPath, { AvisoqError }) {
+export async function open(libraryPath, { AvisoqError, timeLimitMs = 0, memoryLimitMb = 0 }) {
   const f = await ffiModule(AvisoqError);
   let lib;
   try {
@@ -37,6 +37,7 @@ export async function open(libraryPath, { AvisoqError }) {
       avisoq_describe: { arguments: ['buffer', 'int64'], return: 'int64' },
       avisoq_call: { arguments: ['int32', 'buffer', 'int64', 'buffer', 'int64'], return: 'int64' },
       avisoq_take: { arguments: ['buffer', 'int64'], return: 'int64' },
+      avisoq_limits: { arguments: ['int64', 'int64'], return: 'void' },
     });
   } catch (e) {
     throw new AvisoqError(`${libraryPath}: cannot be loaded as an Avisoq library (${e.message})`, { kind: 'setup' });
@@ -50,6 +51,11 @@ export async function open(libraryPath, { AvisoqError }) {
     if (n > out.length) { out = Buffer.alloc(n); fn.avisoq_describe(out, n); }
     return n;
   }
+  if (timeLimitMs > 0 && !about.budget) {
+    lib.lib.close();
+    throw new AvisoqError(`${libraryPath}: a time limit needs a library built with --budget (avisoq build file.avq --shared --budget)`, { kind: 'setup' });
+  }
+  fn.avisoq_limits(Math.ceil(timeLimitMs), Math.ceil(memoryLimitMb * 1048576));
   const { structs, enums } = about.types;
   const bad = (what, ty, value) => new AvisoqError(`${what}: expected ${ty} but got ${typeof value === 'object' ? JSON.stringify(value) : String(value)}`, { kind: 'argument' });
 
@@ -146,6 +152,7 @@ export async function open(libraryPath, { AvisoqError }) {
   let closed = false;
   const module = {
     $functions: about.functions.map(({ denied, ...f }) => f),
+    $types: about.types,
     $output: () => '',
     $native: true,
     $close: () => { if (!closed) { closed = true; lib.lib.close(); } },
@@ -160,6 +167,8 @@ export async function open(libraryPath, { AvisoqError }) {
       if (r < 0) {
         const info = JSON.parse(out.toString('utf8', 0, fetch(-1 - r)));
         if (info.kind === 'capability_denied') info.message = `capability '${f.denied.join("', '")}' was not granted`;
+        if (info.kind === 'time_limit') info.message = `the call ran longer than its time limit of ${timeLimitMs} ms`;
+        if (info.kind === 'out_of_memory' && memoryLimitMb) info.message = `the call used more memory than its limit of ${memoryLimitMb} MB`;
         throw new AvisoqError(`${f.name}: ${info.message}`, info);
       }
       fetch(r);
@@ -172,15 +181,15 @@ export async function open(libraryPath, { AvisoqError }) {
 }
 
 // Compiles a file to a shared library (cached by content) and loads it.
-export async function loadNative(path, { allow = [], source, portable = false } = {}, { AvisoqError }) {
+export async function loadNative(path, { allow = [], source, portable = false, timeLimitMs = 0, memoryLimitMb = 0 } = {}, { AvisoqError }) {
   const { compile, buildNative } = await import('./compiler.mjs');
   await ffiModule(AvisoqError);
-  const compiled = compile(source ?? readFileSync(path, 'utf8'), { backend: 'native', shared: true, path, allow });
+  const compiled = compile(source ?? readFileSync(path, 'utf8'), { backend: 'native', shared: true, budget: timeLimitMs > 0, path, allow });
   if (!compiled.ok) {
     const d = compiled.diagnostics[0];
     throw new AvisoqError(`${path}:${d.line}:${d.col}: error[${d.code}]: ${d.message}`, { kind: 'compile', diagnostics: compiled.diagnostics });
   }
   let library;
   try { library = buildNative(compiled, null, { portable }); } catch (e) { throw new AvisoqError(e.message, { kind: 'setup' }); }
-  return open(library, { AvisoqError });
+  return open(library, { AvisoqError, timeLimitMs, memoryLimitMb });
 }

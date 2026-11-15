@@ -32,6 +32,11 @@ static int avisoq_failed_site;
 #define VSITE_NOFN (-3)
 #endif
 
+#ifdef AVISOQ_SHARED
+#define VSITE_TIME (-4)
+#define VSITE_MEM (-5)
+#endif
+
 __attribute__((noreturn, cold, noinline)) static void avisoq_fail(int site) {
 #ifdef AVISOQ_SHARED
   avisoq_failed_site = site;
@@ -46,6 +51,37 @@ __attribute__((noreturn, cold, noinline)) static void avisoq_fail(int site) {
   }
   __builtin_unreachable();
 }
+
+#ifdef AVISOQ_SHARED
+/* Limits for one call, set with avisoq_limits(). Memory in use is the chunks taken since the
+   call began plus the large blocks and maps that are alive, checked in the allocator's slow
+   paths, so the limit is accurate to about a megabyte. Time is checked every 65536 loop rounds
+   or calls, in libraries built with the budget option. */
+static int64_t avisoq_mem_limit = 0, avisoq_mem_used = 0, avisoq_chunk0 = 0, avisoq_time_limit_ns = 0, avisoq_deadline = 0, avisoq_fuel = 0;
+static int64_t avisoq_now_ns(void) { struct timespec ts; clock_gettime(CLOCK_MONOTONIC, &ts); return (int64_t)ts.tv_sec * 1000000000 + ts.tv_nsec; }
+__attribute__((cold, noinline)) static void avisoq_tick(void) {
+  if (avisoq_deadline && avisoq_now_ns() > avisoq_deadline) avisoq_fail(VSITE_TIME);
+  avisoq_fuel = 65536;
+}
+/* large blocks and maps: counted while they are alive */
+#define VMEM(n) do { avisoq_mem_used += (int64_t)(n); if (VUNLIKELY(avisoq_mem_limit && avisoq_mem_used > avisoq_mem_limit)) { avisoq_mem_used -= (int64_t)(n); avisoq_fail(VSITE_MEM); } } while (0)
+#define VMEM_FREE(n) do { avisoq_mem_used -= (int64_t)(n); } while (0)
+/* about to take chunk number c */
+#define VMEM_CHUNK(c) do { if (VUNLIKELY(avisoq_mem_limit && ((c) - avisoq_chunk0) * (int64_t)VARENA_CHUNK + avisoq_mem_used > avisoq_mem_limit)) avisoq_fail(VSITE_MEM); } while (0)
+#else
+#define VMEM(n) do { } while (0)
+#define VMEM_FREE(n) do { } while (0)
+#define VMEM_CHUNK(c) do { } while (0)
+#endif
+#if defined(AVISOQ_SHARED) && defined(AVISOQ_BUDGET)
+/* VTICK: once per call. VTICKL: once per loop round, counted in a local of the function (_tk),
+   which stays in a register; the clock is read every 16384 rounds. */
+#define VTICK do { if (VUNLIKELY(--avisoq_fuel < 0)) avisoq_tick(); } while (0)
+#define VTICKL do { if (VUNLIKELY(--_tk == 0)) { _tk = 16384; avisoq_tick(); } } while (0)
+#else
+#define VTICK do { } while (0)
+#define VTICKL do { } while (0)
+#endif
 
 /* ---- memory: thread-local region allocator ----
    Small blocks are bump-allocated from 1 MB chunks; large blocks come from malloc and are
@@ -72,13 +108,16 @@ static struct vmap *vmap_older(struct vmap *m);
 
 __attribute__((noinline)) static void *avisoq_alloc_slow(vtls *t, size_t n, bool zeroed) {
   if (n > 65536) {
+    VMEM(n);
     vbig *big = (vbig *)(zeroed ? calloc(1, n + sizeof(vbig)) : malloc(n + sizeof(vbig)));
+    if (big) big->pad = (int64_t)n;
     if (VUNLIKELY(!big)) avisoq_fail(VSITE_OOM);
     big->older = t->cur.big;
     t->cur.big = big;
     return big + 1;
   }
   if (VUNLIKELY((size_t)(t->cur.end - t->cur.p) < n)) {
+    VMEM_CHUNK(t->cur.chunk + 1);
     t->cur.chunk++;
     if (t->cur.chunk >= t->nchunks) {
       t->chunks = (char **)realloc(t->chunks, sizeof(char *) * (size_t)(t->nchunks + 1));
@@ -113,6 +152,7 @@ __attribute__((noinline)) static void avisoq_reset_slow(vtls *t, vmark m) {
   while (t->cur.big != m.big) {
     vbig *b = t->cur.big;
     t->cur.big = b->older;
+    VMEM_FREE(b->pad);
     free(b);
   }
   while (t->cur.maps != m.maps) {
@@ -302,7 +342,8 @@ typedef struct vmap {
 } vmap;
 
 static struct vmap *vmap_older(struct vmap *m) { return m->older; }
-static void vmap_release(struct vmap *m) { free(m->slots); free(m->keys); free(m->vals); }
+#define VMAP_BYTES(m, cap) ((cap) * (int64_t)(sizeof(uint64_t) + (size_t)(m)->vsize + 2 * sizeof(int32_t)))
+static void vmap_release(struct vmap *m) { VMEM_FREE(VMAP_BYTES(m, m->cap)); free(m->slots); free(m->keys); free(m->vals); }
 
 static vmap *vmap_new(int64_t vsize, int strkeys) {
   vmap *m = (vmap *)avisoq_alloc(sizeof(vmap), true);
@@ -348,6 +389,7 @@ static void *vmap_put(vmap *m, uint64_t key) {
   if (m->len == m->cap) {
     int64_t cap = m->cap ? m->cap * 2 : 8;
     if (VUNLIKELY(cap > (INT64_C(1) << 30))) avisoq_fail(VSITE_OOM);
+    VMEM(VMAP_BYTES(m, cap - m->cap));
     m->keys = (uint64_t *)realloc(m->keys, (size_t)cap * sizeof(uint64_t));
     m->vals = (char *)realloc(m->vals, (size_t)(cap * m->vsize));
     free(m->slots);

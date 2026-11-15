@@ -93,7 +93,8 @@ export class Module {
     append(out, section(2, vec(this.imports.map((i) => [...name(i.mod), ...name(i.field), 0x00, ...uleb(i.type)]))));
     append(out, section(3, vec(this.funcs.map((f) => uleb(f.type)))));
     append(out, section(5, vec([[0x01, ...uleb(this.minPages), ...uleb(this.maxPages)]])));
-    append(out, section(6, vec([[I32, 0x01, 0x41, ...sleb(this.heapStart), 0x0b]])));
+    // global 0: the heap pointer; global 1: steps left before the host checks the time limit
+    append(out, section(6, vec([[I32, 0x01, 0x41, ...sleb(this.heapStart), 0x0b], [I32, 0x01, 0x41, 0x00, 0x0b]])));
     const exps = [[...name('memory'), 0x02, 0x00], ...this.exports.map((e) => [...name(e.field), e.kind, ...uleb(e.index)])];
     append(out, section(7, vec(exps)));
     const bodies = this.funcs.map((f) => {

@@ -337,6 +337,14 @@ fn word_count(text: Str) -> Result[Str, Str] uses run {
 }
 ```
 
+**Functions of the program that runs your code.** When the task says the host provides a
+function, declare it and call it; the function that calls it needs `uses host`:
+
+```
+extern "host" fn unit_price(product: Str) -> Int     // Int, Float, Bool and Str only
+fn total(product: Str, n: Int) -> Int uses host { return unit_price(product) * n }
+```
+
 **C code** (native backend only). An `extern` function is written in C. It may take and
 return only `Int` (`long long`), `Float` (`double`), `Bool` and `Str` (`const char*`).
 Calling it needs the `ffi` effect and `--allow ffi`.

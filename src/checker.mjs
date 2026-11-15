@@ -14,7 +14,7 @@ try {
 } catch { /* the hint is optional */ }
 import { elemOf, isArr, isMap, mangle, mapParts, showType, substType, typeArgs, typeHead, unify, walk } from './types.mjs';
 
-export const EFFECTS = new Set(['io', 'time', 'fs', 'net', 'run', 'ffi']);
+export const EFFECTS = new Set(['io', 'time', 'fs', 'net', 'run', 'ffi', 'host']);
 const BUILTIN_EFFECTS = { print: 'io', now_ms: 'time', read_file: 'fs', write_file: 'fs', file_exists: 'fs', http_get: 'net', http_post: 'net', run_command: 'run' };
 const BUILTINS = new Set(['print', 'len', 'array', 'float', 'int', 'sqrt', 'now_ms', 'str', 'substr', 'byte_at',
   'put', 'get', 'get_or', 'has', 'keys', 'remove', 'copy', 'push', 'pop', 'chr', 'read_file', 'write_file', 'file_exists', 'http_get', 'http_post',

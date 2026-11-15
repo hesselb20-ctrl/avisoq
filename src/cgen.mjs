@@ -58,7 +58,10 @@ export function cgen(program, opts = {}) {
   // become vectors and control flow becomes a mask of active lanes. Anything outside the
   // supported subset throws Unsupported and the caller falls back to ordinary scalar code.
   class Unsupported extends Error {}
-  const simd = opts.simd !== false;
+  // a library that counts steps does it one loop round at a time
+  const budget = !!(opts.shared && opts.budget);
+  const tickC = budget ? 'VTICKL; ' : '';
+  const simd = opts.simd !== false && !budget;
   const vecText = [];
   const vecNames = new Map();
   const floatLit = (x) => {
@@ -284,6 +287,12 @@ export function cgen(program, opts = {}) {
   }
 
   function genFn(owner, isTest, cname) {
+    if (!isTest && owner.extern && owner.extern.source === 'host') {
+      // Provided by the embedding program, which only the WebAssembly route can call back into.
+      const sig = `static ${ctype(owner.ret)} ${cname}(${owner.params.map((p) => `${ctype(p.ty)} v_${p.name}`).join(', ') || 'void'})`;
+      sites.push(failInfo(FAIL.HOST, { fn: owner.name, file: owner.file, line: owner.line, col: owner.col, text: owner.name }));
+      return { sig, text: `${sig} { avisoq_fail(${sites.length - 1}); }` };
+    }
     if (!isTest && owner.extern) {
       // A C function: declare it as the C file defines it, and wrap it so the rest of the program
       // calls it like any other function. Standard library functions are already declared by the headers.
@@ -389,7 +398,7 @@ export function cgen(program, opts = {}) {
       const s = tmp(), en = tmp(), n = tmp(), acc = tmp(), k = tmp(), ch = tmp(), i = v(e.sym);
       const range = rangeDecl(e, s, en, n);
       const body = expr(e.body);
-      const head = `for (int64_t ${k} = 0; ${k} < ${n}; ${k}++) { const int64_t ${i} = ${s} + ${k};`;
+      const head = `for (int64_t ${k} = 0; ${k} < ${n}; ${k}++) { ${tickC}const int64_t ${i} = ${s} + ${k};`;
       if (simd && e.ty === 'Int' && e.simd !== false) {
         // Eight iterations per step when the body is plain numeric code.
         try {
@@ -456,7 +465,7 @@ export function cgen(program, opts = {}) {
       return `({ ${range} varr* ${a} = avisoq_arr_alloc(${n}, sizeof(${T}), ${site(FAIL.ARRSIZE, e)}, false); `
         + `${T}* ${d} = VDATA(${T}, ${a}); ${chunkDecl(ch, n)}\n`
         + `VPAR_IN;\n#pragma omp parallel for schedule(dynamic, ${ch}) ${parallelIf(e, n)}\n`
-        + `for (int64_t ${k} = 0; ${k} < ${n}; ${k}++) { const int64_t ${i} = ${s} + ${k}; ${inRegion(e, `${d}[${k}] = ${body};`)} }\nVPAR_OUT;\n`
+        + `for (int64_t ${k} = 0; ${k} < ${n}; ${k}++) { ${tickC}const int64_t ${i} = ${s} + ${k}; ${inRegion(e, `${d}[${k}] = ${body};`)} }\nVPAR_OUT;\n`
         + `${a}; })`;
     }
 
@@ -652,7 +661,7 @@ export function cgen(program, opts = {}) {
           break;
         case 'While':
           for (const c of s.invariants ?? []) line(`if (VUNLIKELY(!${expr(c.expr)})) avisoq_fail(${site(FAIL.INVARIANT, c, c.text)});`);
-          line(`while (${expr(s.cond)}) {`);
+          line(`while (${expr(s.cond)}) {${budget ? ' VTICKL;' : ''}`);
           {
             const after = loopBody(s);
             ind++;
@@ -665,7 +674,7 @@ export function cgen(program, opts = {}) {
         case 'For': {
           const en = tmp(), i = v(s.sym), st = tmp();
           line(`{ int64_t ${st} = ${expr(s.start)}; int64_t ${en} = ${expr(s.end)};`);
-          line(`for (int64_t ${i} = ${st}; ${i} < ${en}; ${i}++) {`);
+          line(`for (int64_t ${i} = ${st}; ${i} < ${en}; ${i}++) {${budget ? ' VTICKL;' : ''}`);
           {
             const after = loopBody(s);
             line('}');
@@ -714,6 +723,7 @@ export function cgen(program, opts = {}) {
 
     const params = isTest ? 'void' : owner.params.map((p) => `${p.grows ? `${ctype(p.ty)}*` : ctype(p.ty)} v_${p.name}`).join(', ') || 'void';
     const sig = `static ${ctype(ret)} ${cname}(${params})`;
+    if (budget) line('uint32_t _tk = 16384; VTICK;');
     if (!isTest) {
       for (const c of owner.requires) line(`if (VUNLIKELY(!${expr(c.expr)})) avisoq_fail(${site(FAIL.REQUIRES, c, c.text)});`);
     }
@@ -752,6 +762,7 @@ export function cgen(program, opts = {}) {
   // Test builds can overwrite reclaimed memory, so a value that was handed back too early shows.
   if (opts.poison) out.push('#define AVISOQ_POISON 1');
   if (opts.shared) out.push('#define AVISOQ_SHARED 1');
+  if (budget) out.push('#define AVISOQ_BUDGET 1');
   out.push(RUNTIME);
   out.push('#ifndef _OPENMP\nstatic inline int omp_get_max_threads(void) { return 1; }\n#endif');
   for (const [s, name] of strings) {
@@ -826,7 +837,7 @@ ${program.main ? '  f_main();' : ''}
       const call = `f_${f.cname}(${f.params.map((_, k) => `a${k}`).join(', ')})`;
       return `      case ${i}: { ${args} if (VUNLIKELY(r.p != r.end)) avisoq_fail(VSITE_WIRE); ${f.ret === 'Unit' ? `${call};` : `wr_${wire(f.ret)}(${call});`}${f.effectSet.has('io') ? ' printed = 1;' : ''} break; }`;
     });
-    const about = JSON.stringify({ avisoq: 1, functions: fns.map((f) => ({ ...describeFn(f), denied: [...f.effectSet].filter((e) => !granted.has(e)) })), types: describeTypes(program) });
+    const about = JSON.stringify({ avisoq: 1, budget, functions: fns.map((f) => ({ ...describeFn(f), denied: [...f.effectSet].filter((e) => !granted.has(e)) })), types: describeTypes(program) });
     text.push(...protos, ...bodies);
     text.push(`#ifdef _WIN32
 #define VEXPORT __declspec(dllexport)
@@ -844,6 +855,9 @@ static void avisoq_say(const char* s) { vwr_len = 0; vwr_put(s, (int64_t)strlen(
 VEXPORT int64_t avisoq_call(int32_t fn, const uint8_t* in, int64_t in_len, uint8_t* out, int64_t out_cap) {
   if (!avisoq_ready) { avisoq_init(); avisoq_ready = 1; }
   vmark m = avisoq_mark();
+  avisoq_chunk0 = VT_MAIN.cur.chunk;
+  avisoq_fuel = 0;
+  avisoq_deadline = avisoq_time_limit_ns ? avisoq_now_ns() + avisoq_time_limit_ns : 0;
   int failed = 0;
   volatile int printed = 0;
   vwr_len = 0;
@@ -857,6 +871,8 @@ ${cases.join('\n')}
     failed = 1;
     if (avisoq_failed_site == VSITE_WIRE) avisoq_say("{\\"kind\\":\\"argument\\",\\"message\\":\\"the arguments do not match the function's parameters\\"}");
     else if (avisoq_failed_site == VSITE_DENIED) avisoq_say("{\\"kind\\":\\"capability_denied\\",\\"message\\":\\"this function needs a capability the library was not built with\\"}");
+    else if (avisoq_failed_site == VSITE_TIME) avisoq_say("{\\"kind\\":\\"time_limit\\",\\"message\\":\\"the call ran longer than its time limit\\"}");
+    else if (avisoq_failed_site == VSITE_MEM) avisoq_say("{\\"kind\\":\\"out_of_memory\\",\\"message\\":\\"the call used more memory than its limit\\"}");
     else if (avisoq_failed_site == VSITE_NOFN) avisoq_say("{\\"kind\\":\\"argument\\",\\"message\\":\\"there is no such function\\"}");
     else avisoq_say(avisoq_sites[avisoq_failed_site]);
   }
@@ -865,6 +881,9 @@ ${cases.join('\n')}
   int64_t n = avisoq_give(out, out_cap);
   return failed ? -1 - n : n;
 }
+/* Limits for every later call: milliseconds (needs a library built with the budget option) and
+   bytes of memory. 0 means no limit. */
+VEXPORT void avisoq_limits(int64_t milliseconds, int64_t bytes) { avisoq_time_limit_ns = milliseconds * 1000000; avisoq_mem_limit = bytes; }
 /* Copies the bytes of the last result or failure. */
 VEXPORT int64_t avisoq_take(uint8_t* out, int64_t cap) { return avisoq_give(out, cap); }
 /* The callable functions and the types they use, as JSON. Returns its length. */

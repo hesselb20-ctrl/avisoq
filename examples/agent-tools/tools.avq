@@ -1,0 +1,79 @@
+// Tools for an AI agent. Start them with:  avisoq mcp tools.avq --host host.mjs
+// Every function here becomes one tool; the comment above it is what the agent reads.
+import "std/strings"
+
+struct Quote { product: Str, quantity: Int, subtotal: Int, discount: Int, total: Int }
+
+// The unit price of a product in cents, or -1 if there is no such product.
+// The program that runs these tools provides it: it is the only thing this file can reach.
+extern "host" fn unit_price(product: Str) -> Int
+
+// Prices an order in cents: quantity times the unit price, with 10% off from 10 units.
+fn quote(product: Str, quantity: Int) -> Result[Quote, Str] uses host
+  requires quantity > 0
+{
+  let price = unit_price(to_lower(trim(product)))
+  if price < 0 { return Err(error: "unknown product: " + product) }
+  let subtotal = price * quantity
+  let discount = if quantity >= 10 then subtotal / 10 else 0
+  return Ok(value: Quote(product: to_lower(trim(product)), quantity: quantity, subtotal: subtotal, discount: discount, total: subtotal - discount))
+}
+
+// Monthly payment in cents on a loan, for a principal in cents, a yearly interest rate in
+// percent and a number of months.
+fn monthly_payment(principal: Int, yearly_rate_percent: Float, months: Int) -> Int
+  requires principal > 0
+  requires months > 0
+  requires yearly_rate_percent >= 0.0
+{
+  let rate = yearly_rate_percent / 1200.0
+  if rate == 0.0 { return principal / months }
+  var growth = 1.0
+  for i in 0..months { growth = growth * (1.0 + rate) }
+  return int(float(principal) * rate * growth / (growth - 1.0) + 0.5)
+}
+
+// The n-th Fibonacci number (0, 1, 1, 2, 3, ...). Fails instead of overflowing.
+fn fibonacci(n: Int) -> Int
+  requires n >= 0
+{
+  var a = 0
+  var b = 1
+  for i in 0..n {
+    let next = a + b
+    a = b
+    b = next
+  }
+  return a
+}
+
+// How often each word occurs in a text, most frequent first.
+fn word_counts(text: Str) -> [(Str, Int)] {
+  var seen: Map[Str, Int] = {}
+  var order: [Str] = []
+  for w in split(to_lower(text), " ") {
+    if len(w) == 0 { continue }
+    if not has(seen, w) { push(order, w) }
+    put(seen, w, get_or(seen, w, 0) + 1)
+  }
+  var out: [(Str, Int)] = []
+  for w in order { push(out, (w, get(seen, w))) }
+  // a small insertion sort, largest count first
+  for i in 1..len(out) {
+    var j = i
+    while j > 0 and out[j - 1].second < out[j].second {
+      let held = out[j - 1]
+      out[j - 1] = out[j]
+      out[j] = held
+      j -= 1
+    }
+  }
+  return out
+}
+
+// Never finishes. It is here to show that a call cannot hang the program that runs it.
+fn spin() -> Int {
+  var x = 1
+  while x > 0 { x = x % 1000 + 1 }
+  return x
+}

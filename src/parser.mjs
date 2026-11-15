@@ -165,9 +165,10 @@ export function parse(src) {
     if (isOp('->')) { next(); ret = parseType(); }
     if (ext) {
       // A function written in C: it has no body here, and calling it needs the ffi effect.
+      // extern "host": a function the embedding program provides; calling it needs the host effect.
       if (typeParams.length) fail('an extern function cannot have type parameters');
       const none = Object.assign([], { closeLine: prevLine });
-      return ended({ kind: 'Fn', name: name.value, typeParams, ...extra, params, ret, effects: [{ name: 'ffi', line: kw.line, col: kw.col }], requires: [], ensures: [], body: none, extern: ext, line: kw.line, col: name.col });
+      return ended({ kind: 'Fn', name: name.value, typeParams, ...extra, params, ret, effects: [{ name: ext.source === 'host' ? 'host' : 'ffi', line: kw.line, col: kw.col }], requires: [], ensures: [], body: none, extern: ext, line: kw.line, col: name.col });
     }
     const effects = [];
     if (isKw('uses')) {

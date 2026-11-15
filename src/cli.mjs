@@ -19,6 +19,7 @@ commands:
   call    call one function and print its result as JSON:  avisoq call file.avq name '[args]'
           (--native runs it as machine code)
   serve   answer function calls as JSON lines on stdin/stdout, for other languages
+  mcp     serve every function of the file as a tool for AI agents (Model Context Protocol)
 
 packages (run in the project folder):
   init [name]                  create avisoq.json
@@ -33,14 +34,17 @@ options:
   --unchecked       disable integer overflow checks (bounds checks stay on)
   --no-simd         native only: do not evaluate pure loops 8 values at a time
   --shared          build only: a shared library (.dll, .so, .dylib) instead of a program
+  --budget          with --shared: count steps, so callers can set a time limit per call
+  --time-limit <ms> call, serve, mcp: stop any call that runs longer than this
+  --host <file.mjs> mcp: a JavaScript module whose exports the code may call (extern "host")
   --portable        native only: build for any recent 64-bit x86 CPU, not just this one
   --no-sandbox      native only: run without the reduced-rights launcher (Windows)
-  --memory <MB>     native only: stop the program if it uses more memory than this
+  --memory <MB>     stop the program, or a call, if it uses more memory than this (run: native only)
   -o <path>         output path for build
 `;
 
 const args = process.argv.slice(2);
-const flags = { allow: [], json: false, unchecked: false, native: false, simd: true, check: false, out: null, rev: null, sandbox: true, portable: false, memory: 0, shared: false };
+const flags = { allow: [], json: false, unchecked: false, native: false, simd: true, check: false, out: null, rev: null, sandbox: true, portable: false, memory: 0, shared: false, budget: false, timeLimit: 0 };
 const pos = [];
 for (let i = 0; i < args.length; i++) {
   const a = args[i];
@@ -52,6 +56,9 @@ for (let i = 0; i < args.length; i++) {
   else if (a === '--no-sandbox') flags.sandbox = false;
   else if (a === '--portable') flags.portable = true;
   else if (a === '--shared') { flags.shared = true; flags.native = true; }
+  else if (a === '--budget') flags.budget = true;
+  else if (a === '--host') flags.host = args[++i];
+  else if (a === '--time-limit') flags.timeLimit = Number(args[++i]) || 0;
   else if (a === '--memory') flags.memory = Number(args[++i]) || 0;
   else if (a === '--allow') flags.allow = (args[++i] ?? '').split(',').filter(Boolean);
   else if (a === '-o') flags.out = args[++i];
@@ -79,11 +86,19 @@ if (cmd === 'lsp') {
   startServer();
   await new Promise(() => {}); // serve until the editor closes the connection
 }
+if (cmd === 'mcp' && file) {
+  const { mcp } = await import('./mcp.mjs');
+  const { pathToFileURL } = await import('node:url');
+  const { resolve } = await import('node:path');
+  // --host tools.mjs: its exports are the functions the Avisoq code may call with extern "host"
+  const host = flags.host ? { ...(await import(pathToFileURL(resolve(flags.host)).href)) } : undefined;
+  process.exit(await mcp(file, { allow: flags.allow, native: flags.native, timeLimitMs: flags.timeLimit, memoryLimitMb: flags.memory, host }));
+}
 if ((cmd === 'call' || cmd === 'serve') && file) {
   const { load, serve, jsonSafe } = await import('./embed.mjs');
-  if (cmd === 'serve') process.exit(await serve(file, { allow: flags.allow }));
+  if (cmd === 'serve') process.exit(await serve(file, { allow: flags.allow, timeLimitMs: flags.timeLimit, memoryLimitMb: flags.memory }));
   try {
-    const module = await load(file, { allow: flags.allow, native: flags.native, portable: flags.portable });
+    const module = await load(file, { allow: flags.allow, native: flags.native, portable: flags.portable, timeLimitMs: flags.timeLimit, memoryLimitMb: flags.memory });
     const name = pos[2];
     if (!name || typeof module[name] !== 'function' || name.startsWith('$')) {
       process.stderr.write(`avisoq call: ${name ? `there is no function '${name}' to call` : 'which function?'}\ncallable: ${module.$functions.map((f) => `${f.name}(${f.params.map((p) => `${p.name}: ${p.ty}`).join(', ')})${f.ret === 'Unit' ? '' : ` -> ${f.ret}`}`).join(', ')}\n`);
@@ -155,7 +170,7 @@ if (cmd === 'fmt') {
   process.exit(flags.check && changed ? 1 : 0);
 }
 
-const result = compile(src, { checked: !flags.unchecked, backend: flags.native ? 'native' : 'wasm', simd: flags.simd, path: file, allow: flags.allow, shared: flags.shared && cmd === 'build' });
+const result = compile(src, { checked: !flags.unchecked, backend: flags.native ? 'native' : 'wasm', simd: flags.simd, path: file, allow: flags.allow, shared: flags.shared && cmd === 'build', budget: flags.budget });
 if (!result.ok) {
   if (flags.json) out({ ok: false, phase: 'compile', diagnostics: result.diagnostics });
   else process.stderr.write(result.diagnostics.map(showDiag).join('\n'));

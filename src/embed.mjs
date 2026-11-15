@@ -31,17 +31,23 @@ const I64_MIN = -(2n ** 63n), I64_MAX = 2n ** 63n - 1n;
 const slot = (ty) => (ty === 'Int' ? 'i64' : ty === 'Float' ? 'f64' : 'i32');
 const elemSize = (ty) => (ty === 'Int' || ty === 'Float' ? 8 : ty === 'Bool' ? 1 : 4);
 
-export async function load(path, { allow = [], source, native = false, portable = false } = {}) {
+// timeLimitMs and memoryLimitMb bound every call: one that runs too long or asks for too much
+// memory stops with an AvisoqError of kind 'time_limit' or 'out_of_memory', and the module stays
+// usable. They are what makes it reasonable to run code nobody has reviewed.
+// host: { name: function } gives the code the functions it declares with extern "host"; they
+// are its only way to reach your program.
+export async function load(path, { allow = [], source, native = false, portable = false, timeLimitMs = 0, memoryLimitMb = 0, host = {} } = {}) {
   // native: true compiles to machine code and calls it in this process (src/embed-native.mjs).
-  if (native) return (await import('./embed-native.mjs')).loadNative(path, { allow, source, portable }, { AvisoqError });
+  if (native) return (await import('./embed-native.mjs')).loadNative(path, { allow, source, portable, timeLimitMs, memoryLimitMb }, { AvisoqError });
   const src = source ?? readFileSync(path, 'utf8');
-  const compiled = compile(src, { backend: 'wasm', path, allow, exports: true });
+  const limits = { deadline: 0 };
+  const compiled = compile(src, { backend: 'wasm', path, allow, exports: true, budget: timeLimitMs > 0, memoryLimitMb });
   if (!compiled.ok) {
     const d = compiled.diagnostics[0];
     throw new AvisoqError(`${path}:${d.line}:${d.col}: error[${d.code}]: ${d.message}`, { kind: 'compile', diagnostics: compiled.diagnostics });
   }
   let printed = '';
-  const instance = await instantiate(compiled.wasm, compiled.meta, { allow, write: (s) => { printed += s; } });
+  const instance = await instantiate(compiled.wasm, compiled.meta, { allow, limits, host, write: (s) => { printed += s; } });
   const ex = instance.exports;
   const { structs, enums } = compiled.meta.types;
   const enc = new TextEncoder(), dec = new TextDecoder();
@@ -129,18 +135,24 @@ export async function load(path, { allow = [], source, native = false, portable 
     return undefined;
   }
 
-  const module = { $functions: compiled.meta.exports, $output: () => { const s = printed; printed = ''; return s; } };
+  const module = { $functions: compiled.meta.exports, $types: compiled.meta.types, $output: () => { const s = printed; printed = ''; return s; } };
   for (const f of compiled.meta.exports) {
     module[f.name] = (...args) => {
       if (args.length !== f.params.length) throw new AvisoqError(`${f.name} takes ${f.params.length} argument${f.params.length === 1 ? '' : 's'} (${f.params.map((p) => `${p.name}: ${p.ty}`).join(', ')}) but got ${args.length}`, { kind: 'argument' });
       const mark = ex.__heap.value;
+      if (timeLimitMs > 0) { limits.deadline = performance.now() + timeLimitMs; ex.__fuel.value = 50000; }
       try {
         const raws = args.map((a, i) => toRaw(a, f.params[i].ty, `${f.name}: argument '${f.params[i].name}'`));
         const result = ex[`fn_${f.name}`](...raws);
         return f.ret === 'Unit' ? undefined : fromRaw(result, f.ret);
       } catch (e) {
         if (e instanceof AvisoqError) throw e;
-        if (e && e.info) throw new AvisoqError(`${f.name}: ${e.info.message}`, e.info);
+        if (e && e.info) {
+          const info = { ...e.info };
+          if (info.kind === 'time_limit') info.message = `the call ran longer than its time limit of ${timeLimitMs} ms`;
+          if (info.kind === 'out_of_memory' && memoryLimitMb) info.message = `the call used more memory than its limit of ${memoryLimitMb} MB`;
+          throw new AvisoqError(`${f.name}: ${info.message}`, info);
+        }
         throw new AvisoqError(`${f.name}: ${e instanceof RangeError ? 'the call ran out of stack (recursion too deep)' : e.message}`, { kind: e instanceof RangeError ? 'stack_overflow' : 'trap' });
       } finally {
         ex.__heap.value = mark; // everything the call allocated is handed back
@@ -184,8 +196,9 @@ export async function serve(path, opts = {}) {
 }
 
 // Loads a shared library built earlier with `avisoq build file.avq --shared`.
-export async function open(libraryPath) {
-  return (await import('./embed-native.mjs')).open(libraryPath, { AvisoqError });
+// A time limit needs a library built with --budget.
+export async function open(libraryPath, { timeLimitMs = 0, memoryLimitMb = 0 } = {}) {
+  return (await import('./embed-native.mjs')).open(libraryPath, { AvisoqError, timeLimitMs, memoryLimitMb });
 }
 
 export { jsonSafe };

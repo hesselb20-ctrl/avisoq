@@ -18,7 +18,7 @@ const UNREACHABLE = 0x00, BLOCK = 0x02, LOOP = 0x03, IF = 0x04, ELSE = 0x05, END
   CALL = 0x10, DROP = 0x1a, LGET = 0x20, LSET = 0x21, LTEE = 0x22, GGET = 0x23, GSET = 0x24,
   I32_LOAD = 0x28, I64_LOAD = 0x29, F64_LOAD = 0x2b, I32_LOAD8_U = 0x2d, I32_STORE8 = 0x3a, I32_STORE = 0x36, I64_STORE = 0x37, F64_STORE = 0x39,
   MEM_SIZE = 0x3f, MEM_GROW = 0x40, I32_CONST = 0x41, I64_CONST = 0x42, F64_CONST = 0x44,
-  I32_EQZ = 0x45, I32_EQ = 0x46, I32_NE = 0x47, I32_LT_U = 0x49, I32_GT_U = 0x4b, I32_GE_U = 0x4f,
+  I32_EQZ = 0x45, I32_EQ = 0x46, I32_NE = 0x47, I32_LT_S = 0x48, I32_LT_U = 0x49, I32_GT_U = 0x4b, I32_GE_U = 0x4f,
   I64_EQZ = 0x50, I64_EQ = 0x51, I64_NE = 0x52, I64_LT_S = 0x53, I64_GT_S = 0x55, I64_GT_U = 0x56, I64_LE_S = 0x57,
   I64_GE_S = 0x59, I64_GE_U = 0x5a,
   F64_EQ = 0x61, F64_NE = 0x62, F64_LT = 0x63, F64_GT = 0x64, F64_LE = 0x65, F64_GE = 0x66,
@@ -35,6 +35,11 @@ export function codegen(program, opts = {}) {
   const used = program.usedBuiltins;
 
   const imp = { fail: m.addImport('env', 'fail', [I32, I32], []) };
+  // budget: every loop round and every call counts down; at zero the host looks at the clock.
+  if (opts.budget) imp.tick = m.addImport('env', 'tick', [], []);
+  // extern "host" functions are imports the embedding program fills in.
+  const hostFns = program.fns.filter((f) => f.extern && f.extern.source === 'host');
+  for (const f of hostFns) f.hostImp = m.addImport('host', f.name, f.params.map((p) => wt(p.ty)), f.ret === 'Unit' ? [] : [wt(f.ret)]);
   if (used.has('print')) {
     imp.print_i64 = m.addImport('io', 'print_i64', [I64], []);
     imp.print_f64 = m.addImport('io', 'print_f64', [F64], []);
@@ -244,6 +249,9 @@ export function codegen(program, opts = {}) {
   }
   for (const t of program.tests) t.wasm = m.declareFunc([], []);
 
+  const tickFn = opts.budget ? m.declareFunc([], []) : null;
+  if (tickFn) tickFn.body = [GGET, 1, ...i32c(1), I32_SUB, GSET, 1, GGET, 1, ...i32c(0), I32_LT_S, IF, VOID, CALL, ...uleb(imp.tick), END];
+
   function genFn(owner, isTest) {
     const fnName = isTest ? `test "${owner.name}"` : owner.name;
     const c = [];
@@ -257,6 +265,11 @@ export function codegen(program, opts = {}) {
     const t1 = addLocal(I64), t2 = addLocal(I64), t3 = addLocal(I64), p1 = addLocal(I32);
 
     const emit = (...bytes) => { for (const b of bytes) c.push(b); };
+    // Calls count down a shared budget. Loops count their rounds in a local of their own, which
+    // stays in a register, and look at the clock every 1024 rounds.
+    const tick = () => { if (tickFn) emit(CALL, ...uleb(tickFn.index)); };
+    const rounds = tickFn ? addLocal(I32) : -1;
+    const loopTick = () => { if (tickFn) emit(LGET, ...uleb(rounds), ...i32c(1), I32_ADD, LTEE, ...uleb(rounds), ...i32c(1023), I32_AND, I32_EQZ, IF, VOID, CALL, ...uleb(imp.tick), END); };
     const site = (node, text = '') => { sites.push({ fn: fnName, file: node.file ?? owner.file, line: node.line, col: node.col, text }); return sites.length - 1; };
     const fail = (kind, node, text) => emit(...failConst(kind, site(node, text)));
     const lget = (i) => emit(LGET, ...uleb(i));
@@ -407,7 +420,7 @@ export function codegen(program, opts = {}) {
       lget(t1); emit(I32_WRAP, I32_STORE, 2, 0);
       lget(arr); lget(t1); emit(I32_WRAP, I32_STORE, 2, 4);
       lget(arr); emit(...i32c(8), I32_ADD); lset(cur);
-      emit(BLOCK, VOID, LOOP, VOID);
+      emit(BLOCK, VOID, LOOP, VOID); loopTick();
       lget(i); lget(end); emit(I64_GE_S, BR_IF, 1);
       const mk = e.iterReset ? markHeap() : null;
       lget(cur); expr(e.body); emit(STORE[elemClass(et)], sh, 0);
@@ -425,7 +438,7 @@ export function codegen(program, opts = {}) {
       if (e.ty === 'Float') emit(F64_CONST, ...f64bytes(0)); else emit(...i64c(0));
       lset(lo);
       emit(...i64c(0)); lset(hi);
-      emit(BLOCK, VOID, LOOP, VOID);
+      emit(BLOCK, VOID, LOOP, VOID); loopTick();
       lget(i); lget(end); emit(I64_GE_S, BR_IF, 1);
       const mk = e.iterReset ? markHeap() : null;
       if (e.ty === 'Float') {
@@ -666,7 +679,7 @@ export function codegen(program, opts = {}) {
           break;
         case 'While':
           contracts(s.invariants ?? [], FAIL.INVARIANT);
-          emit(BLOCK, VOID, LOOP, VOID);
+          emit(BLOCK, VOID, LOOP, VOID); loopTick();
           expr(s.cond); emit(I32_EQZ, BR_IF, 1);
           depth += 2; loopBody(s); depth -= 2;
           contracts(s.invariants ?? [], FAIL.INVARIANT);
@@ -675,7 +688,7 @@ export function codegen(program, opts = {}) {
         case 'For':
           expr(s.start); lset(s.sym.idx);
           expr(s.end); lset(s.endSym.idx);
-          emit(BLOCK, VOID, LOOP, VOID);
+          emit(BLOCK, VOID, LOOP, VOID); loopTick();
           lget(s.sym.idx); lget(s.endSym.idx); emit(I64_GE_S, BR_IF, 1);
           depth += 2; loopBody(s); depth -= 2;
           lget(s.sym.idx); emit(...i64c(1), I64_ADD); lset(s.sym.idx);
@@ -739,9 +752,15 @@ export function codegen(program, opts = {}) {
     };
 
     const fnMark = !isTest && owner.regionReset ? markHeap() : null;
+    tick();
     if (!isTest) contracts(owner.requires, FAIL.REQUIRES);
     emit(BLOCK, VOID);
-    if (owner.extern) fail(FAIL.EXTERN, owner, owner.name);
+    if (owner.extern && owner.hostImp !== undefined) {
+      owner.paramSyms.forEach((p) => lget(p.idx));
+      emit(CALL, ...uleb(owner.hostImp));
+      if (owner.ret !== 'Unit') lset(owner.resultSym.idx);
+      emit(BR, ...uleb(depth));
+    } else if (owner.extern) fail(FAIL.EXTERN, owner, owner.name);
     block(owner.body);
     if (!isTest && owner.ret !== 'Unit') emit(UNREACHABLE);
     emit(END);
@@ -770,13 +789,17 @@ export function codegen(program, opts = {}) {
       callable.push(describeFn(f));
     }
     m.exportGlobal('__heap', 0);
+    if (opts.budget) m.exportGlobal('__fuel', 1);
   }
 
   m.heapStart = (8 + m.data.length + 7) & ~7;
   m.minPages = Math.max(1, Math.ceil((m.heapStart + 1) / 65536));
+  // memoryLimitMb: the module cannot grow past it, and asking for more is an out-of-memory failure
+  if (opts.memoryLimitMb) m.maxPages = Math.max(m.minPages, Math.ceil(opts.memoryLimitMb * 16));
 
   const meta = {
     sites,
+    host: hostFns.map((f) => ({ name: f.name, params: f.params.map((p) => p.ty), ret: f.ret })),
     effects: program.main ? [...program.main.effectSet] : [],
     tests: program.tests.map((t) => ({ name: t.name, line: t.line })),
     hasMain: !!program.main,

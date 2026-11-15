@@ -4,6 +4,21 @@ Avisoq is an experimental preview. Until 1.0, any release may change the languag
 release below passed the full test suite on both backends on Windows; no other platform has
 been tested.
 
+## 0.15 (15 November 2026)
+
+- Limits per call when embedding: `timeLimitMs` and `memoryLimitMb` in JavaScript,
+  `time_limit_ms` and `memory_limit_mb` in Python, `--time-limit` and `--memory` for
+  `avisoq call` and `serve`. Both routes. A call that goes over stops with `time_limit` or
+  `out_of_memory`, and the module keeps working. `avisoq build --shared --budget` builds a
+  library whose callers can set a time limit.
+- `extern "host" fn name(...)`: a function the embedding program provides, with the new effect
+  `host`. `load(file, { host: { name: fn } })`. WebAssembly route, JavaScript.
+- `avisoq mcp file.avq`: every function of a file as a tool for AI agents over the Model
+  Context Protocol. Schemas come from the types, descriptions from the comments, and each
+  description states the capabilities the function uses. `--host file.mjs` supplies host
+  functions; calls are limited to 5 seconds and 256 MB unless told otherwise.
+- The README now leads with what Avisoq is for: running code nobody has reviewed.
+
 ## 0.14 (15 November 2026)
 
 - Embedding at native speed: `load(file, { native: true })` in JavaScript and

@@ -1,6 +1,6 @@
 # Avisoq language reference
 
-Version 0.14. For a guided introduction read the [tutorial](TUTORIAL.md) first. Code blocks
+Version 0.15. For a guided introduction read the [tutorial](TUTORIAL.md) first. Code blocks
 marked as Avisoq on this page are compiled by the test suite.
 
 ## Source files
@@ -216,6 +216,7 @@ fn main() uses io {
 | `net` | `http_get`, `http_post` | `--allow net:<host>` (or `net`) |
 | `run` | `run_command` | `--allow run:<program>` (or `run`) |
 | `ffi` | calling an `extern` function | `--allow ffi` |
+| `host` | calling a function the embedding program provides (`extern "host"`) | by passing that function in `host` when loading |
 
 A program that needs a capability it was not given does not start. A path outside a granted
 folder, a host or a program that was not granted is refused when it is used.
@@ -309,9 +310,16 @@ extern "shim.c" link "sqlite3" fn count_rows(path: Str) -> Int   // also link a 
 An `extern` function is C code: native backend only, effect `ffi`, and only `Int`
 (`long long`), `Float` (`double`), `Bool` and `Str` (`const char*`) cross over.
 
+`extern "host" fn unit_price(product: Str) -> Int` declares a function that the program
+embedding this code provides (`load(file, { host: { unit_price: ... } })` in JavaScript, or
+`avisoq mcp file.avq --host module.mjs`). Same four types, effect `host`, WebAssembly route.
+
 In the other direction, `import { load } from 'avisoq'` (JavaScript),
 `bindings/python/avisoq.py` (Python), `avisoq call` and `avisoq serve` let other languages call
 any Avisoq function that is not `private` and takes no `mut`, `Map` or function parameters.
+Each call can be given a time limit and a memory limit (`timeLimitMs`, `memoryLimitMb`;
+`--time-limit`, `--memory`); going over is a failure of kind `time_limit` or `out_of_memory`.
+`avisoq mcp file.avq` serves the same functions as tools for AI agents.
 
 ## Command line
 
@@ -324,6 +332,7 @@ any Avisoq function that is not `private` and takes no `mut`, `Map` or function 
 | `avisoq build file.avq -o out` | a `.wasm` file, or an executable with `--native` |
 | `avisoq call file.avq name '[args]'` | calls one function and prints the result as JSON |
 | `avisoq serve file.avq` | answers function calls as JSON lines |
+| `avisoq mcp file.avq` | serves every callable function as a tool over the Model Context Protocol (`--host module.mjs`, `--time-limit`, `--memory`, `--allow`) |
 | `avisoq guide` | prints the guide written for AI models |
 | `avisoq lsp` | language server on stdin and stdout |
 | `avisoq init`, `add`, `install` | packages |
