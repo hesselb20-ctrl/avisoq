@@ -4,6 +4,19 @@ Avisoq is an experimental preview. Until 1.0, any release may change the languag
 release below passed the full test suite on both backends on Windows; no other platform has
 been tested.
 
+## 0.14 (15 November 2026)
+
+- Embedding at native speed: `load(file, { native: true })` in JavaScript and
+  `avisoq.load(file, native=True)` in Python compile the file to a shared library and call it
+  in the same process. `avisoq build file.avq --shared` writes the library, `open()` /
+  `open_library()` load one built earlier, and `avisoq call --native` uses it from the shell.
+  1.7 to 23 times faster than the WebAssembly route on calls that do real work.
+- A failure inside a native library is reported to the caller; it never ends the process.
+- `agentbench`: a task set imported mechanically from Exercism (tasks and tests the author did
+  not write), three runs per model and language, and a harness for local models.
+- Documentation: a tutorial, a language reference and this changelog; every example in them
+  is run by the tests.
+
 ## 0.13.1 (15 November 2026)
 
 - `link` in an `extern` declaration can name a library file next to the source

@@ -1,6 +1,6 @@
 # Avisoq language reference
 
-Version 0.13. For a guided introduction read the [tutorial](TUTORIAL.md) first. Code blocks
+Version 0.14. For a guided introduction read the [tutorial](TUTORIAL.md) first. Code blocks
 marked as Avisoq on this page are compiled by the test suite.
 
 ## Source files

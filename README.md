@@ -6,10 +6,10 @@ A small, fast, safe programming language designed to be written and verified by 
 
 <img src=".github/assets/figure/scene.webp" width="100%" alt="Three beats: a mandelbrot benchmark computed on one thread with every check on in 112 ms against 108 ms for C++; the same loop written as a sum, spread over 8 threads and 8 lanes; and the result, 4.6 ms against 15 ms for C++ parallelised by hand with OpenMP.">
 
-Version 0.13. One front end, two backends (native machine code through GCC, and sandboxed
+Version 0.14. One front end, two backends (native machine code through GCC, and sandboxed
 WebAssembly), a standard library written in Avisoq, a formatter, a compile-time contract prover,
 a language server, a package manager and a differential fuzzer. The test suites pass on both
-backends: 371 compiler cases each, 21 embedding and 18 interop tests, plus 26 editor, 17 package and 10 sandbox tests.
+backends: 371 compiler cases each, 21 + 65 embedding and 18 interop tests, plus 26 editor, 17 package and 10 sandbox tests.
 
 ```
 import "std/strings"
@@ -90,6 +90,24 @@ with avisoq.load("scoring.avq") as scoring:
 Any other language can use `avisoq serve file.avq` (one JSON request per line) or
 `avisoq call file.avq name '[args]'`. Structs, tuples, arrays and enums cross over as objects
 and arrays. See [`examples/embed`](examples/embed/README.md).
+
+By default the code runs in the WebAssembly sandbox. With `native: true` (`native=True` in
+Python) the same file is compiled to machine code as a shared library and called inside your
+process, and `avisoq build file.avq --shared` writes that library for anything that can call C:
+
+| Called from JavaScript | WebAssembly | Native library |
+|---|---:|---:|
+| count the primes below 5 000 000 | 13.4 ms | 8.1 ms |
+| longest Collatz sequence below 300 000 | 65.9 ms | 30.7 ms |
+| most frequent word in a text of 150 000 words | 92.1 ms | 3.9 ms |
+| sort and deduplicate 200 000 numbers | 42.4 ms | 18.5 ms |
+| a call that does almost nothing | 0.19 microseconds | 0.31 microseconds |
+
+(`node examples/embed/speed.mjs`, best of five, one machine.) Native is 1.7 to 23 times faster
+when the call does real work, and slightly slower per call when it does none. From Python the
+gain is larger, because the WebAssembly route there goes through a pipe: 3 microseconds a call
+instead of 50. The price: no virtual-machine sandbox, one thread, and what the code prints goes
+straight to standard output.
 
 ### Use what already exists from Avisoq
 
@@ -375,8 +393,8 @@ on an idle machine with 8 logical cores (Zen 4, AVX-512). Ratios are relative to
   Python or npm package. It can run a program (`run_command`), call C through a small C file
   (`extern`, native backend only, plain values only), or be called from JavaScript and Python.
   Native `run_command` works on Windows only so far, and C interop has been tried with one real
-  library (SQLite), on Windows. Embedding uses the WebAssembly backend,
-  which is slower than the native one.
+  library (SQLite), on Windows. Native embedding needs GCC, and from JavaScript also
+  `node:ffi`, which Node 26 still marks experimental (it prints a warning).
 - **Big integers are a library, not built in.** `std/bigint` is faster than Python at
   factorials, parsing and printing, level on powers and multiplication, and 2 to 4 times
   slower on long chains of additions and on dividing very large numbers.

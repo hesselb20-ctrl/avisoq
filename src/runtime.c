@@ -22,7 +22,21 @@
 /* Reserved failure sites. */
 enum { VSITE_OOM = 0, VSITE_DIV_OVERFLOW = 1, VSITE_FLOAT_RANGE = 2, VSITE_FS_DENIED = 3, VSITE_NET_DENIED = 4, VSITE_RUN_DENIED = 5 };
 
+#ifdef AVISOQ_SHARED
+/* A shared library must never end the program that loaded it: a failure jumps back to
+   avisoq_call(), which reports it. Shared builds are single-threaded for that reason. */
+static void *avisoq_jmp[5];
+static int avisoq_failed_site;
+#define VSITE_WIRE (-1)
+#define VSITE_DENIED (-2)
+#define VSITE_NOFN (-3)
+#endif
+
 __attribute__((noreturn, cold, noinline)) static void avisoq_fail(int site) {
+#ifdef AVISOQ_SHARED
+  avisoq_failed_site = site;
+  __builtin_longjmp(avisoq_jmp, 1);
+#endif
 #pragma omp critical(avisoq_fail_lock)
   {
     fflush(stdout);
@@ -757,10 +771,12 @@ static inline __int128 vhsum(vi r) {
 }
 
 static void avisoq_init(void) {
+#ifndef AVISOQ_SHARED
 #ifdef _WIN32
   _setmode(_fileno(stdout), _O_BINARY);
 #endif
   setvbuf(stdout, NULL, _IOFBF, 1 << 16);
+#endif
   for (int i = 0; i < 256; i++) {
     VCHR[i] = (vstr *)malloc(sizeof(vstr) + 2);
     VCHR[i]->len = 1;
@@ -768,3 +784,51 @@ static void avisoq_init(void) {
     VCHR[i]->data[1] = 0;
   }
 }
+
+#ifdef AVISOQ_SHARED
+/* ---- calling from another language ----
+   Arguments and results cross as bytes, little-endian, in this layout:
+     Int, Float  8 bytes        Bool  1 byte        Str  length (8 bytes) then the bytes
+     [T]  count (8 bytes) then each element        struct, tuple  the fields in order
+     enum  variant number (8 bytes) then that variant's fields */
+typedef struct { const uint8_t *p, *end; } vrd;
+static inline void vrd_take(vrd *r, void *to, int64_t n) {
+  if (VUNLIKELY(n < 0 || (int64_t)(r->end - r->p) < n)) avisoq_fail(VSITE_WIRE);
+  memcpy(to, r->p, (size_t)n);
+  r->p += n;
+}
+/* A count of things that each take at least `each` bytes: it cannot exceed what is left. */
+static inline int64_t vrd_count(vrd *r, int64_t each) {
+  int64_t n;
+  vrd_take(r, &n, 8);
+  if (VUNLIKELY(n < 0 || n > VMAX_ARRAY_LEN || (each > 0 && n > (int64_t)(r->end - r->p) / each))) avisoq_fail(VSITE_WIRE);
+  return n;
+}
+static uint8_t *vwr_buf = NULL;
+static int64_t vwr_len = 0, vwr_cap = 0;
+static void vwr_put(const void *from, int64_t n) {
+  if (VUNLIKELY(vwr_len + n > vwr_cap)) {
+    int64_t cap = vwr_cap ? vwr_cap : 256;
+    while (cap < vwr_len + n) cap *= 2;
+    uint8_t *b = (uint8_t *)realloc(vwr_buf, (size_t)cap);
+    if (VUNLIKELY(!b)) avisoq_fail(VSITE_OOM);
+    vwr_buf = b;
+    vwr_cap = cap;
+  }
+  memcpy(vwr_buf + vwr_len, from, (size_t)n);
+  vwr_len += n;
+}
+static inline int64_t rd_Int(vrd *r) { int64_t v; vrd_take(r, &v, 8); return v; }
+static inline double rd_Float(vrd *r) { double v; vrd_take(r, &v, 8); return v; }
+static inline bool rd_Bool(vrd *r) { uint8_t v; vrd_take(r, &v, 1); return v != 0; }
+static const vstr *rd_Str(vrd *r) {
+  int64_t n = vrd_count(r, 1);
+  vstr *s = vstr_new(n);
+  vrd_take(r, s->data, n);
+  return s;
+}
+static inline void wr_Int(int64_t v) { vwr_put(&v, 8); }
+static inline void wr_Float(double v) { vwr_put(&v, 8); }
+static inline void wr_Bool(bool v) { uint8_t b = v ? 1 : 0; vwr_put(&b, 1); }
+static void wr_Str(const vstr *v) { vwr_put(&v->len, 8); vwr_put(v->data, v->len); }
+#endif

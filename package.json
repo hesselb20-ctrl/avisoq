@@ -1,6 +1,6 @@
 {
   "name": "avisoq",
-  "version": "0.13.1",
+  "version": "0.14.0",
   "description": "Avisoq: a fast, safe programming language designed to be written and verified by AI agents",
   "license": "MIT",
   "author": "Hessel",
@@ -16,7 +16,7 @@
   "engines": { "node": ">=22" },
   "scripts": {
     "test": "node tests/run.mjs wasm && node tests/ide.mjs && node tests/pkg.mjs && node tests/embed.mjs && node tests/docs.mjs",
-    "test:native": "node tests/run.mjs native && node tests/sandbox.mjs && node tests/interop.mjs",
+    "test:native": "node tests/run.mjs native && node tests/sandbox.mjs && node tests/interop.mjs && node tests/embed-native.mjs",
     "fuzz": "node tests/fuzz.mjs 200",
     "test:memory": "node tests/memory.mjs"
   }

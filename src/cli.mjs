@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Avisoq command line: check | run | test | build | fmt | lsp | init | add | install
 import { readFileSync, writeFileSync } from 'node:fs';
-import { buildNative, compile, run, runTests } from './compiler.mjs';
+import { buildNative, compile, LIB_EXT, run, runTests } from './compiler.mjs';
 
 const USAGE = `Avisoq - a fast, safe language built for AI agents
 
@@ -11,11 +11,13 @@ commands:
   check   type-check, effect-check and contract-check without running
   run     compile and run fn main()
   test    compile and run every test block
-  build   compile to a .wasm file, or an executable with --native (-o path)
+  build   compile to a .wasm file, an executable with --native, or a library that other
+          languages load with --shared (-o path)
   fmt     rewrite the file in the canonical layout (--check only reports)
   lsp     start the language server on stdin/stdout (no file argument)
   guide   print the language guide written for AI agents (no file argument)
   call    call one function and print its result as JSON:  avisoq call file.avq name '[args]'
+          (--native runs it as machine code)
   serve   answer function calls as JSON lines on stdin/stdout, for other languages
 
 packages (run in the project folder):
@@ -30,6 +32,7 @@ options:
   --json            machine-readable output on stdout
   --unchecked       disable integer overflow checks (bounds checks stay on)
   --no-simd         native only: do not evaluate pure loops 8 values at a time
+  --shared          build only: a shared library (.dll, .so, .dylib) instead of a program
   --portable        native only: build for any recent 64-bit x86 CPU, not just this one
   --no-sandbox      native only: run without the reduced-rights launcher (Windows)
   --memory <MB>     native only: stop the program if it uses more memory than this
@@ -37,7 +40,7 @@ options:
 `;
 
 const args = process.argv.slice(2);
-const flags = { allow: [], json: false, unchecked: false, native: false, simd: true, check: false, out: null, rev: null, sandbox: true, portable: false, memory: 0 };
+const flags = { allow: [], json: false, unchecked: false, native: false, simd: true, check: false, out: null, rev: null, sandbox: true, portable: false, memory: 0, shared: false };
 const pos = [];
 for (let i = 0; i < args.length; i++) {
   const a = args[i];
@@ -48,6 +51,7 @@ for (let i = 0; i < args.length; i++) {
   else if (a === '--check') flags.check = true;
   else if (a === '--no-sandbox') flags.sandbox = false;
   else if (a === '--portable') flags.portable = true;
+  else if (a === '--shared') { flags.shared = true; flags.native = true; }
   else if (a === '--memory') flags.memory = Number(args[++i]) || 0;
   else if (a === '--allow') flags.allow = (args[++i] ?? '').split(',').filter(Boolean);
   else if (a === '-o') flags.out = args[++i];
@@ -79,7 +83,7 @@ if ((cmd === 'call' || cmd === 'serve') && file) {
   const { load, serve, jsonSafe } = await import('./embed.mjs');
   if (cmd === 'serve') process.exit(await serve(file, { allow: flags.allow }));
   try {
-    const module = await load(file, { allow: flags.allow });
+    const module = await load(file, { allow: flags.allow, native: flags.native, portable: flags.portable });
     const name = pos[2];
     if (!name || typeof module[name] !== 'function' || name.startsWith('$')) {
       process.stderr.write(`avisoq call: ${name ? `there is no function '${name}' to call` : 'which function?'}\ncallable: ${module.$functions.map((f) => `${f.name}(${f.params.map((p) => `${p.name}: ${p.ty}`).join(', ')})${f.ret === 'Unit' ? '' : ` -> ${f.ret}`}`).join(', ')}\n`);
@@ -151,7 +155,7 @@ if (cmd === 'fmt') {
   process.exit(flags.check && changed ? 1 : 0);
 }
 
-const result = compile(src, { checked: !flags.unchecked, backend: flags.native ? 'native' : 'wasm', simd: flags.simd, path: file, allow: flags.allow });
+const result = compile(src, { checked: !flags.unchecked, backend: flags.native ? 'native' : 'wasm', simd: flags.simd, path: file, allow: flags.allow, shared: flags.shared && cmd === 'build' });
 if (!result.ok) {
   if (flags.json) out({ ok: false, phase: 'compile', diagnostics: result.diagnostics });
   else process.stderr.write(result.diagnostics.map(showDiag).join('\n'));
@@ -166,7 +170,7 @@ if (cmd === 'check') {
     if (pr.proven + pr.runtime) process.stdout.write(`contracts: ${pr.proven} of ${pr.proven + pr.runtime} checks proven at compile time; the rest are checked while running\n`);
   }
 } else if (cmd === 'build') {
-  const path = flags.out ?? file.replace(/\.avq$/, '') + (flags.native ? '.exe' : '.wasm');
+  const path = flags.out ?? file.replace(/\.avq$/, '') + (flags.shared ? LIB_EXT : flags.native ? '.exe' : '.wasm');
   if (flags.native) buildNative(result, path, { portable: flags.portable });
   else writeFileSync(path, result.wasm);
   if (flags.json) out({ ok: true, output: path });

@@ -469,6 +469,8 @@ export function sandboxLauncher() {
   return (launcher = exe);
 }
 
+export const LIB_EXT = process.platform === 'win32' ? '.dll' : process.platform === 'darwin' ? '.dylib' : '.so';
+
 // Compiles generated C to an executable. Results are cached by content.
 // opts.portable: build for any 64-bit x86 CPU of the last decade instead of exactly this one.
 export function buildNative(compiled, outPath, opts = {}) {
@@ -476,14 +478,17 @@ export function buildNative(compiled, outPath, opts = {}) {
   if (!gcc) throw new Error('the native backend needs GCC; install it or set AVISOQ_CC to its path');
   const cache = join(tmpdir(), 'avisoq-cache');
   mkdirSync(cache, { recursive: true });
-  const flags = opts.portable ? CFLAGS.map((f) => (f === '-march=native' ? '-march=x86-64-v2' : f)) : CFLAGS;
+  let flags = opts.portable ? CFLAGS.map((f) => (f === '-march=native' ? '-march=x86-64-v2' : f)) : CFLAGS;
+  // A shared library (compile with shared: true): one thread, and position-independent where that matters.
+  const shared = /^#define AVISOQ_SHARED 1$/m.test(compiled.c);
+  if (shared) flags = [...flags.filter((f) => f !== '-fopenmp'), '-shared', ...(process.platform === 'win32' ? [] : ['-fPIC'])];
   const ext = compiled.extern ?? { sources: [], links: [] };
   for (const s of ext.sources) if (!existsSync(s)) throw new Error(`extern C file not found: ${s}`);
   const useFlags = flags; // -static still applies to the compiler's own runtime; a .dll named on the command line is linked dynamically
   const hasher = createHash('sha256').update(compiled.c).update(flags.join(' ')).update(ext.links.join(' '));
   for (const s of ext.sources) hasher.update(readFileSync(s));
   const hash = hasher.digest('hex').slice(0, 24);
-  const exe = join(cache, `${hash}${process.platform === 'win32' ? '.exe' : ''}`);
+  const exe = join(cache, `${hash}${shared ? LIB_EXT : process.platform === 'win32' ? '.exe' : ''}`);
   if (!existsSync(exe)) {
     const cfile = join(cache, `${hash}.c`);
     writeFileSync(cfile, compiled.c);

@@ -1,6 +1,7 @@
 // Avisoq native backend: checked AST -> C (GNU C17), compiled by GCC.
 import { readFileSync } from 'node:fs';
 import { FAIL, failInfo } from './fail.mjs';
+import { callableFns, describeFn, describeTypes } from './exports.mjs';
 import { children, containerTest, elemOf, isArr, isMap, mangle, mapParts } from './types.mjs';
 // INT64_C(-9223372036854775808) is not a valid C constant; spell the minimum the way <stdint.h> does
 const cint = (v) => (v === -(2n ** 63n) ? '(-INT64_C(9223372036854775807) - 1)' : `INT64_C(${v})`);
@@ -741,6 +742,7 @@ export function cgen(program, opts = {}) {
   out.push(`static const char* const avisoq_run_programs[] = { ${[...rung.programs.map((p) => cstring(p)), 'NULL'].join(', ')} };`);
   // Test builds can overwrite reclaimed memory, so a value that was handed back too early shows.
   if (opts.poison) out.push('#define AVISOQ_POISON 1');
+  if (opts.shared) out.push('#define AVISOQ_SHARED 1');
   out.push(RUNTIME);
   out.push('#ifndef _OPENMP\nstatic inline int omp_get_max_threads(void) { return 1; }\n#endif');
   for (const [s, name] of strings) {
@@ -759,7 +761,8 @@ export function cgen(program, opts = {}) {
   for (const f of [...fnOut, ...testOut]) out.push(`${f.sig};`);
   for (const t of vecText) out.push(t);
   for (const f of [...fnOut, ...testOut]) out.push(f.text);
-  out.push(`int main(int argc, char** argv) {
+  if (opts.shared) out.push(sharedEntry());
+  else out.push(`int main(int argc, char** argv) {
   avisoq_init();
   if (argc >= 3 && strcmp(argv[1], "--test") == 0) {
     switch (atoi(argv[2])) {
@@ -774,7 +777,98 @@ ${program.main ? '  f_main();' : ''}
   return 0;
 }`);
 
+  // ---- shared library: one entry point that other languages call (see runtime.c for the bytes) ----
+  function sharedEntry() {
+    const text = [];
+    const done = new Map([['Int', 1], ['Float', 1], ['Bool', 1], ['Str', 1]]);
+    const protos = [], bodies = [];
+    const least = (t) => (t === 'Bool' ? 1 : program.types.structs.has(t) ? program.types.structs.get(t).fields.reduce((n, f) => n + least(f.ty), 0) : 8);
+    function wire(t) {
+      const key = mangle(t);
+      if (done.has(t)) return key;
+      done.set(t, 1);
+      const T = ctype(t);
+      protos.push(`static ${T} rd_${key}(vrd* r);`, `static void wr_${key}(${T} v);`);
+      let rd, wr;
+      if (isArr(t)) {
+        const et = elemOf(t), E = ctype(et), k = wire(et);
+        rd = `int64_t n = vrd_count(r, ${least(et)}); varr* a = avisoq_arr_alloc(n, sizeof(${E}), VSITE_OOM, false); for (int64_t i = 0; i < n; i++) VDATA(${E}, a)[i] = rd_${k}(r); return a;`;
+        wr = `wr_Int(v->len); for (int64_t i = 0; i < v->len; i++) wr_${k}(VDATA(${E}, v)[i]);`;
+      } else if (program.types.structs.has(t)) {
+        const fields = program.types.structs.get(t).fields;
+        rd = `${T} v; ${fields.map((f) => `v.f_${f.name} = rd_${wire(f.ty)}(r);`).join(' ')} return v;`;
+        wr = fields.map((f) => `wr_${wire(f.ty)}(v.f_${f.name});`).join(' ');
+      } else {
+        const variants = program.types.enums.get(t).variants;
+        const some = variants.filter((x) => x.fields.length);
+        rd = `${T} v; memset(&v, 0, sizeof v); v.tag = rd_Int(r); if (VUNLIKELY((uint64_t)v.tag >= ${variants.length})) avisoq_fail(VSITE_WIRE);`
+          + (some.length ? ` switch (v.tag) { ${some.map((x) => `case ${x.index}: ${x.fields.map((f) => `v.u.v${x.index}.f_${f.name} = rd_${wire(f.ty)}(r);`).join(' ')} break;`).join(' ')} default: break; }` : '') + ' return v;';
+        wr = 'wr_Int(v.tag);' + (some.length ? ` switch (v.tag) { ${some.map((x) => `case ${x.index}: ${x.fields.map((f) => `wr_${wire(f.ty)}(v.u.v${x.index}.f_${f.name});`).join(' ')} break;`).join(' ')} default: break; }` : '');
+      }
+      bodies.push(`static ${T} rd_${key}(vrd* r) { ${rd} }`, `static void wr_${key}(${T} v) { ${wr} }`);
+      return key;
+    }
+    const granted = opts.grants?.names ?? new Set();
+    const fns = callableFns(program);
+    const cases = fns.map((f, i) => {
+      const missing = [...f.effectSet].filter((e) => !granted.has(e));
+      if (missing.length) return `      case ${i}: avisoq_fail(VSITE_DENIED);`;
+      const args = f.params.map((p, k) => `${ctype(p.ty)} a${k} = rd_${wire(p.ty)}(&r);`).join(' ');
+      const call = `f_${f.cname}(${f.params.map((_, k) => `a${k}`).join(', ')})`;
+      return `      case ${i}: { ${args} if (VUNLIKELY(r.p != r.end)) avisoq_fail(VSITE_WIRE); ${f.ret === 'Unit' ? `${call};` : `wr_${wire(f.ret)}(${call});`}${f.effectSet.has('io') ? ' printed = 1;' : ''} break; }`;
+    });
+    const about = JSON.stringify({ avisoq: 1, functions: fns.map((f) => ({ ...describeFn(f), denied: [...f.effectSet].filter((e) => !granted.has(e)) })), types: describeTypes(program) });
+    text.push(...protos, ...bodies);
+    text.push(`#ifdef _WIN32
+#define VEXPORT __declspec(dllexport)
+#else
+#define VEXPORT __attribute__((visibility("default")))
+#endif
+static const char avisoq_about[] = ${cstring(about)};
+static int avisoq_ready = 0;
+static int64_t avisoq_give(uint8_t* out, int64_t cap) { if (out && vwr_len <= cap) memcpy(out, vwr_buf, (size_t)vwr_len); return vwr_len; }
+static void avisoq_say(const char* s) { vwr_len = 0; vwr_put(s, (int64_t)strlen(s)); }
+/* Calls function number fn (its place in avisoq_describe's list) with the arguments in in[0..in_len).
+   Returns the length of the result, which is copied to out when it fits in out_cap (otherwise
+   fetch it with avisoq_take). A failure returns -1 - length, and the bytes are a JSON object
+   with its kind and message. Not safe to call from two threads at once. */
+VEXPORT int64_t avisoq_call(int32_t fn, const uint8_t* in, int64_t in_len, uint8_t* out, int64_t out_cap) {
+  if (!avisoq_ready) { avisoq_init(); avisoq_ready = 1; }
+  vmark m = avisoq_mark();
+  int failed = 0;
+  volatile int printed = 0;
+  vwr_len = 0;
+  if (__builtin_setjmp(avisoq_jmp) == 0) {
+    vrd r = { in, in + in_len };
+    switch (fn) {
+${cases.join('\n')}
+      default: avisoq_fail(VSITE_NOFN);
+    }
+  } else {
+    failed = 1;
+    if (avisoq_failed_site == VSITE_WIRE) avisoq_say("{\\"kind\\":\\"argument\\",\\"message\\":\\"the arguments do not match the function's parameters\\"}");
+    else if (avisoq_failed_site == VSITE_DENIED) avisoq_say("{\\"kind\\":\\"capability_denied\\",\\"message\\":\\"this function needs a capability the library was not built with\\"}");
+    else if (avisoq_failed_site == VSITE_NOFN) avisoq_say("{\\"kind\\":\\"argument\\",\\"message\\":\\"there is no such function\\"}");
+    else avisoq_say(avisoq_sites[avisoq_failed_site]);
+  }
+  if (printed || failed) fflush(stdout);
+  avisoq_reset(m);
+  int64_t n = avisoq_give(out, out_cap);
+  return failed ? -1 - n : n;
+}
+/* Copies the bytes of the last result or failure. */
+VEXPORT int64_t avisoq_take(uint8_t* out, int64_t cap) { return avisoq_give(out, cap); }
+/* The callable functions and the types they use, as JSON. Returns its length. */
+VEXPORT int64_t avisoq_describe(uint8_t* out, int64_t cap) {
+  int64_t n = (int64_t)sizeof(avisoq_about) - 1;
+  if (out && n <= cap) memcpy(out, avisoq_about, (size_t)n);
+  return n;
+}`);
+    return text.join('\n');
+  }
+
   const meta = {
+    ...(opts.shared ? { exports: callableFns(program).map(describeFn), types: describeTypes(program) } : {}),
     effects: program.main ? [...program.main.effectSet] : [],
     tests: program.tests.map((t) => ({ name: t.name, line: t.line })),
     hasMain: !!program.main,

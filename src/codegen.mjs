@@ -2,6 +2,7 @@
 import { Module, I32, I64, F64, uleb, sleb, f64bytes } from './wasm.mjs';
 
 import { FAIL } from './fail.mjs';
+import { callableFns, describeFn, describeTypes } from './exports.mjs';
 import { containerTest, elemOf, isArr, isMap, mapParts, walk } from './types.mjs';
 
 export { FAIL };
@@ -741,13 +742,9 @@ export function codegen(program, opts = {}) {
   // returns plain data can be called from outside, and the heap pointer can be restored after a call.
   const callable = [];
   if (opts.exports) {
-    const plain = (t) => !isMap(t) && !t.startsWith('Fn[') && !t.includes('Map[') && !t.includes('Fn[');
-    const own = (f) => !/[\\/]std[\\/][a-z_]+\.avq$/.test(f.file ?? '');
-    for (const f of program.fns) {
-      if (f.generic || f === program.main || !own(f) || f.private || f.name.startsWith('__') || (f.fnParams && f.fnParams.size)) continue;
-      if (f.params.some((p) => p.mut || !plain(p.ty)) || !plain(f.ret)) continue;
+    for (const f of callableFns(program)) {
       m.exportFunc(`fn_${f.name}`, f.wasm.index);
-      callable.push({ name: f.name, params: f.params.map((p) => ({ name: p.name, ty: p.ty })), ret: f.ret, effects: [...f.effectSet] });
+      callable.push(describeFn(f));
     }
     m.exportGlobal('__heap', 0);
   }
@@ -762,10 +759,7 @@ export function codegen(program, opts = {}) {
     hasMain: !!program.main,
     ...(opts.exports ? {
       exports: callable,
-      types: {
-        structs: Object.fromEntries([...program.types.structs].map(([t, s]) => [t, s.fields.map((f) => ({ name: f.name, ty: f.ty }))])),
-        enums: Object.fromEntries([...program.types.enums].map(([t, e]) => [t, e.variants.map((v) => ({ name: v.name, fields: v.fields.map((f) => ({ name: f.name, ty: f.ty })) }))])),
-      },
+      types: describeTypes(program),
     } : {}),
   };
   m.customs.push({ name: 'avisoq.meta', text: JSON.stringify(meta) });

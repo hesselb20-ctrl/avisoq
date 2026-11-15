@@ -16,6 +16,8 @@
 //   enum     { variant: "Name", field: value, ... }
 // A function can be called this way if it takes no `mut`, Map or function parameters.
 // The module runs in the WebAssembly sandbox and gets only the capabilities in `allow`.
+// With { native: true } it is compiled to machine code and called in this process instead:
+// the speed of a native program, without the sandbox (see src/embed-native.mjs).
 import { readFileSync } from 'node:fs';
 import { createInterface } from 'node:readline';
 import { compile, instantiate } from './compiler.mjs';
@@ -29,7 +31,9 @@ const I64_MIN = -(2n ** 63n), I64_MAX = 2n ** 63n - 1n;
 const slot = (ty) => (ty === 'Int' ? 'i64' : ty === 'Float' ? 'f64' : 'i32');
 const elemSize = (ty) => (ty === 'Int' || ty === 'Float' ? 8 : ty === 'Bool' ? 1 : 4);
 
-export async function load(path, { allow = [], source } = {}) {
+export async function load(path, { allow = [], source, native = false, portable = false } = {}) {
+  // native: true compiles to machine code and calls it in this process (src/embed-native.mjs).
+  if (native) return (await import('./embed-native.mjs')).loadNative(path, { allow, source, portable }, { AvisoqError });
   const src = source ?? readFileSync(path, 'utf8');
   const compiled = compile(src, { backend: 'wasm', path, allow, exports: true });
   if (!compiled.ok) {
@@ -177,6 +181,11 @@ export async function serve(path, opts = {}) {
     }
   }
   return 0;
+}
+
+// Loads a shared library built earlier with `avisoq build file.avq --shared`.
+export async function open(libraryPath) {
+  return (await import('./embed-native.mjs')).open(libraryPath, { AvisoqError });
 }
 
 export { jsonSafe };

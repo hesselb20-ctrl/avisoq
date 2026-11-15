@@ -1,0 +1,72 @@
+// Work heavy enough to time. Used by speed.mjs, which calls each function through
+// WebAssembly and through a native shared library.
+import "std/strings"
+import "std/arrays"
+
+// How many primes are below `limit` (a sieve).
+fn count_primes(limit: Int) -> Int
+  requires limit >= 2
+{
+  var composite = array(limit, false)
+  var count = 0
+  for n in 2..limit {
+    if not composite[n] {
+      count += 1
+      var m = n * n
+      while m < limit {
+        composite[m] = true
+        m += n
+      }
+    }
+  }
+  return count
+}
+
+// The start below `limit` whose Collatz sequence is longest.
+fn longest_collatz(limit: Int) -> Int
+  requires limit >= 2
+{
+  var best = 1
+  var best_steps = 0
+  for start in 1..limit {
+    var n = start
+    var steps = 0
+    while n != 1 {
+      n = if n % 2 == 0 then n / 2 else 3 * n + 1
+      steps += 1
+    }
+    if steps > best_steps {
+      best = start
+      best_steps = steps
+    }
+  }
+  return best
+}
+
+// The most frequent word of a text, and how often it occurs.
+fn top_word(text: Str) -> (Str, Int) {
+  var seen: Map[Str, Int] = {}
+  var best = ""
+  var best_count = 0
+  for w in split(text, " ") {
+    if len(w) == 0 { continue }
+    let n = get_or(seen, w, 0) + 1
+    put(seen, w, n)
+    if n > best_count {
+      best = w
+      best_count = n
+    }
+  }
+  return (best, best_count)
+}
+
+// The numbers in order, without duplicates.
+fn sorted_unique(xs: [Int]) -> [Int] {
+  var ys = copy(xs)
+  sort(ys)
+  var out: [Int] = []
+  for y in ys {
+    if len(out) == 0 or out[len(out) - 1] != y { push(out, y) }
+  }
+  return out
+}
