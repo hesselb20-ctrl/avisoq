@@ -8,16 +8,6 @@
 
 Failures: Avisoq run 3: pig_latin (wrong); Python run 1: food_chain (wrong); Rust run 2: food_chain (wrong); Rust run 3: food_chain (wrong).
 
-### qwen (1 run per language)
-
-| Language | Correct per run | Total | Rejected before running | Stopped with an error | Silently wrong | Time per run | Mean time | Mean tokens |
-|---|---|---:|---:|---:|---:|---|---:|---:|
-| Avisoq | 11 | 11 of 20 | 0 | 0 | 9 | 1899 s | 1899 s | 41k |
-| Python | 14 | 14 of 20 | 1 | 1 | 4 | 1695 s | 1695 s | 27k |
-| Rust | 13 | 13 of 20 | 0 | 1 | 6 | 1699 s | 1699 s | 30k |
-
-Failures: Avisoq run 1: crypto_square (wrong); Avisoq run 1: largest_series_product (wrong); Avisoq run 1: luhn (wrong); Avisoq run 1: book_store (wrong); Avisoq run 1: transpose (wrong); Avisoq run 1: meetup (wrong); Avisoq run 1: isbn_verifier (wrong); Avisoq run 1: connect (wrong); Avisoq run 1: perfect_numbers (wrong); Python run 1: change (stopped); Python run 1: book_store (wrong); Python run 1: transpose (wrong); Python run 1: pig_latin (wrong); Python run 1: isbn_verifier (rejected); Python run 1: connect (wrong); Rust run 1: crypto_square (wrong); Rust run 1: change (wrong); Rust run 1: book_store (wrong); Rust run 1: transpose (wrong); Rust run 1: pig_latin (wrong); Rust run 1: connect (wrong); Rust run 1: state_of_tic_tac_toe (stopped).
-
 ### sonnet (3 runs per language)
 
 | Language | Correct per run | Total | Rejected before running | Stopped with an error | Silently wrong | Time per run | Mean time | Mean tokens |
