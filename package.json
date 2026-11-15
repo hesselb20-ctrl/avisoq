@@ -4,16 +4,51 @@
   "description": "Avisoq: the language AI agents write their actions in. What a script can do (which tools, how often, under which rules) is known and approved before it runs.",
   "license": "MIT",
   "author": "Hessel",
-  "repository": { "type": "git", "url": "git+https://github.com/hesselb20-ctrl/avisoq.git" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hesselb20-ctrl/avisoq.git"
+  },
   "homepage": "https://github.com/hesselb20-ctrl/avisoq#readme",
-  "bugs": { "url": "https://github.com/hesselb20-ctrl/avisoq/issues" },
-  "keywords": ["programming-language", "compiler", "webassembly", "ai-agents", "contracts", "capabilities"],
+  "bugs": {
+    "url": "https://github.com/hesselb20-ctrl/avisoq/issues"
+  },
+  "keywords": [
+    "programming-language",
+    "compiler",
+    "webassembly",
+    "ai-agents",
+    "contracts",
+    "capabilities"
+  ],
   "type": "module",
   "main": "src/index.mjs",
-  "exports": { ".": "./src/index.mjs" },
-  "bin": { "avisoq": "src/cli.mjs" },
-  "files": ["src", "std", "docs", "examples", "bindings", "README.md", "CHANGELOG.md", "LICENSE"],
-  "engines": { "node": ">=22" },
+  "exports": {
+    ".": "./src/index.mjs"
+  },
+  "bin": {
+    "avisoq": "src/cli.mjs"
+  },
+  "files": [
+    "src",
+    "std",
+    "docs",
+    "examples",
+    "bindings",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE",
+    "!**/*.dll",
+    "!**/*.so",
+    "!**/*.dylib",
+    "!**/*.exe",
+    "!**/*.runs.jsonl",
+    "!**/*.approval.json",
+    "!**/shop-state.json",
+    "!**/avisoq-scripts"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "test": "node tests/run.mjs wasm && node tests/ide.mjs && node tests/pkg.mjs && node tests/embed.mjs && node tests/mcp.mjs && node tests/act.mjs && node tests/attack.mjs && node tests/docs.mjs",
     "test:native": "node tests/run.mjs native && node tests/sandbox.mjs && node tests/interop.mjs && node tests/embed-native.mjs",
